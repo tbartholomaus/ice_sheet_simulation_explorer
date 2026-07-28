@@ -1,0 +1,17 @@
+/* Loaded automatically by Dash (any CSS in an assets/ folder is auto-served
+   and included) -- styles the small "updating" indicator near the top of
+   app.py's layout (see the "loading-indicator" dcc.Loading, custom_spinner). */
+
+@keyframes slow-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.custom-slow-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(42, 63, 95, 0.15);
+  border-top-color: rgba(42, 63, 95, 0.45);
+  animation: slow-spin 2.5s linear infinite;
+}

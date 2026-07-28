@@ -1,0 +1,7 @@
+services:
+  - name: ismip6-rate-comparison
+    type: web
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:server --timeout 120
