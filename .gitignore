@@ -217,6 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# simulation explorer specific ignores:
 /utilities/external_sources_cache/
 *.png
 *.pdf
+v7_CMIP5_pub/
