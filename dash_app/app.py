@@ -854,7 +854,16 @@ def plot_interactive_rate_comparison(
     buttons = []
     for label in GROUP_BY_LABELS:
         visible = [i in managed_groups[label] for i in managed_idx]
-        buttons.append(dict(label=label, method="update", args=[{"visible": visible}, managed_idx]))
+        # method="restyle" (not "update"): this only ever touches trace data
+        # (visible), never layout, and restyle's args signature is exactly
+        # [dataUpdate, traceIndices] -- "update"'s signature is instead
+        # [dataUpdate, layoutUpdate, traceIndices], so passing managed_idx as
+        # the 2nd positional arg to "update" put a list of integers where
+        # Plotly expects a layout-patch object, silently breaking which
+        # traces the visibility patch actually applied to (this is what
+        # caused a real bug: empty panels and stray legend entries from
+        # non-selected dimensions after clicking "Group by:").
+        buttons.append(dict(label=label, method="restyle", args=[{"visible": visible}, managed_idx]))
 
     # "Units:" is NOT an in-figure Plotly updatemenu here (unlike the
     # notebook copy of this function) -- a native Plotly updatemenu can only
@@ -918,10 +927,10 @@ def plot_interactive_rate_comparison(
         text="Distribution medians:", x=0.28, y=1.13, xref="paper", yref="paper",
         xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
     )
-    fig.add_annotation(
-        text="Units:", x=0.0, y=1.13, xref="paper", yref="paper",
-        xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
-    )
+    # No in-figure "Units:" annotation here -- that control is a Dash-level
+    # dcc.RadioItems + clientside_callback now (see the module docstring and
+    # the note above), not an in-figure dropdown, so its label lives in
+    # app.layout instead of as a Plotly annotation.
     return fig
 
 
@@ -1089,6 +1098,11 @@ app.layout = html.Div(
                     target_components={"rate-comparison-graph": "figure"},
                     custom_spinner=html.Div(className="custom-slow-spinner"),
                     display="auto",
+                    # Keeps the spinner visible at least this long once shown,
+                    # so a fast callback (e.g. a Years: drag that lands back
+                    # on an already-cached window) doesn't flash it on and
+                    # off too quickly to actually notice.
+                    delay_hide=400,
                 ),
             ],
             style={
@@ -1237,11 +1251,11 @@ app.layout = html.Div(
                 dcc.Graph(
                     id="rate-comparison-graph",
                     figure=FIG,
-                    # minWidth guards the "Units:"/"Distribution medians:"/"Group by:" dropdown
-                    # row -- those controls have roughly fixed pixel footprints regardless of the
-                    # figure's paper-coordinate width, so below ~1000px they start to visually
-                    # collide. Letting the page scroll horizontally on narrow windows beats a
-                    # broken control row.
+                    # minWidth guards the in-figure "Distribution medians:"/"Group by:"
+                    # dropdown row -- those controls have roughly fixed pixel footprints
+                    # regardless of the figure's paper-coordinate width, so below ~1000px
+                    # they start to visually collide. Letting the page scroll horizontally
+                    # on narrow windows beats a broken control row.
                     style={"flex": "1", "minWidth": "1050px", "height": "85vh"},
                     config={"responsive": True, "displaylogo": False},
                 ),
