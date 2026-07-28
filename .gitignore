@@ -218,3 +218,5 @@ __marimo__/
 .streamlit/secrets.toml
 
 /utilities/external_sources_cache/
+*.png
+*.pdf
