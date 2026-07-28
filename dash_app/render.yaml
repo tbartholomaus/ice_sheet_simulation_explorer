@@ -3,5 +3,10 @@ services:
     type: web
     runtime: python
     plan: free
+    # The GitHub repo root is now the whole ismip6-ipcc-main project
+    # (dash_app/, exploring_fits/, utilities/), not just this directory --
+    # rootDir makes buildCommand/startCommand run from dash_app/ regardless
+    # of where in the repo this render.yaml itself is discovered from.
+    rootDir: dash_app
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:server --timeout 120

@@ -497,7 +497,7 @@ def load_aschwanden2022_gis():
     -- like every other source in this module, only rate differences over a
     selected year window are ever computed from this, so the absolute
     reference year doesn't matter, but it does mean a rate window starting
-    before 2008 will have no Aschwanden2022 points.
+    before 2008 will have no Aschwanden2019 points.
     """
     les_path = _aschwanden2022_download_les()
     df = pd.read_csv(les_path)
@@ -508,7 +508,11 @@ def load_aschwanden2022_gis():
     df["Exp"] = [f"les{e:03d}_rcp{r}" for e, r in zip(exp, rcp)]
     df["Year"] = df["Year"].astype(int)
     df["Cumulative ice sheet mass change (Gt)"] = df["Mass (Gt)"]
-    df["Group"] = "Aschwanden2022"
+    # "Aschwanden2019", not "...2022" -- matches the archive's own dataset
+    # naming ("aschwanden_et_al_2019_les_2008_norm.csv"), which is what's
+    # shown to users (checkboxes, legend, hover text); the paper itself
+    # (Aschwanden & Brinkerhoff) was published in 2022, unchanged above.
+    df["Group"] = "Aschwanden2019"
     df["Model"] = "PISM"
     df["IS"] = "GIS"
     df["climate_model"] = "Not applicable"

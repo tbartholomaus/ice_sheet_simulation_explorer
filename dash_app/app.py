@@ -2,25 +2,26 @@
 Standalone Dash app serving the "Interactive Figure - Rate Comparison" from
 exploring_fits/analyze_slr_predictions_interactive.ipynb.
 
-The figure is pure Plotly. Its "Distribution medians:" and "Group by:"
-dropdowns are native Plotly updatemenus toggling/restyling pre-built traces,
-so they run entirely client-side with no callbacks back to this server.
-"Units:" is a small dcc.RadioItems + clientside_callback (see near the
-bottom of this file) instead of a third native updatemenu -- a native
-updatemenu can only apply a pre-baked data patch, which would mean shipping
-a full second (Sea level rise) copy of every trace's x/text/hovertemplate
-just for a unit conversion, roughly doubling the page's payload; the
-clientside_callback does the same *2.759 conversion with plain JS on data
-already in the browser instead. The "Years:" range slider and the
-"Simulation studies:" checklist are different from all of the above -- the
-KDEs, jitter, medians, and IMBIE slope all depend on the selected year
-window and which sources are included, so those genuinely need a real Dash
-callback that reruns plot_interactive_rate_comparison() on the server.
+The figure is pure Plotly. Its "Units:", "Distribution medians:", and
+"Group by:" dropdowns are all native Plotly updatemenus toggling/restyling
+pre-built traces, so they run entirely client-side with no callbacks back
+to this server. (An earlier version tried moving "Units:" to a Dash-level
+dcc.RadioItems + clientside_callback specifically to avoid precomputing a
+second Sea-level-rise copy of every trace's x/text/hovertemplate
+server-side -- ~10 MB of extra payload. That never actually worked in a
+real browser despite checking out in every way testable without one, so it
+reverted to the plain in-figure dropdown below, matching the notebook.) The
+"Years:" range slider and the "Simulation studies:" checklist are different
+from all of the above -- the KDEs, jitter, medians, and IMBIE slope all
+depend on the selected year window and which sources are included, so
+those genuinely need a real Dash callback that reruns
+plot_interactive_rate_comparison() on the server.
 
 That server-side rebuild is the app's main cost: building weighted KDEs
 across 7 "Group by:" dimensions x 2 panels, potentially over ~1700+ pooled
-ISMIP6 + extra_sources simulations, plus JSON-serializing the ~13 MB result.
-On a resource-constrained deploy target this can exceed a WSGI server's
+ISMIP6 + extra_sources simulations, plus JSON-serializing the ~23 MB result
+(back up from ~13 MB after reverting "Units:" -- see above). On a
+resource-constrained deploy target this can exceed a WSGI server's
 default request timeout (gunicorn's is 30s) well before it exceeds what
 actually feels "slow" locally, so raising --timeout matters (see render.yaml
 alongside this file). This is specifically why the app moved off Plotly
@@ -232,9 +233,9 @@ ism_meta = {
 
     # Non-ISMIP6 published simulations (see utilities/external_sources.py for
     # provenance/derivation of each).
-    ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman (power-law)",        "initialization": "ERA5- or ESM-forced spin-up"},
-    ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "See paper",                   "initialization": "Nudged to present-day geometry"},
-    ("Aschwanden2022", "PISM"):  {"ice_model": "PISM",      "sliding_law": "See paper",                   "initialization": "Temperature-index SMB, present-day start"},
+    ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman",                    "initialization": "Spin-up"},
+    ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
+    ("Aschwanden2019", "PISM"):  {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",              "initialization": "Spin-up"},
 }
 
 
@@ -282,7 +283,7 @@ gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
 EXTRA_SOURCES = [
     {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
     {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
-    {"label": "Aschwanden 2022", "df": aschwanden2022_gis, "color": "#756bb1"},
+    {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
 ]
 
 # plot_interactive_rate_comparison's "Group by publication" category names/
@@ -296,13 +297,19 @@ ISMIP6_PUBLICATION_COLOR = "#636363"  # ISMIP6's own color under "Group by publi
 # papers above, named after each panel's own source paper (Seroussi et al.
 # 2020 / Goelzer et al. 2020) rather than "ISMIP6 AIS"/"ISMIP6 GIS", to read
 # as one flat list of papers rather than singling ISMIP6 out as different in
-# kind from Rahlves2025/Coulon2024/Aschwanden2022. Sourced from
+# kind from Rahlves2025/Coulon2024/Aschwanden2019. Sourced from
 # PUBLICATION_LABEL (plot_interactive_rate_comparison's own "Group by
 # publication" category names) so the checklist and the figure never drift
 # apart on what to call each panel's ISMIP6 population.
 ISMIP6_AIS_LABEL = PUBLICATION_LABEL["AIS"]
 ISMIP6_GIS_LABEL = PUBLICATION_LABEL["GIS"]
-DATA_SOURCE_LABELS = [src["label"] for src in EXTRA_SOURCES] + [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL]
+# ISMIP6 first (it's the app's core dataset, per its own title/intro text),
+# then the three extra_sources papers.
+DATA_SOURCE_LABELS = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL] + [src["label"] for src in EXTRA_SOURCES]
+# Only the two ISMIP6 panels checked by default -- the extra_sources papers
+# are opt-in, not on-by-default, so a first-time visitor sees the app's core
+# ISMIP6-vs-IMBIE comparison before discovering the added papers.
+DATA_SOURCE_DEFAULT_CHECKED = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -508,7 +515,15 @@ def _sim_rows(simulated, ice_sheet, year_start, year_end):
     return rows
 
 
-GROUP_BY_LABELS = [label for label, _dim, _fixed in GROUP_DIMENSIONS] + ["Group by publication"]
+# "Group by publication" is a special-cased dimension (see the weighting note
+# in the merged_df.groupby(dim) loop below), not one of GROUP_DIMENSIONS's
+# generic entries -- inserted right after "All simulations" (GROUP_DIMENSIONS[0])
+# rather than appended at the end, so it reads as the second-most-fundamental
+# way to view the data, ahead of the more granular modeling-choice dimensions.
+GROUP_BY_LABELS = (
+    [GROUP_DIMENSIONS[0][0], "Group by publication"]
+    + [label for label, _dim, _fixed in GROUP_DIMENSIONS[1:]]
+)
 
 
 def plot_interactive_rate_comparison(
@@ -765,7 +780,21 @@ def plot_interactive_rate_comparison(
                     cat_weight = g["row_weight"].sum()
                     if len(g) >= 2 and g["rate"].std() > 0:
                         _, dens2_raw = _rate_kde_raw(g["rate"].values, x_range, weights=g["row_weight"].values)
-                        weight = cat_weight / total_weight
+                        # "Group by publication" compares whole sources/studies
+                        # to each other, not simulation counts -- ISMIP6 (summed
+                        # across ~15-20 institutions) has vastly more total
+                        # row_weight than any one paper's own (already
+                        # de-weighted-to-typical_model_n) equivalent, so
+                        # weighting by row_weight share here would make every
+                        # paper's curve nearly invisible next to ISMIP6's.
+                        # Every OTHER dimension keeps proportional-by-weight
+                        # scaling (a category with more simulations legitimately
+                        # gets a bigger curve there), but publication instead
+                        # gives every category (ISMIP6 counts as one) equal
+                        # area, so it's each source's distribution SHAPE being
+                        # compared, not how many institutions/ensemble members
+                        # went into computing it.
+                        weight = (1.0 / n_cats) if dim == "publication" else (cat_weight / total_weight)
                         dens2 = (dens2_raw * weight) / full_max * rate_kde_height
                         idx = len(fig.data)
                         fig.add_trace(go.Scatter(
@@ -865,19 +894,56 @@ def plot_interactive_rate_comparison(
         # non-selected dimensions after clicking "Group by:").
         buttons.append(dict(label=label, method="restyle", args=[{"visible": visible}, managed_idx]))
 
-    # "Units:" is NOT an in-figure Plotly updatemenu here (unlike the
-    # notebook copy of this function) -- a native Plotly updatemenu can only
-    # apply a static, pre-baked data patch, which would mean shipping a full
-    # second (Sea level rise) copy of every trace's x/text/hovertemplate to
-    # the browser just for a *2.759 unit conversion, roughly doubling the
-    # page's data payload. Instead, the Dash app wires "Units:" up as its own
-    # dcc.RadioItems (see app.layout) plus a clientside_callback (see below
-    # this function) that does the conversion with plain JS math on data
-    # already sitting in the browser -- no server round trip, and no
-    # duplicated payload. x_range_by_panel/observed_annotation_x below feed
-    # that clientside callback's initial-state expectations (it re-derives
-    # everything from the CURRENTLY-rendered mass-Gt figure, so it works
-    # whether this FIG came from initial load or `_update_figure`).
+    # "Units:" dropdown -- every trace's x-data represents a rate in Gt/yr;
+    # the Sea level rise view is just that same data times gt2mmSLE. Rather
+    # than rebuild the figure, read each trace's already-built x/text/
+    # hovertemplate back out and restyle to the alt-unit version computed
+    # from it, so the two controls above (Group by / Distribution medians)
+    # keep working unmodified regardless of which unit is selected.
+    #
+    # This is a native in-figure Plotly updatemenu (precomputing both unit
+    # versions server-side, ~10 MB of extra payload) rather than the
+    # RadioItems + clientside_callback this app tried first -- that JS
+    # version never visibly worked in an actual browser despite checking
+    # out in every way testable without one, so this reverts to the
+    # mechanism already proven correct (same method="update" pattern this
+    # file's "Group by:" restyle bug fix confirmed the correct args shape
+    # for -- [dataUpdate, layoutUpdate], not [dataUpdate, traceIndices]).
+    mass_x_all = [tr.x for tr in fig.data]
+    sle_x_all = [
+        tuple(v * gt2mmSLE for v in tr.x) if tr.x is not None else None for tr in fig.data
+    ]
+    mass_text_all = [tr.text for tr in fig.data]
+    # Point traces stash their alt-unit hover string in customdata (set
+    # alongside "text" at trace-creation); every other trace type either
+    # has no text at all or doesn't depend on units (KDE fills, IMBIE),
+    # so it falls back to its own (untouched) text.
+    sle_text_all = [
+        tr.customdata if tr.customdata is not None else tr.text for tr in fig.data
+    ]
+    mass_hovertemplate_all = [tr.hovertemplate for tr in fig.data]
+    # Only the median markers' hovertemplate hardcodes a unit (the point
+    # traces' hovertemplate is just "%{text}...", already unit-agnostic).
+    sle_hovertemplate_all = [
+        ht.replace("%{x:.0f} Gt/yr", "%{x:.2f} mm/yr") if ht is not None else None
+        for ht in mass_hovertemplate_all
+    ]
+
+    def _panel_range(row, factor=1.0):
+        r = x_range_by_panel.get(row)
+        return [r[0] * factor, r[1] * factor] if r is not None else None
+
+    # The "Observed ..." arrow annotation(s) are pinned to the IMBIE slope in
+    # data coordinates (annotation.x), so switching units has to move the
+    # arrow itself, not just relabel it -- relayout can target a specific
+    # annotation's properties via "annotations[i].<prop>".
+    mass_annotation_updates, sle_annotation_updates = {}, {}
+    for _idx, _slope in observed_annotation_x.items():
+        mass_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed mass change</b>"
+        mass_annotation_updates[f"annotations[{_idx}].x"] = _slope
+        sle_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed sea level contribution</b>"
+        sle_annotation_updates[f"annotations[{_idx}].x"] = _slope * gt2mmSLE
+
     layout_kwargs = dict(
         updatemenus=[
             dict(
@@ -892,6 +958,27 @@ def plot_interactive_rate_comparison(
                 buttons=[
                     dict(label="Off", method="restyle", args=[{"opacity": 0}, median_trace_idx]),
                     dict(label="On", method="restyle", args=[{"opacity": 1}, median_trace_idx]),
+                ],
+            ),
+            dict(
+                type="dropdown", direction="down",
+                x=0.06, y=1.13, xanchor="left", yanchor="bottom",
+                active=0,
+                buttons=[
+                    dict(label="Mass change", method="update", args=[
+                        {"x": mass_x_all, "text": mass_text_all, "hovertemplate": mass_hovertemplate_all},
+                        {"xaxis.title.text": "Rate of ice sheet mass change (Gt/yr)",
+                         "xaxis2.title.text": "Rate of ice sheet mass change (Gt/yr)",
+                         "xaxis.range": _panel_range(1), "xaxis2.range": _panel_range(2),
+                         **mass_annotation_updates},
+                    ]),
+                    dict(label="Sea level rise", method="update", args=[
+                        {"x": sle_x_all, "text": sle_text_all, "hovertemplate": sle_hovertemplate_all},
+                        {"xaxis.title.text": "Contribution to sea level rise (mm/yr)",
+                         "xaxis2.title.text": "Contribution to sea level rise (mm/yr)",
+                         "xaxis.range": _panel_range(1, gt2mmSLE), "xaxis2.range": _panel_range(2, gt2mmSLE),
+                         **sle_annotation_updates},
+                    ]),
                 ],
             ),
         ],
@@ -927,10 +1014,10 @@ def plot_interactive_rate_comparison(
         text="Distribution medians:", x=0.28, y=1.13, xref="paper", yref="paper",
         xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
     )
-    # No in-figure "Units:" annotation here -- that control is a Dash-level
-    # dcc.RadioItems + clientside_callback now (see the module docstring and
-    # the note above), not an in-figure dropdown, so its label lives in
-    # app.layout instead of as a Plotly annotation.
+    fig.add_annotation(
+        text="Units:", x=0.0, y=1.13, xref="paper", yref="paper",
+        xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
+    )
     return fig
 
 
@@ -1063,10 +1150,20 @@ TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
 DIM_COLOR_MAPS = _dim_color_maps(ismip6, extra_sources=EXTRA_SOURCES)
 ROWS_CACHE = _precompute_rows_cache(ismip6, YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN)
 
+# Matches DATA_SOURCE_DEFAULT_CHECKED (only the two ISMIP6 panels) so the
+# page's very first render is consistent with what the "Simulation studies:"
+# checklist shows checked -- otherwise a user would see all 5 sources on
+# load despite only 2 checkboxes being ticked, until their first interaction.
+_default_checked = set(DATA_SOURCE_DEFAULT_CHECKED)
 FIG = plot_interactive_rate_comparison(
     simulated=ismip6, observed=imbie, year_start=YEAR_DEFAULT[0], year_end=YEAR_DEFAULT[1],
-    show_title=False, show_subtitle=False, extra_sources=EXTRA_SOURCES,
-    precomputed_dim_color_maps=DIM_COLOR_MAPS, precomputed_rows=ROWS_CACHE[tuple(YEAR_DEFAULT)],
+    show_title=False, show_subtitle=False,
+    extra_sources=[src for src in EXTRA_SOURCES if src["label"] in _default_checked],
+    precomputed_dim_color_maps=DIM_COLOR_MAPS,
+    precomputed_rows={
+        "AIS": ROWS_CACHE[tuple(YEAR_DEFAULT)]["AIS"] if ISMIP6_AIS_LABEL in _default_checked else [],
+        "GIS": ROWS_CACHE[tuple(YEAR_DEFAULT)]["GIS"] if ISMIP6_GIS_LABEL in _default_checked else [],
+    },
 )
 
 app = dash.Dash(__name__)
@@ -1090,12 +1187,18 @@ app.layout = html.Div(
                 ),
                 # Small "app is updating" indicator -- shown whenever the
                 # server is recomputing the graph (Years: slider drag or a
-                # Simulation studies: checkbox change), via target_components
-                # rather than wrapping the graph itself, so nothing dims or
-                # blocks interaction while it spins: the slider/checklist/
-                # graph all stay fully usable, this is purely informational.
+                # Simulation studies: checkbox change). Uses the classic
+                # dcc.Loading(children=...) pattern (wrapping a hidden div
+                # that _update_figure also targets as an Output), not the
+                # newer target_components prop -- target_components never
+                # visibly showed anything in practice, so this switches to
+                # the long-established, heavily-used mechanism instead. The
+                # wrapped div itself is empty/invisible either way; only the
+                # spinner (positioned here, next to the title, not over the
+                # graph) is meant to be seen, so nothing dims or blocks
+                # interaction while it spins.
                 dcc.Loading(
-                    target_components={"rate-comparison-graph": "figure"},
+                    children=html.Div(id="loading-trigger", style={"display": "none"}),
                     custom_spinner=html.Div(className="custom-slow-spinner"),
                     display="auto",
                     # Keeps the spinner visible at least this long once shown,
@@ -1166,7 +1269,7 @@ app.layout = html.Div(
                     # label into either an EXTRA_SOURCES filter or an empty
                     # precomputed_rows["AIS"/"GIS"] list.
                     options=[{"label": f" {label}", "value": label} for label in DATA_SOURCE_LABELS],
-                    value=list(DATA_SOURCE_LABELS),
+                    value=list(DATA_SOURCE_DEFAULT_CHECKED),
                     inline=True,
                     style={"display": "flex", "flexWrap": "wrap", "gap": "4px 20px"},
                     inputStyle={"marginRight": "4px"},
@@ -1178,43 +1281,12 @@ app.layout = html.Div(
                 "fontFamily": "Arial, sans-serif", "fontSize": "14px", "color": "#2a3f5f",
             },
         ),
-        html.Div(
-            [
-                html.Label(
-                    "Units:",
-                    style={"fontWeight": "bold", "marginRight": "16px", "whiteSpace": "nowrap"},
-                ),
-                dcc.RadioItems(
-                    id="units-radio",
-                    # A Dash-level control (not an in-figure Plotly updatemenu,
-                    # unlike Group by/Distribution medians) -- see the
-                    # clientside_callback below plot_interactive_rate_comparison
-                    # for why: it lets the Mass<->Sea level rise conversion run
-                    # as plain JS math on data already in the browser, instead
-                    # of the server having to ship a full second copy of every
-                    # trace's x/text/hovertemplate.
-                    options=[
-                        {"label": " Mass change", "value": "mass"},
-                        {"label": " Sea level rise", "value": "sle"},
-                    ],
-                    value="mass",
-                    inline=True,
-                    style={"display": "flex", "gap": "4px 20px"},
-                    inputStyle={"marginRight": "4px"},
-                ),
-                # Required Output target for the clientside_callback below --
-                # it performs its work as a Plotly.restyle/relayout side
-                # effect on the graph div directly, so this never needs to
-                # hold anything meaningful, just satisfy Dash's requirement
-                # that every callback have an Output.
-                html.Div(id="units-clientside-dummy", style={"display": "none"}),
-            ],
-            style={
-                "display": "flex", "alignItems": "center", "justifyContent": "center",
-                "width": "100%", "margin": "12px auto 0 auto",
-                "fontFamily": "Arial, sans-serif", "fontSize": "14px", "color": "#2a3f5f",
-            },
-        ),
+        # "Units:" is a native in-figure Plotly dropdown now (see the
+        # "Mass change"/"Sea level rise" buttons inside
+        # plot_interactive_rate_comparison), not a Dash-level control -- an
+        # earlier RadioItems + clientside_callback version lived here, but
+        # never worked in practice (see that function's docstring), so this
+        # was reverted to the same in-figure mechanism the notebook uses.
         html.Div(
             [
                 html.Div(
@@ -1270,6 +1342,7 @@ app.layout = html.Div(
 @app.callback(
     Output("rate-comparison-graph", "figure"),
     Output("year-range-slider", "value"),
+    Output("loading-trigger", "children"),
     Input("year-range-slider", "value"),
     Input("data-sources-checklist", "value"),
 )
@@ -1306,6 +1379,11 @@ def _update_figure(year_range, checked_sources):
     written back to the slider via the second Output, which re-triggers this
     same callback once more with a valid span -- so an invalid, too-narrow
     window is never rendered.
+
+    The third Output (loading-trigger.children) carries no information of
+    its own -- it exists purely so the dcc.Loading wrapping that div (see
+    app.layout) shows its spinner for exactly the duration of this callback,
+    the standard dcc.Loading(children=...) pattern.
     """
     lo, hi = year_range
     if hi - lo < MIN_YEAR_SPAN:
@@ -1331,88 +1409,11 @@ def _update_figure(year_range, checked_sources):
         show_title=False, show_subtitle=False, extra_sources=active_extra_sources,
         precomputed_dim_color_maps=DIM_COLOR_MAPS, precomputed_rows=active_rows,
     )
-    return fig, [lo, hi]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# "Units:" -- a clientside_callback (plain JS, runs entirely in the browser,
-# no request back to this server) instead of a third native Plotly
-# updatemenu. A native updatemenu can only apply a pre-baked data patch, so
-# giving it a "Sea level rise" option would mean the server precomputing and
-# shipping a full second copy of every trace's x/text/hovertemplate on every
-# request -- previously ~10 MB of a ~27 MB payload (see the module docstring)
-# for nothing but a *2.759 unit conversion. This does that multiplication in
-# JS instead, always deriving from the `figure` Input (the FRESH, mass-Gt
-# figure plot_interactive_rate_comparison() just built -- it never builds an
-# SLE version itself), so it's correct both when the units radio changes and
-# when the figure itself is rebuilt (Years:/Simulation studies: change)
-# while "Sea level rise" is already selected -- both are listed as Inputs so
-# either one re-applies the current unit choice.
-#
-# `text`/`customdata` on each point trace already carry BOTH hover-string
-# variants (baked in server-side by _sim_rows, see plot_interactive_rate_
-# comparison) -- this only ever swaps which one is assigned to `text`, it
-# never computes new hover text itself.
-app.clientside_callback(
-    """
-    function(units_value, figure) {
-        if (!figure || !figure.data) {
-            return "";
-        }
-        window.requestAnimationFrame(function() {
-            var gd = document.getElementById("rate-comparison-graph");
-            if (!gd || !gd.data) { return; }
-            var GT2MMSLE = 1.0 / 362.5;  // Gt -> mm sea-level-equivalent, matches gt2mmSLE in app.py
-            var factor = (units_value === "sle") ? GT2MMSLE : 1.0;
-
-            var traceIdx = [], newX = [], newText = [], newHovertemplate = [];
-            for (var i = 0; i < figure.data.length; i++) {
-                var tr = figure.data[i];
-                if (!tr.x) { continue; }
-                traceIdx.push(i);
-                newX.push(tr.x.map(function(v) { return v * factor; }));
-                if (tr.customdata) {
-                    newText.push(units_value === "sle" ? tr.customdata : tr.text);
-                } else {
-                    newText.push(tr.text || null);
-                }
-                var ht = tr.hovertemplate;
-                if (ht && units_value === "sle") {
-                    ht = ht.replace("%{x:.0f} Gt/yr", "%{x:.2f} mm/yr");
-                }
-                newHovertemplate.push(ht || null);
-            }
-            Plotly.restyle(gd, {x: newX, text: newText, hovertemplate: newHovertemplate}, traceIdx);
-
-            var xTitle = (units_value === "sle")
-                ? "Contribution to sea level rise (mm/yr)"
-                : "Rate of ice sheet mass change (Gt/yr)";
-            var relayoutUpdate = {"xaxis.title.text": xTitle, "xaxis2.title.text": xTitle};
-            var L = figure.layout || {};
-            if (L.xaxis && L.xaxis.range) {
-                relayoutUpdate["xaxis.range"] = L.xaxis.range.map(function(v) { return v * factor; });
-            }
-            if (L.xaxis2 && L.xaxis2.range) {
-                relayoutUpdate["xaxis2.range"] = L.xaxis2.range.map(function(v) { return v * factor; });
-            }
-            var annotations = L.annotations || [];
-            for (var j = 0; j < annotations.length; j++) {
-                var ann = annotations[j];
-                if (ann.text && ann.text.indexOf("Observed mass change") !== -1) {
-                    relayoutUpdate["annotations[" + j + "].text"] = (units_value === "sle")
-                        ? "<b>Observed sea level contribution</b>" : "<b>Observed mass change</b>";
-                    relayoutUpdate["annotations[" + j + "].x"] = ann.x * factor;
-                }
-            }
-            Plotly.relayout(gd, relayoutUpdate);
-        });
-        return "";
-    }
-    """,
-    Output("units-clientside-dummy", "children"),
-    Input("units-radio", "value"),
-    Input("rate-comparison-graph", "figure"),
-)
+    # The third return value is meaningless on its own -- its only purpose is
+    # being this callback's Output("loading-trigger", "children"), which is
+    # what makes the dcc.Loading wrapping that div show its spinner for the
+    # duration of this callback (see app.layout).
+    return fig, [lo, hi], ""
 
 
 server = app.server  # WSGI entry point, e.g. `gunicorn app:server`
