@@ -9,4 +9,11 @@ services:
     # of where in the repo this render.yaml itself is discovered from.
     rootDir: dash_app
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:server --timeout 120
+    # --max-requests (+jitter to avoid every worker recycling in lockstep)
+    # periodically restarts the worker process even with no code changes --
+    # cheap insurance against gradual RSS growth from allocator
+    # fragmentation (glibc malloc doesn't always return freed memory to the
+    # OS, and this app's per-request KDE/pandas/Plotly-JSON churn is exactly
+    # the varying-allocation-size workload that triggers it), independent
+    # of whether that growth is ever large enough to matter on its own.
+    startCommand: gunicorn app:server --timeout 120 --max-requests 200 --max-requests-jitter 50

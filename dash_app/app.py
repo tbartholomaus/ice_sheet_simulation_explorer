@@ -712,7 +712,13 @@ def plot_interactive_rate_comparison(
             frames.append(sim_df)
             publication_color_map[PUBLICATION_LABEL[ice_sheet]] = ISMIP6_PUBLICATION_COLOR
         for src in (extra_sources or []):
-            src_rows = _sim_rows(src["df"], ice_sheet, year_start, year_end)
+            # Use the precomputed cache when this source has one (see its
+            # construction above, near ROWS_CACHE), falling back to
+            # _sim_rows() itself when there's no cache (e.g. the notebook's
+            # own extra_sources, which never sets "rows_cache") or the
+            # requested window falls outside the cache's precomputed range.
+            src_cache = src.get("rows_cache", {}).get((year_start, year_end))
+            src_rows = src_cache[ice_sheet] if src_cache is not None else _sim_rows(src["df"], ice_sheet, year_start, year_end)
             if not src_rows:
                 continue
             src_df = pd.DataFrame(src_rows)
@@ -1193,6 +1199,19 @@ TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
 # depending on which papers happen to be checked right now.
 DIM_COLOR_MAPS = _dim_color_maps(ismip6, extra_sources=EXTRA_SOURCES)
 ROWS_CACHE = _precompute_rows_cache(ismip6, YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN)
+# Same precomputed-per-window-rate cache ISMIP6 gets above, one per
+# extra_sources entry -- _sim_rows() on a paper's own dataframe (e.g.
+# Aschwanden2019's ~500 LHS ensemble members) was previously recomputed via
+# the slow scipy.stats.linregress path on every single request regardless
+# of whether the year window had changed, which was real, avoidable
+# per-request CPU/memory pressure. _precompute_rows_cache is already
+# generic over any (Group, Model, Exp, IS)-shaped dataframe, so this is a
+# direct reuse, not a new code path. plot_interactive_rate_comparison()
+# below checks each source dict for this key and falls back to the
+# original _sim_rows() call when it's absent -- keeping the notebook
+# (which passes plain extra_sources dicts with no such cache) unaffected.
+for _src in EXTRA_SOURCES:
+    _src["rows_cache"] = _precompute_rows_cache(_src["df"], YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN)
 
 # Matches DATA_SOURCE_DEFAULT_CHECKED (only the two ISMIP6 panels) so the
 # page's very first render is consistent with what the "Simulation studies:"
