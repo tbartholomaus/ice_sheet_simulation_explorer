@@ -437,28 +437,57 @@ def load_coulon2024_ais():
 # https://doi.org/10.1029/2022GL099058.
 #
 # PISM, forced by a temperature-index SMB model driven by RCP-scenario
-# warming (not per-GCM downscaling the way Rahlves2025/Coulon2024 are, so
-# there's no climate_model classification here beyond the RCP itself). The
-# paper trains a PyTorch neural-network emulator on ~1000 true PISM runs,
-# then draws large ensembles from it both before ("les", the prior --
-# what's loaded here, per an explicit user request to use the uncalibrated
-# ensemble rather than the Bayesian-calibrated posterior) and after ("mc")
-# jointly conditioning on observed surface speed and observed cumulative
-# mass loss.
+# warming. The paper trains a PyTorch neural-network emulator on ~1000 true
+# PISM runs, then draws large ensembles from it both before ("les", the
+# prior -- what's loaded here, per an explicit user request to use the
+# uncalibrated ensemble rather than the Bayesian-calibrated posterior) and
+# after ("mc") jointly conditioning on observed surface speed and observed
+# cumulative mass loss.
 #
 # Archive: Aschwanden & Brinkerhoff (2022), Arctic Data Center,
 # https://doi.org/10.18739/A2KW57K4R -- a plain Apache directory listing
 # (https://arcticdata.io/data/10.18739/A2KW57K4R/pism_scalars/), no
 # API/DOI-resolution archaeology needed the way Coulon2024's Zenodo record
 # or Rahlves2025's NIRD table-of-contents did.
+#
+# Per-member climate_model (which of 4 CMIP5 GCMs forced that member) comes
+# from a SEPARATE, related Arctic Data Center project instead: Aschwanden's
+# earlier (2019) "Contribution of the Greenland Ice Sheet to sea-level over
+# the next millennium" study, https://arcticdata.io/catalog/view/urn%3Auuid%
+# 3Afbca9086-b36a-4526-8289-2aa2622f0e7a -- an NSF-grant-level umbrella
+# record (not a dataset with data files itself) whose own "nested" dataset
+# doi:10.18739/A2222R58F ("raw scalar time series part 1") contains
+# lhs_samples_gcm.csv, a 500-row (id 0-499) Latin Hypercube parameter table
+# that includes a numeric GCM column -- and whose ids are the SAME ids used
+# as "Experiment" in aschwanden_et_al_2019_les_2008_norm.csv (matching
+# filename convention -- "et_al_2019", "les" -- confirms this is the same
+# underlying LHS ensemble the calibrated-paper archive reuses). See
+# _aschwanden2022_download_lhs_gcm()'s docstring for the GCM-code decoding.
 # ═════════════════════════════════════════════════════════════════════════
 
 ASCHWANDEN2022_LES_URL = (
     "https://arcticdata.io/data/10.18739/A2KW57K4R/pism_scalars/"
     "aschwanden_et_al_2019_les_2008_norm.csv.gz"
 )
+ASCHWANDEN2022_LHS_GCM_URL = "https://cn.dataone.org/cn/v2/resolve/urn:uuid:fe6bf612-5cc3-48de-bc72-231c3a97a91f"
 ASCHWANDEN2022_RCP_TO_SCENARIO = {26: "RCP2.6", 45: "RCP4.5", 85: "RCP8.5"}
 ASCHWANDEN2022_KEEP_THROUGH_YEAR = 2100  # trim the 2008-3007 file to the paper's own stated analysis horizon
+
+# The methods PDF for the 2019 millennium study (linked from the arcticdata.io
+# catalog page cited above -- https://cn.dataone.org/cn/v2/resolve/urn:uuid:
+# e9780902-453b-48bf-8d18-b5ed151b9526) documents the GCM parameter as:
+# "We select the four GCMs that extend to year 2300: GISS-E2-H, GISS-E2-R,
+# IPSL-CM5A-LR, and MPI-ESM-LR. We select the four GCM projections with
+# equal probability" (Table 1 lists the GCM parameter's distribution as
+# "uniform (1-4)"). The PDF does NOT explicitly tabulate which numeric code
+# is which GCM -- this order (matching the prose listing order, 0-indexed
+# instead of the paper's 1-4) is our own inference, not a stated mapping.
+# It's corroborated by lhs_samples_gcm.csv's GCM column taking exactly the
+# values {0,1,2,3} with an EXACTLY even 125/125/125/125 split across 500
+# rows, matching "select with equal probability" -- but if this specific
+# code-to-name ORDER is ever contradicted by another source, treat this
+# dict, not the underlying data, as what's wrong.
+ASCHWANDEN2022_GCM_CODE_MAP = {0: "GISS-E2-H", 1: "GISS-E2-R", 2: "IPSL-CM5A-LR", 3: "MPI-ESM-LR"}
 
 
 def _aschwanden2022_download_les():
@@ -474,6 +503,17 @@ def _aschwanden2022_download_les():
     return _download(ASCHWANDEN2022_LES_URL, "aschwanden2022_les_2008_norm.csv.gz", min_expected_bytes=10_000_000)
 
 
+def _aschwanden2022_download_lhs_gcm():
+    """
+    Step 1b: download lhs_samples_gcm.csv (~60 KB) from the separate 2019
+    millennium-study archive (see the module-level comment above for the
+    full provenance chain) -- one row per LHS ensemble member id (0-499),
+    with an 11-parameter Latin Hypercube design including a numeric `GCM`
+    column decoded by ASCHWANDEN2022_GCM_CODE_MAP.
+    """
+    return _download(ASCHWANDEN2022_LHS_GCM_URL, "aschwanden2022_lhs_samples_gcm.csv", min_expected_bytes=10_000)
+
+
 def load_aschwanden2022_gis():
     """
     Loads Aschwanden & Brinkerhoff (2022)'s Greenland/PISM uncalibrated
@@ -482,13 +522,18 @@ def load_aschwanden2022_gis():
     climate_model/scenario/protocol columns for classification.
 
     Step 1 (above): download aschwanden_et_al_2019_les_2008_norm.csv.gz.
+    Step 1b (above): download lhs_samples_gcm.csv, the companion 2019
+    millennium-study LHS parameter table that this ensemble's "Experiment"
+    ids are drawn from, for per-member climate_model classification.
     Step 2: read the `Mass (Gt)` column directly (already the exact
     cumulative-mass-change quantity this module's other loaders have to
     derive via unit conversion) for each (Experiment, RCP) realization,
     trimmed to ASCHWANDEN2022_KEEP_THROUGH_YEAR (the file runs to year
     3007, like Coulon2024's SSP585 continuation, far past anything this
     figure's year-range slider needs).
-    Step 3: label each realization's `scenario` from its RCP and mark
+    Step 3: label each realization's `scenario` from its RCP, its
+    `climate_model` from lhs_samples_gcm.csv's GCM column (joined on
+    Experiment == id, decoded via ASCHWANDEN2022_GCM_CODE_MAP), and mark
     `protocol` as "Uncalibrated (prior ensemble)" -- distinguishing it from
     the archive's separate Bayesian-calibrated "mc" (posterior) ensemble,
     which this loader does NOT use.
@@ -503,6 +548,10 @@ def load_aschwanden2022_gis():
     df = pd.read_csv(les_path)
     df = df[df["Year"] <= ASCHWANDEN2022_KEEP_THROUGH_YEAR].copy()
 
+    lhs_gcm_path = _aschwanden2022_download_lhs_gcm()
+    lhs_gcm = pd.read_csv(lhs_gcm_path, index_col=0)  # index = LHS ensemble member id, matches "Experiment" below
+    gcm_by_id = lhs_gcm["GCM"].round().astype(int).map(ASCHWANDEN2022_GCM_CODE_MAP)
+
     rcp = df["RCP"].astype(int)
     exp = df["Experiment"].astype(int)
     df["Exp"] = [f"les{e:03d}_rcp{r}" for e, r in zip(exp, rcp)]
@@ -515,7 +564,7 @@ def load_aschwanden2022_gis():
     df["Group"] = "Aschwanden2019"
     df["Model"] = "PISM"
     df["IS"] = "GIS"
-    df["climate_model"] = "Not applicable"
+    df["climate_model"] = exp.map(gcm_by_id).fillna("Unknown")
     df["scenario"] = rcp.map(ASCHWANDEN2022_RCP_TO_SCENARIO)
     df["protocol"] = "Uncalibrated (prior ensemble)"
 
