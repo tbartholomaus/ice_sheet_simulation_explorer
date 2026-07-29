@@ -85,7 +85,7 @@ RAHLVES2025_TOC_URL = (
 
 R_TIER_TO_OCEAN_SENSITIVITY = {"Low": "Low", "Med": "Medium", "High": "High"}
 ESM_SCENARIO_MAP = {
-    "hist": "Historical", "proj_ctrl": "Control", "proj_rcp85": "RCP 8.5",
+    "hist": "Historical", "proj_ctrl": "Control", "proj_rcp85": "RCP8.5",
     "proj_ssp126": "SSP1-2.6", "proj_ssp245": "SSP2-4.5", "proj_ssp585": "SSP5-8.5",
 }
 ERA5_F_CODE_TO_SCENARIO = {"26": "SSP1-2.6", "45": "SSP2-4.5", "85": "SSP5-8.5"}

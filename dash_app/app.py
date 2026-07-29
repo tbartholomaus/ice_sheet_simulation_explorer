@@ -144,39 +144,39 @@ def load_ismip6_gis():
 
 # GIS experiment descriptions (Goelzer et al. 2020, Table 1 & Appendix)
 gis_exp_meta = {
-    # "exp01":  {"climate_model": "MIROC5",       "scenario": "RCP 8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp02":  {"climate_model": "MIROC5",       "scenario": "RCP 8.5", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    # "exp03":  {"climate_model": "MIROC5",       "scenario": "RCP 2.6", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp04":  {"climate_model": "MIROC5",       "scenario": "RCP 2.6", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    "exp05":  {"climate_model": "MIROC5",       "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp06":  {"climate_model": "NorESM",       "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp07":  {"climate_model": "MIROC5",       "scenario": "RCP 2.6", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp08":  {"climate_model": "HadGEM2-ES",   "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp09":  {"climate_model": "MIROC5",       "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "exp10":  {"climate_model": "MIROC5",       "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Low"},
-    # "exp11":  {"climate_model": "ACCESS1.3",    "scenario": "RCP 8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp12":  {"climate_model": "ACCESS1.3",    "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    # "exp13":  {"climate_model": "CESM2",        "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "expa01": {"climate_model": "IPSL-CM5A-MR", "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa02": {"climate_model": "CSIRO-Mk3.6",  "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa03": {"climate_model": "ACCESS1.3",    "scenario": "RCP 8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    # "exp01":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
+    # "exp02":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Low"},
+    # "exp03":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Medium"},
+    # "exp04":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Low"},
+    "exp05":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "exp06":  {"climate_model": "NorESM",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "exp07":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "exp08":  {"climate_model": "HadGEM2-ES",   "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "exp09":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
+    "exp10":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Low"},
+    # "exp11":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
+    # "exp12":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    # "exp13":  {"climate_model": "CESM2",        "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
+    "expa01": {"climate_model": "IPSL-CM5A-MR", "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "expa02": {"climate_model": "CSIRO-Mk3.6",  "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
+    "expa03": {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
 }
 
 # AIS experiment descriptions (Seroussi et al. 2020, Table 1)
 ais_exp_meta = {
-    "exp01": {"climate_model": "NorESM",         "scenario": "RCP 8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp02": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP 8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp03": {"climate_model": "NorESM",         "scenario": "RCP 2.6",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp04": {"climate_model": "CCSM4",          "scenario": "RCP 8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp05": {"climate_model": "NorESM",         "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp06": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp07": {"climate_model": "NorESM",         "scenario": "RCP 2.6",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp08": {"climate_model": "CCSM4",          "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp09": {"climate_model": "NorESM",         "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "PIGL medium"},
-    "exp10": {"climate_model": "NorESM",         "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "PIGL high"},
-    "exp11": {"climate_model": "CCSM4",          "scenario": "RCP 8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp12": {"climate_model": "CCSM4",          "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp13": {"climate_model": "NorESM",         "scenario": "RCP 8.5",  "protocol": "Standard", "basal_melt_param": "PIGL very high"},
+    "exp01": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
+    "exp02": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
+    "exp03": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Open",     "basal_melt_param": "Standard"},
+    "exp04": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
+    "exp05": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
+    "exp06": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
+    "exp07": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Standard", "basal_melt_param": "Standard"},
+    "exp08": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
+    "exp09": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL medium"},
+    "exp10": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL high"},
+    "exp11": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
+    "exp12": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
+    "exp13": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL very high"},
     "expA1": {"climate_model": "HadGEM2-ES",     "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
     "expA2": {"climate_model": "CSIRO-MK3",      "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
     "expA3": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Open",     "basal_melt_param": "Standard"},
@@ -317,16 +317,21 @@ DATA_SOURCE_DEFAULT_CHECKED = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL]
 # ─────────────────────────────────────────────────────────────────────────────
 
 RCP_COLOR = {
-    "RCP 2.6":  "#003466",
-    "RCP 8.5":  "#990002",
+    "RCP2.6":  "#003466",
+    "RCP8.5":  "#990002",
     "SSP1-2.6": "#1a7f5e",
     "SSP5-8.5": "#8b1a00",
     "Unknown":  "#888888",
 }
 IMBIE_COLOR = "#08519c"
 
-gt2cmSLE = 1.0 / 362.5 / 10.0  # Gt -> cm sea-level-equivalent
-gt2mmSLE = gt2cmSLE * 10  # the "Units:" toggle uses mm, not cm -- typical rates are well under 1 cm/yr
+gt2cmSLE = 1.0 / 362.5 / 10.0  # Gt -> cm sea-level-equivalent (magnitude only, see the sign flip below)
+# Negative: mass change and sea-level rise are physically opposite in sign
+# (losing ice -- negative Gt/yr -- raises sea level -- positive mm/yr -- and
+# vice versa), so the "Sea level rise" unit view has to flip sign, not just
+# rescale. The "Units:" toggle uses mm, not cm -- typical rates are well
+# under 1 cm/yr.
+gt2mmSLE = -gt2cmSLE * 10
 
 INIT_COLOR = {
     "Data assimilation": "#1a7f5e",
@@ -930,8 +935,14 @@ def plot_interactive_rate_comparison(
     ]
 
     def _panel_range(row, factor=1.0):
+        # sorted(...), not [r[0]*factor, r[1]*factor] directly: gt2mmSLE is
+        # negative (see its definition), so a naive scale would swap which
+        # endpoint is bigger and hand Plotly a descending range -- which
+        # Plotly interprets as "reverse this axis's direction", not what's
+        # wanted here (the axis should still read left-to-right ascending,
+        # only the underlying values are sign-flipped).
         r = x_range_by_panel.get(row)
-        return [r[0] * factor, r[1] * factor] if r is not None else None
+        return sorted([r[0] * factor, r[1] * factor]) if r is not None else None
 
     # The "Observed ..." arrow annotation(s) are pinned to the IMBIE slope in
     # data coordinates (annotation.x), so switching units has to move the
@@ -1201,11 +1212,17 @@ app.layout = html.Div(
                     children=html.Div(id="loading-trigger", style={"display": "none"}),
                     custom_spinner=html.Div(className="custom-slow-spinner"),
                     display="auto",
-                    # Keeps the spinner visible at least this long once shown,
-                    # so a fast callback (e.g. a Years: drag that lands back
-                    # on an already-cached window) doesn't flash it on and
-                    # off too quickly to actually notice.
-                    delay_hide=400,
+                    # Keeps the spinner visible at least this long once shown.
+                    # Both Years: and Simulation studies: target the SAME
+                    # _update_figure callback -- interacting with one while
+                    # the other's request is still in flight (or landing back
+                    # in an already-cached window quickly) can end one
+                    # loading event and start another in close succession;
+                    # without a large enough bridge here, that shows up as
+                    # the spinner flickering off between them instead of
+                    # staying continuously visible for the whole time the
+                    # user is actively interacting with either control.
+                    delay_hide=1000,
                 ),
             ],
             style={
