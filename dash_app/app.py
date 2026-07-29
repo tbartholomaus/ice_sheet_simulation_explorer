@@ -1346,72 +1346,110 @@ app.layout = html.Div(
                 "margin": "24px 0 0 40px",
             },
         ),
+        # Three text boxes around the Years:/Simulation studies: controls: a
+        # "this can take ~10 sec" note on the far left, vertically centered
+        # against BOTH rows combined (not just one), and a "Select the time
+        # window..." label + the "Simulation studies:" label left-aligned
+        # with each other directly above the controls each one describes --
+        # achieved by giving both labels the same fixed width and stacking
+        # the two rows in their own flex column, so the outer row's
+        # alignItems:center centers the note against that whole column's
+        # height, and both inner rows share one consistent left edge rather
+        # than each independently self-centering (which is what the
+        # previous version -- two separate top-level, individually
+        # justifyContent:center'd rows -- could not express: two rows
+        # centered as a group don't share a left edge unless their content
+        # widths happen to match by coincidence).
         html.Div(
             [
                 html.Div(
-                    "Select the time span over which to calculate the average rate of "
-                    "change. Adjustments of this time span can take ~10 sec. to load.",
+                    "Adjustments to the averaging window or the simulation "
+                    "studies can take ~10 seconds to load.",
                     style={
                         "color": "#555555", "fontFamily": "Arial, sans-serif",
-                        "fontSize": "13px", "lineHeight": "1.4", "maxWidth": "300px",
-                        "marginRight": "24px",
+                        "fontSize": "13px", "lineHeight": "1.4", "maxWidth": "220px",
+                        "marginRight": "32px",
                     },
                 ),
-                html.Label(
-                    "Years:",
-                    style={"fontWeight": "bold", "marginRight": "16px", "whiteSpace": "nowrap"},
-                ),
                 html.Div(
-                    dcc.RangeSlider(
-                        id="year-range-slider",
-                        min=YEAR_MIN, max=YEAR_MAX, step=1,
-                        value=YEAR_DEFAULT,
-                        allowCross=False,
-                        # Just the two end years -- at 420px wide, every-5-years marks
-                        # (7 labels) overlapped/got clipped.
-                        marks={YEAR_MIN: str(YEAR_MIN), YEAR_MAX: str(YEAR_MAX)},
-                        # Only while dragging/hovering a handle, not persistently --
-                        # the boundary-year marks are enough the rest of the time.
-                        tooltip={"placement": "bottom"},
-                    ),
-                    # ~40% of the slider's previous width (it used to fill a flex:1
-                    # slot spanning most of a 70%-wide row, roughly 1000-1100px at
-                    # typical desktop widths). Fixed px, not %, since this div's
-                    # immediate parent has no explicit width of its own for a
-                    # percentage to resolve against.
-                    style={"width": "420px", "minWidth": "220px"},
+                    [
+                        html.Div(
+                            [
+                                html.Div(
+                                    "Select the time window over which to "
+                                    "calculate the average rate of ice sheet "
+                                    "change.",
+                                    style={
+                                        "width": "220px", "minWidth": "220px",
+                                        "color": "#555555", "fontFamily": "Arial, sans-serif",
+                                        "fontSize": "13px", "lineHeight": "1.4",
+                                        "marginRight": "16px",
+                                    },
+                                ),
+                                html.Label(
+                                    "Years:",
+                                    style={"fontWeight": "bold", "marginRight": "16px", "whiteSpace": "nowrap"},
+                                ),
+                                html.Div(
+                                    dcc.RangeSlider(
+                                        id="year-range-slider",
+                                        min=YEAR_MIN, max=YEAR_MAX, step=1,
+                                        value=YEAR_DEFAULT,
+                                        allowCross=False,
+                                        # Just the two end years -- at 420px wide, every-5-years marks
+                                        # (7 labels) overlapped/got clipped.
+                                        marks={YEAR_MIN: str(YEAR_MIN), YEAR_MAX: str(YEAR_MAX)},
+                                        # Only while dragging/hovering a handle, not persistently --
+                                        # the boundary-year marks are enough the rest of the time.
+                                        tooltip={"placement": "bottom"},
+                                    ),
+                                    # ~40% of the slider's previous width (it used to fill a flex:1
+                                    # slot spanning most of a 70%-wide row, roughly 1000-1100px at
+                                    # typical desktop widths). Fixed px, not %, since this div's
+                                    # immediate parent has no explicit width of its own for a
+                                    # percentage to resolve against.
+                                    style={"width": "420px", "minWidth": "220px"},
+                                ),
+                            ],
+                            style={"display": "flex", "alignItems": "center"},
+                        ),
+                        html.Div(
+                            [
+                                html.Label(
+                                    "Simulation studies:",
+                                    style={
+                                        "width": "220px", "minWidth": "220px",
+                                        "fontWeight": "bold", "marginRight": "16px",
+                                    },
+                                ),
+                                dcc.Checklist(
+                                    id="data-sources-checklist",
+                                    # Every extra_sources paper plus both core ISMIP6 panels,
+                                    # so unchecking Seroussi/Goelzer removes that whole panel's
+                                    # ISMIP6 overlay the same way unchecking a paper removes
+                                    # its own -- see _update_figure, which turns each checked
+                                    # label into either an EXTRA_SOURCES filter or an empty
+                                    # precomputed_rows["AIS"/"GIS"] list.
+                                    options=[{"label": f" {label}", "value": label} for label in DATA_SOURCE_LABELS],
+                                    value=list(DATA_SOURCE_DEFAULT_CHECKED),
+                                    inline=True,
+                                    style={"display": "flex", "flexWrap": "wrap", "gap": "4px 20px"},
+                                    inputStyle={"marginRight": "4px"},
+                                ),
+                            ],
+                            style={
+                                "display": "flex", "alignItems": "center",
+                                "marginTop": "12px",
+                                "fontFamily": "Arial, sans-serif", "fontSize": "14px", "color": "#2a3f5f",
+                            },
+                        ),
+                    ],
+                    style={"display": "flex", "flexDirection": "column"},
                 ),
             ],
             style={
                 "display": "flex", "alignItems": "center", "justifyContent": "center",
                 "width": "100%", "margin": "20px auto 0 auto",
-            },
-        ),
-        html.Div(
-            [
-                html.Label(
-                    "Simulation studies:",
-                    style={"fontWeight": "bold", "marginRight": "16px", "whiteSpace": "nowrap"},
-                ),
-                dcc.Checklist(
-                    id="data-sources-checklist",
-                    # Every extra_sources paper plus both core ISMIP6 panels,
-                    # so unchecking Seroussi/Goelzer removes that whole panel's
-                    # ISMIP6 overlay the same way unchecking a paper removes
-                    # its own -- see _update_figure, which turns each checked
-                    # label into either an EXTRA_SOURCES filter or an empty
-                    # precomputed_rows["AIS"/"GIS"] list.
-                    options=[{"label": f" {label}", "value": label} for label in DATA_SOURCE_LABELS],
-                    value=list(DATA_SOURCE_DEFAULT_CHECKED),
-                    inline=True,
-                    style={"display": "flex", "flexWrap": "wrap", "gap": "4px 20px"},
-                    inputStyle={"marginRight": "4px"},
-                ),
-            ],
-            style={
-                "display": "flex", "alignItems": "center", "justifyContent": "center",
-                "width": "100%", "margin": "12px auto 0 auto",
-                "fontFamily": "Arial, sans-serif", "fontSize": "14px", "color": "#2a3f5f",
             },
         ),
         # "Units:" is a native in-figure Plotly dropdown now (see the
@@ -1425,11 +1463,11 @@ app.layout = html.Div(
                 html.Div(
                     [
                         html.P(
-                            "This app allows for comparison between ISMIP6 simulations of "
-                            "recent ice sheet change (Goelzer et al., 2020; Seroussi et al., "
-                            "2020) and observations of ice sheet change (Otosaka et al., "
-                            "2023). The goal of this app is to facilitate exploration of how "
-                            "different modeling decisions affect simulated mass change."
+                            "This app allows comparison between simulations of recent ice "
+                            "sheet change, including from ISMIP6, and observations of ice "
+                            "sheet change (Otosaka et al., 2023). The goal of this app is to "
+                            "facilitate exploration of how different modeling decisions "
+                            "affect simulated mass change."
                         ),
                         html.P(
                             "PDFs show the distribution of simulated mass changes over the "
@@ -1442,8 +1480,10 @@ app.layout = html.Div(
                             "plotted at its simulated rate of mass change."
                         ),
                         html.P(
-                            "Hover over each dot to learn more about its characteristics, or "
-                            "click on legend elements to hide or show plot components."
+                            "Hover over each dot to learn more about its characteristics, "
+                            "click on legend elements to hide or show plot components, or "
+                            "use the tools at top right of the plots to zoom or pan through "
+                            "the plots."
                         ),
                     ],
                     style={
