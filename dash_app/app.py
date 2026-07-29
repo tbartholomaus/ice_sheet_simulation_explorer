@@ -51,6 +51,7 @@ Embed on an existing page once deployed:
     <iframe src="https://your-domain.example/" style="width:100%; height:900px; border:0;"></iframe>
 """
 
+import math
 import os
 
 import numpy as np
@@ -443,6 +444,37 @@ def _rgba(color, alpha):
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
+def _nice_sle_ticks(gt_range, factor, target_ticks=6):
+    """Picks ~target_ticks "nice" (1/2/5 x 10^n) round sea-level-rise
+    (mm/yr) values spanning gt_range (a (min, max) tuple in Gt/yr, i.e. a
+    panel's x_range_by_panel entry), and returns (gt_positions, sle_labels):
+    gt_positions are where those nice SLE values actually fall on the
+    (never-moved) Gt/yr axis (sle_value / factor), and sle_labels are their
+    display text. Used so the "Units:" dropdown's "Sea level rise" option
+    can relabel the x-axis with sign-flipped, rescaled tick text WITHOUT
+    moving a single point -- see that dropdown's construction below."""
+    lo, hi = sorted(v * factor for v in gt_range)
+    span = hi - lo
+    if span <= 0:
+        return [], []
+    raw_step = span / target_ticks
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    step = 10 * magnitude
+    for m in (1, 2, 5, 10):
+        if raw_step <= m * magnitude:
+            step = m * magnitude
+            break
+    start = math.ceil(lo / step) * step
+    sle_values = []
+    v = start
+    while v <= hi + step * 1e-6:
+        sle_values.append(round(v, 10))
+        v += step
+    gt_positions = [v / factor for v in sle_values]
+    labels = [f"{v:g}" for v in sle_values]
+    return gt_positions, labels
+
+
 def _dim_color_maps(simulated, extra_sources=None):
     """Category -> color, per grouping dimension, built from the FULL
     simulated dataframe AND every extra_sources entry (not windowed by
@@ -638,6 +670,15 @@ def plot_interactive_rate_comparison(
     publication_only_idx = []  # "Group by publication": one category per paper (ISMIP6 counts as one)
     median_trace_idx = []  # every median-marker trace, across all dimensions -- toggled by the "Medians:" dropdown
     legend_shown = set()  # (dim, cat) pairs already given a legend entry, across both panels
+    # legendgroups for the fixed "All simulations" traces (kde_all/all_pts/
+    # median:all) already given a legend entry. NOT hardcoded to "whichever
+    # trace belongs to k==1 (AIS)" -- a panel can have zero data (e.g. its
+    # ISMIP6 checkbox is unchecked and no extra source covers that ice
+    # sheet), skipping these traces entirely for that k, which silently
+    # dropped the legend entry for BOTH panels when k==1 was assumed to
+    # always be the one bearing it. Tracked dynamically instead, same
+    # principle as legend_shown above.
+    fixed_legend_shown = set()
     x_range_by_panel = {}  # row (1=AIS, 2=GIS) -> (min, max), for the Units: dropdown's explicit axis ranges
     observed_annotation_x = {}  # annotation index -> its Gt/yr x-position (slope), for the Units: dropdown
 
@@ -711,11 +752,13 @@ def plot_interactive_rate_comparison(
                 hoverinfo="skip", showlegend=False,
             ), row=k, col=1)
             all_only_idx.append(idx)
+            show_kde_all = "kde_all" not in fixed_legend_shown
+            fixed_legend_shown.add("kde_all")
             idx = len(fig.data)
             fig.add_trace(go.Scatter(
                 x=xs, y=rate_kde_y0 + dens, mode="lines", line=dict(color="gray", width=1),
                 fill="tonexty", fillcolor=_rgba("gray", 0.5), hoverinfo="skip",
-                name="PDF of all simulations", legendgroup="kde_all", showlegend=(k == 1),
+                name="PDF of all simulations", legendgroup="kde_all", showlegend=show_kde_all,
             ), row=k, col=1)
             all_only_idx.append(idx)
 
@@ -735,6 +778,8 @@ def plot_interactive_rate_comparison(
                     continue
                 size_by_pub[src["label"]] = 3 if n_src > 30 else 4
                 opacity_by_pub[src["label"]] = max(0.12, min(0.6, 15 / n_src))
+            show_all_pts = "all_pts" not in fixed_legend_shown
+            fixed_legend_shown.add("all_pts")
             idx = len(fig.data)
             fig.add_trace(go.Scatter(
                 x=merged_df["rate"], y=merged_df["jitter"], mode="markers",
@@ -743,16 +788,18 @@ def plot_interactive_rate_comparison(
                     size=merged_df["publication"].map(size_by_pub).tolist(),
                     opacity=merged_df["publication"].map(opacity_by_pub).tolist(),
                 ),
-                name="Simulation", legendgroup="all_pts", showlegend=(k == 1), visible=True,
+                name="Simulation", legendgroup="all_pts", showlegend=show_all_pts, visible=True,
                 text=merged_df["hover"], customdata=merged_df["hover_sle"], hovertemplate="%{text}<extra></extra>",
             ), row=k, col=1)
             all_only_idx.append(idx)
 
+            show_median_all = "median:all" not in fixed_legend_shown
+            fixed_legend_shown.add("median:all")
             idx = len(fig.data)
             fig.add_trace(go.Scatter(
                 x=[merged_df["rate"].median()], y=[rate_median_y], mode="markers",
                 marker=dict(symbol="triangle-down", size=11, color="gray", line=dict(width=1, color="black")),
-                opacity=1, name="All simulations median", legendgroup="median:all", showlegend=(k == 1),
+                opacity=1, name="All simulations median", legendgroup="median:all", showlegend=show_median_all,
                 visible=True, hovertemplate="All simulations median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
             ), row=k, col=1)
             all_only_idx.append(idx)
@@ -899,25 +946,18 @@ def plot_interactive_rate_comparison(
         # non-selected dimensions after clicking "Group by:").
         buttons.append(dict(label=label, method="restyle", args=[{"visible": visible}, managed_idx]))
 
-    # "Units:" dropdown -- every trace's x-data represents a rate in Gt/yr;
-    # the Sea level rise view is just that same data times gt2mmSLE. Rather
-    # than rebuild the figure, read each trace's already-built x/text/
-    # hovertemplate back out and restyle to the alt-unit version computed
-    # from it, so the two controls above (Group by / Distribution medians)
-    # keep working unmodified regardless of which unit is selected.
-    #
-    # This is a native in-figure Plotly updatemenu (precomputing both unit
-    # versions server-side, ~10 MB of extra payload) rather than the
-    # RadioItems + clientside_callback this app tried first -- that JS
-    # version never visibly worked in an actual browser despite checking
-    # out in every way testable without one, so this reverts to the
-    # mechanism already proven correct (same method="update" pattern this
-    # file's "Group by:" restyle bug fix confirmed the correct args shape
-    # for -- [dataUpdate, layoutUpdate], not [dataUpdate, traceIndices]).
-    mass_x_all = [tr.x for tr in fig.data]
-    sle_x_all = [
-        tuple(v * gt2mmSLE for v in tr.x) if tr.x is not None else None for tr in fig.data
-    ]
+    # "Units:" dropdown -- switches between showing rates as ice-sheet mass
+    # change (Gt/yr) and as their sea-level-rise equivalent (mm/yr). Every
+    # trace's x data stays in Gt/yr NO MATTER which unit is selected -- an
+    # explicit user request that points never move or get replotted when
+    # this is toggled. "Sea level rise" is achieved purely by RELABELING
+    # the same physical x-axis positions: explicit tickvals/ticktext (see
+    # _nice_sle_ticks) showing each position's sign-flipped, rescaled
+    # sea-level-equivalent value, instead of Plotly's own auto-ticking
+    # (which can only label an axis by the data's actual values, not some
+    # other unit's equivalent). Not moving x also means neither button
+    # needs to ship its own copy of every trace's x array (previously the
+    # single largest contributor to this dropdown's payload cost).
     mass_text_all = [tr.text for tr in fig.data]
     # Point traces stash their alt-unit hover string in customdata (set
     # alongside "text" at trace-creation); every other trace type either
@@ -934,26 +974,16 @@ def plot_interactive_rate_comparison(
         for ht in mass_hovertemplate_all
     ]
 
-    def _panel_range(row, factor=1.0):
-        # sorted(...), not [r[0]*factor, r[1]*factor] directly: gt2mmSLE is
-        # negative (see its definition), so a naive scale would swap which
-        # endpoint is bigger and hand Plotly a descending range -- which
-        # Plotly interprets as "reverse this axis's direction", not what's
-        # wanted here (the axis should still read left-to-right ascending,
-        # only the underlying values are sign-flipped).
-        r = x_range_by_panel.get(row)
-        return sorted([r[0] * factor, r[1] * factor]) if r is not None else None
+    sle_ticks_1 = _nice_sle_ticks(x_range_by_panel[1], gt2mmSLE) if 1 in x_range_by_panel else ([], [])
+    sle_ticks_2 = _nice_sle_ticks(x_range_by_panel[2], gt2mmSLE) if 2 in x_range_by_panel else ([], [])
 
-    # The "Observed ..." arrow annotation(s) are pinned to the IMBIE slope in
-    # data coordinates (annotation.x), so switching units has to move the
-    # arrow itself, not just relabel it -- relayout can target a specific
-    # annotation's properties via "annotations[i].<prop>".
+    # The "Observed ..." arrow annotation is pinned to the IMBIE slope in
+    # data coordinates (annotation.x) -- left untouched here (same "nothing
+    # moves" rule as the traces above), only its text changes.
     mass_annotation_updates, sle_annotation_updates = {}, {}
     for _idx, _slope in observed_annotation_x.items():
         mass_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed mass change</b>"
-        mass_annotation_updates[f"annotations[{_idx}].x"] = _slope
         sle_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed sea level contribution</b>"
-        sle_annotation_updates[f"annotations[{_idx}].x"] = _slope * gt2mmSLE
 
     layout_kwargs = dict(
         updatemenus=[
@@ -977,17 +1007,20 @@ def plot_interactive_rate_comparison(
                 active=0,
                 buttons=[
                     dict(label="Mass change", method="update", args=[
-                        {"x": mass_x_all, "text": mass_text_all, "hovertemplate": mass_hovertemplate_all},
+                        {"text": mass_text_all, "hovertemplate": mass_hovertemplate_all},
                         {"xaxis.title.text": "Rate of ice sheet mass change (Gt/yr)",
                          "xaxis2.title.text": "Rate of ice sheet mass change (Gt/yr)",
-                         "xaxis.range": _panel_range(1), "xaxis2.range": _panel_range(2),
+                         "xaxis.tickmode": "auto", "xaxis2.tickmode": "auto",
+                         "xaxis.tickvals": None, "xaxis2.tickvals": None,
+                         "xaxis.ticktext": None, "xaxis2.ticktext": None,
                          **mass_annotation_updates},
                     ]),
                     dict(label="Sea level rise", method="update", args=[
-                        {"x": sle_x_all, "text": sle_text_all, "hovertemplate": sle_hovertemplate_all},
+                        {"text": sle_text_all, "hovertemplate": sle_hovertemplate_all},
                         {"xaxis.title.text": "Contribution to sea level rise (mm/yr)",
                          "xaxis2.title.text": "Contribution to sea level rise (mm/yr)",
-                         "xaxis.range": _panel_range(1, gt2mmSLE), "xaxis2.range": _panel_range(2, gt2mmSLE),
+                         "xaxis.tickmode": "array", "xaxis.tickvals": sle_ticks_1[0], "xaxis.ticktext": sle_ticks_1[1],
+                         "xaxis2.tickmode": "array", "xaxis2.tickvals": sle_ticks_2[0], "xaxis2.ticktext": sle_ticks_2[1],
                          **sle_annotation_updates},
                     ]),
                 ],
