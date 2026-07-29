@@ -219,9 +219,17 @@ ism_meta = {
     ("MUN",      "GSM1"):      {"ice_model": "GSM",       "sliding_law": "Coulomb and Weertman",        "initialization": "Spin-up"},
     ("MUN",      "GSM2"):      {"ice_model": "GSM",       "sliding_law": "Linear viscous and Weertman", "initialization": "Spin-up"},
     ("VUB",      "GISM"):      {"ice_model": "GISM",      "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
+    # Goelzer et al. 2020 Table A1/A6/A7/A12 -- previously missing exact
+    # keys, silently mislabeled via get_ism_meta()'s substring fallback
+    # (e.g. JPL/ISSM was borrowing JPL1's unrelated AIS entry).
+    ("JPL",      "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
+    ("JPL",      "ISSMPALEO"): {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Spin-up"},
+    ("UCIJPL",   "ISSM1"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
+    ("UCIJPL",   "ISSM2"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
     # AIS additional groups
     ("ARC",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
     ("ARC",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
+    ("AWI",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
     ("DOE",      "MALI"):      {"ice_model": "MALI",      "sliding_law": "Coulomb",                  "initialization": "Data assimilation"},
     ("GRL",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
     ("GSFC",     "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
@@ -231,9 +239,12 @@ ism_meta = {
     ("PSU",      "PSU3D1"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
     ("PSU",      "PSU3D2"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
     ("UTAS",     "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
+    ("VUB",      "AISMPALEO"): {"ice_model": "AISMPALEO", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
 
     # Non-ISMIP6 published simulations (see utilities/external_sources.py for
-    # provenance/derivation of each).
+    # provenance/derivation of each). "initialization" for Rahlves2025 covers
+    # both its ERA5- and ESM-forced branches with one description, since Model
+    # is "CISM" either way (unlike ISMIP6, this dict doesn't split them further).
     ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman",                    "initialization": "Spin-up"},
     ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
     ("Aschwanden2019", "PISM"):  {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",              "initialization": "Spin-up"},
@@ -319,9 +330,12 @@ DATA_SOURCE_DEFAULT_CHECKED = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL]
 
 RCP_COLOR = {
     "RCP2.6":  "#003466",
+    "RCP4.5":  "#b8860b",
     "RCP8.5":  "#990002",
     "SSP1-2.6": "#1a7f5e",
+    "SSP2-4.5": "#8a6d3a",
     "SSP5-8.5": "#8b1a00",
+    "Control":  "#555555",
     "Unknown":  "#888888",
 }
 IMBIE_COLOR = "#08519c"
@@ -435,12 +449,33 @@ def _rgba(color, alpha):
     """Bakes an alpha channel directly into an rgba(...) string. Plotly's
     trace-level `opacity` does not reliably apply to `fill` (a lone fill at
     opacity=0.14 still renders fully solid), so every translucent fill in
-    this figure uses this instead of the `opacity` kwarg."""
+    this figure uses this instead of the `opacity` kwarg.
+
+    Every color constant in this file (RCP_COLOR/INIT_COLOR/extra_sources'
+    "color"/px.colors.qualitative.Dark24) is a hex string or literal "gray",
+    so this deliberately doesn't pull in matplotlib (unlike the notebook's
+    own _rgba, which uses colors.to_rgb and so accepts any named CSS color)
+    -- that's real import/memory weight for a case that never happens today.
+    It does handle 3-digit hex shorthand and passthrough rgb(...)/rgba(...)
+    strings, and raises a clear error for anything else instead of a
+    confusing IndexError/ValueError deep in string slicing, in case a
+    future color constant is added in one of those other forms."""
     if color in ("gray", "grey"):
         r, g, b = 128, 128, 128
-    else:
+    elif color.startswith("#"):
         c = color.lstrip("#")
+        if len(c) == 3:
+            c = "".join(ch * 2 for ch in c)
+        if len(c) != 6:
+            raise ValueError(f"_rgba: unsupported hex color {color!r} (expected #rgb or #rrggbb)")
         r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    elif color.startswith(("rgb(", "rgba(")):
+        r, g, b = (int(v) for v in color[color.index("(") + 1:color.index(")")].split(",")[:3])
+    else:
+        raise ValueError(
+            f"_rgba: unsupported color format {color!r} -- only hex (#rgb/#rrggbb), "
+            f"'gray'/'grey', or rgb(...)/rgba(...) strings are supported"
+        )
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
@@ -712,13 +747,16 @@ def plot_interactive_rate_comparison(
             frames.append(sim_df)
             publication_color_map[PUBLICATION_LABEL[ice_sheet]] = ISMIP6_PUBLICATION_COLOR
         for src in (extra_sources or []):
-            # Use the precomputed cache when this source has one (see its
-            # construction above, near ROWS_CACHE), falling back to
-            # _sim_rows() itself when there's no cache (e.g. the notebook's
-            # own extra_sources, which never sets "rows_cache") or the
-            # requested window falls outside the cache's precomputed range.
-            src_cache = src.get("rows_cache", {}).get((year_start, year_end))
-            src_rows = src_cache[ice_sheet] if src_cache is not None else _sim_rows(src["df"], ice_sheet, year_start, year_end)
+            # Use the lazily-memoized cache when this source has one (see
+            # its construction above, near ROWS_CACHE) -- indexing with
+            # [key], not .get(key), so a first-time window actually
+            # triggers LazyRowsCache's __missing__ compute-and-memoize
+            # rather than silently falling through every time. Falls back
+            # to _sim_rows() itself only when there's no cache at all
+            # (e.g. the notebook's own extra_sources, which never sets
+            # "rows_cache").
+            rows_cache = src.get("rows_cache")
+            src_rows = rows_cache[(year_start, year_end)][ice_sheet] if rows_cache is not None else _sim_rows(src["df"], ice_sheet, year_start, year_end)
             if not src_rows:
                 continue
             src_df = pd.DataFrame(src_rows)
@@ -1105,23 +1143,14 @@ def _fast_slope(x, y):
     return np.dot(xd, yd) / ssxx
 
 
-def _valid_year_ranges(year_min, year_max, min_span):
-    """Every (lo, hi) the "Years:" RangeSlider can land on (post min-span
-    self-correction): integers with year_min <= lo, hi <= year_max, and
-    hi - lo >= min_span."""
-    for lo in range(year_min, year_max - min_span + 1):
-        for hi in range(lo + min_span, year_max + 1):
-            yield (lo, hi)
-
-
-def _precompute_rows_cache(simulated, year_min, year_max, min_span):
-    """Builds {(year_start, year_end): {"AIS": [...], "GIS": [...]}}, with
-    each inner list in exactly the row-dict shape _sim_rows() returns, for
-    every valid (year_start, year_end). Extracts each (ice_sheet, group,
-    model, exp) combo's NaN-dropped Year/mass-change arrays and its
-    year-independent metadata (ice model, sliding law, GCM, scenario, base
-    hover string) once, then reuses them across all 351 year windows --
-    only the boolean mask and _fast_slope call vary per window."""
+def _build_combo_arrays(simulated):
+    """The expensive, one-time (not per-window) prep step: for every
+    (ice_sheet, group, model, exp) combo, its NaN-dropped Year/mass-change
+    arrays and its year-independent metadata (ice model, sliding law, GCM,
+    scenario, base hover string) -- the groupby/get_ism_meta/get_exp_meta/
+    _build_hover work, paid once regardless of how many year-windows are
+    ever actually requested. Cost scales with the number of (group, model,
+    exp) combos in `simulated`, NOT with the number of valid year windows."""
     combo_arrays = {}
     combo_meta = {}
     for ice_sheet in ["AIS", "GIS"]:
@@ -1143,28 +1172,63 @@ def _precompute_rows_cache(simulated, year_min, year_max, min_span):
                 "climate_model": exp_m.get("climate_model", "Unknown"),
                 "base_hover": _build_hover(group, model, exp, ice_sheet),
             }
+    return combo_arrays, combo_meta
 
-    cache = {}
-    for lo, hi in _valid_year_ranges(year_min, year_max, min_span):
-        per_ice_sheet = {"AIS": [], "GIS": []}
-        for (ice_sheet, group, model, exp), (years, vals) in combo_arrays.items():
-            m = (years >= lo) & (years <= hi)
-            if m.sum() < 2:
-                continue
-            slope = _fast_slope(years[m], vals[m])
-            if slope is None or not np.isfinite(slope):
-                continue
-            meta = combo_meta[(ice_sheet, group, model, exp)]
-            per_ice_sheet[ice_sheet].append({
-                "rate": slope, "group": group, "model": model, "exp": exp,
-                "initialization": meta["initialization"], "ice_model": meta["ice_model"],
-                "sliding_law": meta["sliding_law"], "scenario": meta["scenario"],
-                "climate_model": meta["climate_model"],
-                "hover": meta["base_hover"] + f"<br>Rate: {slope:.0f} Gt/yr",
-                "hover_sle": meta["base_hover"] + f"<br>Rate: {slope * gt2mmSLE:.2f} mm/yr",
-            })
-        cache[(lo, hi)] = per_ice_sheet
-    return cache
+
+def _rows_for_window(combo_arrays, combo_meta, lo, hi):
+    """The cheap per-window step (a boolean mask + _fast_slope call over
+    already-prepared arrays) -- what used to run for all 351 valid windows
+    eagerly at startup. Called lazily instead, see LazyRowsCache below."""
+    per_ice_sheet = {"AIS": [], "GIS": []}
+    for (ice_sheet, group, model, exp), (years, vals) in combo_arrays.items():
+        m = (years >= lo) & (years <= hi)
+        if m.sum() < 2:
+            continue
+        slope = _fast_slope(years[m], vals[m])
+        if slope is None or not np.isfinite(slope):
+            continue
+        meta = combo_meta[(ice_sheet, group, model, exp)]
+        per_ice_sheet[ice_sheet].append({
+            "rate": slope, "group": group, "model": model, "exp": exp,
+            "initialization": meta["initialization"], "ice_model": meta["ice_model"],
+            "sliding_law": meta["sliding_law"], "scenario": meta["scenario"],
+            "climate_model": meta["climate_model"],
+            "hover": meta["base_hover"] + f"<br>Rate: {slope:.0f} Gt/yr",
+            "hover_sle": meta["base_hover"] + f"<br>Rate: {slope * gt2mmSLE:.2f} mm/yr",
+        })
+    return per_ice_sheet
+
+
+class LazyRowsCache(dict):
+    """{(year_start, year_end): {"AIS": [...], "GIS": [...]}}, computed and
+    memoized lazily on first access (via dict's own __missing__ hook, so
+    ordinary `cache[(lo, hi)]` indexing everywhere else needs no changes)
+    instead of eagerly building all 351 valid windows at import time.
+
+    This replaces an earlier version (_precompute_rows_cache) that built
+    every window upfront for ISMIP6, which was then naively extended to
+    each of the 3 extra_sources dataframes too -- for Aschwanden2019's
+    ~500-member ensemble alone that meant ~350,000 pre-built row-dicts held
+    in memory before a single request ever arrived, nearly doubling this
+    app's import-time RSS (measured locally: ~513 MB -> ~960 MB) and
+    causing Render's free-tier instance to OOM during startup, before
+    gunicorn could even bind a port. A real deployed session only ever
+    touches a handful of the 351 possible windows (wherever the Years:
+    slider actually gets dragged to), so eagerly building all of them was
+    pure waste. The one-time _build_combo_arrays() setup this still does at
+    startup is cheap (proportional to the number of (group, model, exp)
+    combos, not the number of windows) -- only the expensive "build every
+    window" step is now deferred and memoized per-window instead."""
+
+    def __init__(self, simulated):
+        super().__init__()
+        self._combo_arrays, self._combo_meta = _build_combo_arrays(simulated)
+
+    def __missing__(self, key):
+        lo, hi = key
+        value = _rows_for_window(self._combo_arrays, self._combo_meta, lo, hi)
+        self[key] = value
+        return value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1198,20 +1262,20 @@ TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
 # checklist currently has checked), so a category's color never shifts
 # depending on which papers happen to be checked right now.
 DIM_COLOR_MAPS = _dim_color_maps(ismip6, extra_sources=EXTRA_SOURCES)
-ROWS_CACHE = _precompute_rows_cache(ismip6, YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN)
-# Same precomputed-per-window-rate cache ISMIP6 gets above, one per
+ROWS_CACHE = LazyRowsCache(ismip6)
+# Same lazily-memoized per-window-rate cache ISMIP6 gets above, one per
 # extra_sources entry -- _sim_rows() on a paper's own dataframe (e.g.
 # Aschwanden2019's ~500 LHS ensemble members) was previously recomputed via
 # the slow scipy.stats.linregress path on every single request regardless
 # of whether the year window had changed, which was real, avoidable
-# per-request CPU/memory pressure. _precompute_rows_cache is already
-# generic over any (Group, Model, Exp, IS)-shaped dataframe, so this is a
-# direct reuse, not a new code path. plot_interactive_rate_comparison()
-# below checks each source dict for this key and falls back to the
-# original _sim_rows() call when it's absent -- keeping the notebook
-# (which passes plain extra_sources dicts with no such cache) unaffected.
+# per-request CPU/memory pressure. LazyRowsCache is already generic over
+# any (Group, Model, Exp, IS)-shaped dataframe, so this is a direct reuse,
+# not a new code path. plot_interactive_rate_comparison() below checks
+# each source dict for this key and falls back to the original _sim_rows()
+# call when it's absent -- keeping the notebook (which passes plain
+# extra_sources dicts with no such cache) unaffected.
 for _src in EXTRA_SOURCES:
-    _src["rows_cache"] = _precompute_rows_cache(_src["df"], YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN)
+    _src["rows_cache"] = LazyRowsCache(_src["df"])
 
 # Matches DATA_SOURCE_DEFAULT_CHECKED (only the two ISMIP6 panels) so the
 # page's very first render is consistent with what the "Simulation studies:"
