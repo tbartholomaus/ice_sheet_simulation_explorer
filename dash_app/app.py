@@ -56,6 +56,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import psutil
 import scipy.stats
 import plotly.graph_objects as go
 import plotly.express as px
@@ -1507,9 +1508,56 @@ app.layout = html.Div(
             ],
             style={"display": "flex", "alignItems": "flex-start"},
         ),
+        # Small live CPU/memory readout -- position:fixed takes it entirely
+        # out of the normal document flow (pinned to the viewport corner),
+        # so adding it here can't shift or resize anything else in the
+        # layout above, regardless of where in this children list it's
+        # appended. Polls this process's own usage every 2s via
+        # dcc.Interval -- added after chasing a real Render OOM (see
+        # LazyRowsCache's docstring and render.yaml's --max-requests
+        # comment) to make memory/CPU behavior visible during local
+        # testing without needing to shell in or read server logs.
+        dcc.Interval(id="perf-monitor-interval", interval=2000, n_intervals=0),
+        html.Div(
+            id="perf-monitor",
+            style={
+                "position": "fixed", "bottom": "8px", "right": "8px",
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "border": "1px solid #ccc", "borderRadius": "4px",
+                "padding": "3px 8px", "fontFamily": "monospace",
+                "fontSize": "11px", "color": "#555555", "zIndex": 1000,
+                "pointerEvents": "none",
+            },
+        ),
     ],
     style={"margin": 0, "padding": 0},
 )
+
+
+# A single, reused Process handle -- cpu_percent(interval=None) reports
+# usage SINCE THAT SAME OBJECT'S LAST CALL (0.0 on an object's first-ever
+# call, with no prior reading to diff against), so calling
+# psutil.Process().cpu_percent(...) fresh inside the callback below would
+# silently read 0.0% forever. The throwaway priming call establishes a
+# baseline immediately so the very first tick already reports something
+# meaningful instead of 0.0.
+_PERF_PROC = psutil.Process()
+_PERF_PROC.cpu_percent(interval=None)
+
+
+@app.callback(
+    Output("perf-monitor", "children"),
+    Input("perf-monitor-interval", "n_intervals"),
+)
+def _update_perf_monitor(_n_intervals):
+    """Live CPU%/memory readout for this worker process specifically (not
+    the whole machine) -- cpu_percent(interval=None) is non-blocking and
+    reports usage since _PERF_PROC's last call, which is exactly what a
+    per-tick poll on a persistent handle wants; interval=<float> would
+    instead block this callback for that long on every single tick."""
+    cpu_pct = _PERF_PROC.cpu_percent(interval=None)
+    mem_mb = _PERF_PROC.memory_info().rss / 1e6
+    return f"CPU {cpu_pct:5.1f}%  |  Mem {mem_mb:6.0f} MB"
 
 
 @app.callback(
