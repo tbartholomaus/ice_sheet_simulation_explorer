@@ -51,8 +51,10 @@ Embed on an existing page once deployed:
     <iframe src="https://your-domain.example/" style="width:100%; height:900px; border:0;"></iframe>
 """
 
+import collections
 import math
 import os
+import time
 
 import numpy as np
 import pandas as pd
@@ -1544,6 +1546,15 @@ app.layout = html.Div(
 _PERF_PROC = psutil.Process()
 _PERF_PROC.cpu_percent(interval=None)
 
+# (monotonic timestamp, cpu_pct, mem_mb) readings from the last
+# _PERF_WINDOW_SECONDS, for the "Max of last 5 min." line -- time.monotonic()
+# rather than time.time(), since this is only ever compared against other
+# readings from this same process's uptime, and monotonic is immune to
+# wall-clock adjustments (NTP sync, DST, etc.) that could otherwise make the
+# trailing-window cutoff jump backward or forward.
+_PERF_HISTORY = collections.deque()
+_PERF_WINDOW_SECONDS = 5 * 60
+
 
 @app.callback(
     Output("perf-monitor", "children"),
@@ -1551,13 +1562,26 @@ _PERF_PROC.cpu_percent(interval=None)
 )
 def _update_perf_monitor(_n_intervals):
     """Live CPU%/memory readout for this worker process specifically (not
-    the whole machine) -- cpu_percent(interval=None) is non-blocking and
-    reports usage since _PERF_PROC's last call, which is exactly what a
-    per-tick poll on a persistent handle wants; interval=<float> would
-    instead block this callback for that long on every single tick."""
+    the whole machine), plus the running max of each over the trailing 5
+    minutes -- cpu_percent(interval=None) is non-blocking and reports usage
+    since _PERF_PROC's last call, which is exactly what a per-tick poll on
+    a persistent handle wants; interval=<float> would instead block this
+    callback for that long on every single tick."""
+    now = time.monotonic()
     cpu_pct = _PERF_PROC.cpu_percent(interval=None)
     mem_mb = _PERF_PROC.memory_info().rss / 1e6
-    return f"CPU {cpu_pct:5.1f}%  |  Mem {mem_mb:6.0f} MB"
+
+    _PERF_HISTORY.append((now, cpu_pct, mem_mb))
+    cutoff = now - _PERF_WINDOW_SECONDS
+    while _PERF_HISTORY and _PERF_HISTORY[0][0] < cutoff:
+        _PERF_HISTORY.popleft()
+    max_cpu = max(r[1] for r in _PERF_HISTORY)
+    max_mem = max(r[2] for r in _PERF_HISTORY)
+
+    return [
+        html.Div(f"Live: CPU {cpu_pct:5.1f}%  |  Mem {mem_mb:6.0f} MB"),
+        html.Div(f"Max of last 5 min.: CPU {max_cpu:5.1f}%  |  Mem {max_mem:6.0f} MB"),
+    ]
 
 
 @app.callback(
