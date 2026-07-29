@@ -56,6 +56,27 @@ import math
 import os
 import time
 
+# Pin every BLAS/OpenMP-based library this app touches (numpy, scipy,
+# pandas' numexpr backend) to a single thread each, BEFORE they're
+# imported -- these libraries size their internal thread pools once, the
+# first time they're used, by reading these env vars (or falling back to
+# "one thread per detected CPU core" if unset). A container's CPU CORE
+# COUNT (what /proc/cpuinfo reports) and its actual CPU QUOTA (a thin
+# fraction of a core, on Render's free tier) are different numbers --
+# spawning threads sized to the former onto the latter causes thread
+# contention/context-switching overhead that can make things far slower
+# than the raw throttling alone would (observed: ~100x, not the ~10x a
+# straightforward CPU-quota cut would predict). None of this app's own
+# code benefits from BLAS/OpenMP parallelism -- every gaussian_kde/
+# linregress call here operates on at most a few hundred points, well
+# below where multi-threading would pay for its own overhead -- so pinning
+# to 1 has no downside even on an unconstrained machine.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
 import numpy as np
 import pandas as pd
 import psutil
@@ -424,7 +445,7 @@ def _categorical_color_map(categories, fixed=None, palette=None):
     return color_map
 
 
-def _rate_kde_raw(values, x_range, n=200, weights=None):
+def _rate_kde_raw(values, x_range, n=100, weights=None):
     """Raw KDE curve (integrates to 1 over its own support) -- NOT renormalized
     to its own peak. Callers weight and rescale this against a shared reference
     so peak heights stay comparable across subgroups of very different spread.

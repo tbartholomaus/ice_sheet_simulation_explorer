@@ -17,3 +17,23 @@ services:
     # the varying-allocation-size workload that triggers it), independent
     # of whether that growth is ever large enough to matter on its own.
     startCommand: gunicorn app:server --timeout 120 --max-requests 200 --max-requests-jitter 50
+    # Belt-and-suspenders alongside app.py's own os.environ.setdefault(...)
+    # calls (which only take effect if they run before numpy/scipy/pandas
+    # are first imported) -- setting these here guarantees they're in the
+    # process environment before Python even starts, regardless of import
+    # order. See app.py's top-of-file comment for why: BLAS/OpenMP
+    # threading itself, oversubscribed onto this container's thin CPU
+    # quota, was found to cause a ~100x slowdown (0.4s locally vs 39s on
+    # Render for an identical request) -- far more than raw CPU throttling
+    # alone would explain.
+    envVars:
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"
+      - key: VECLIB_MAXIMUM_THREADS
+        value: "1"
+      - key: NUMEXPR_NUM_THREADS
+        value: "1"
