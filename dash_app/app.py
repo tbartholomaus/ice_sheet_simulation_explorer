@@ -1272,8 +1272,8 @@ ismip6_gis = load_ismip6_gis()
 ismip6_gis["IS"] = "GIS"
 ismip6 = pd.concat([ismip6_ais, ismip6_gis])
 
-YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 1990, 2020, 5
-YEAR_DEFAULT = [2010, 2020]
+YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2020, 5
+YEAR_DEFAULT = [2015, 2020]
 
 TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
 
