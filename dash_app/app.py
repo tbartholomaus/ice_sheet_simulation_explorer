@@ -51,10 +51,8 @@ Embed on an existing page once deployed:
     <iframe src="https://your-domain.example/" style="width:100%; height:900px; border:0;"></iframe>
 """
 
-import collections
 import math
 import os
-import time
 
 # Pin every BLAS/OpenMP-based library this app touches (numpy, scipy,
 # pandas' numexpr backend) to a single thread each, BEFORE they're
@@ -79,7 +77,6 @@ os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 import numpy as np
 import pandas as pd
-import psutil
 import scipy.stats
 import plotly.graph_objects as go
 import plotly.express as px
@@ -1531,78 +1528,9 @@ app.layout = html.Div(
             ],
             style={"display": "flex", "alignItems": "flex-start"},
         ),
-        # Small live CPU/memory readout -- position:fixed takes it entirely
-        # out of the normal document flow (pinned to the viewport corner),
-        # so adding it here can't shift or resize anything else in the
-        # layout above, regardless of where in this children list it's
-        # appended. Polls this process's own usage every 2s via
-        # dcc.Interval -- added after chasing a real Render OOM (see
-        # LazyRowsCache's docstring and render.yaml's --max-requests
-        # comment) to make memory/CPU behavior visible during local
-        # testing without needing to shell in or read server logs.
-        dcc.Interval(id="perf-monitor-interval", interval=2000, n_intervals=0),
-        html.Div(
-            id="perf-monitor",
-            style={
-                "position": "fixed", "bottom": "8px", "right": "8px",
-                "backgroundColor": "rgba(255,255,255,0.9)",
-                "border": "1px solid #ccc", "borderRadius": "4px",
-                "padding": "3px 8px", "fontFamily": "monospace",
-                "fontSize": "11px", "color": "#555555", "zIndex": 1000,
-                "pointerEvents": "none",
-            },
-        ),
     ],
     style={"margin": 0, "padding": 0},
 )
-
-
-# A single, reused Process handle -- cpu_percent(interval=None) reports
-# usage SINCE THAT SAME OBJECT'S LAST CALL (0.0 on an object's first-ever
-# call, with no prior reading to diff against), so calling
-# psutil.Process().cpu_percent(...) fresh inside the callback below would
-# silently read 0.0% forever. The throwaway priming call establishes a
-# baseline immediately so the very first tick already reports something
-# meaningful instead of 0.0.
-_PERF_PROC = psutil.Process()
-_PERF_PROC.cpu_percent(interval=None)
-
-# (monotonic timestamp, cpu_pct, mem_mb) readings from the last
-# _PERF_WINDOW_SECONDS, for the "Max of last 5 min." line -- time.monotonic()
-# rather than time.time(), since this is only ever compared against other
-# readings from this same process's uptime, and monotonic is immune to
-# wall-clock adjustments (NTP sync, DST, etc.) that could otherwise make the
-# trailing-window cutoff jump backward or forward.
-_PERF_HISTORY = collections.deque()
-_PERF_WINDOW_SECONDS = 5 * 60
-
-
-@app.callback(
-    Output("perf-monitor", "children"),
-    Input("perf-monitor-interval", "n_intervals"),
-)
-def _update_perf_monitor(_n_intervals):
-    """Live CPU%/memory readout for this worker process specifically (not
-    the whole machine), plus the running max of each over the trailing 5
-    minutes -- cpu_percent(interval=None) is non-blocking and reports usage
-    since _PERF_PROC's last call, which is exactly what a per-tick poll on
-    a persistent handle wants; interval=<float> would instead block this
-    callback for that long on every single tick."""
-    now = time.monotonic()
-    cpu_pct = _PERF_PROC.cpu_percent(interval=None)
-    mem_mb = _PERF_PROC.memory_info().rss / 1e6
-
-    _PERF_HISTORY.append((now, cpu_pct, mem_mb))
-    cutoff = now - _PERF_WINDOW_SECONDS
-    while _PERF_HISTORY and _PERF_HISTORY[0][0] < cutoff:
-        _PERF_HISTORY.popleft()
-    max_cpu = max(r[1] for r in _PERF_HISTORY)
-    max_mem = max(r[2] for r in _PERF_HISTORY)
-
-    return [
-        html.Div(f"Live: CPU {cpu_pct:5.1f}%  |  Mem {mem_mb:6.0f} MB"),
-        html.Div(f"Max of last 5 min.: CPU {max_cpu:5.1f}%  |  Mem {max_mem:6.0f} MB"),
-    ]
 
 
 @app.callback(
