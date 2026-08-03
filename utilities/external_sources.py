@@ -26,6 +26,7 @@ looking at, not a stale snapshot.
 
 import os
 import re
+import tarfile
 import urllib.request
 
 import h5py
@@ -572,6 +573,215 @@ def load_aschwanden2022_gis():
         "Year", "Cumulative ice sheet mass change (Gt)", "Group", "Model", "Exp", "IS",
         "climate_model", "scenario", "protocol",
     ]]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Goelzer, Berends, Boberg, Durand, Edwards, Fettweis, Gillet-Chaulet,
+# Glaude, Huybrechts, Le clec'h, Mottram, Noël, Olesen, Rahlves, Rohmer, van
+# den Broeke & van de Wal (2025), "Extending the range and reach of
+# physically-based Greenland ice sheet sea-level projections", The
+# Cryosphere 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 (PROTECT
+# project). An ISMIP6-protocol-extending, multi-model GrIS ensemble: 4 ice
+# sheet models (one per group below) x up to 14 CMIP6/CMIP5 GCMs x up to 3
+# regional climate models x 3 SSP/RCP scenarios x 5 ocean-retreat
+# percentiles x (for NORCE specifically) several CISM grid
+# resolutions/tuning variants, 1472 simulations total in the full archive.
+#
+# Archive: NIRD Research Data Archive, https://doi.org/10.11582/2025.lf9m2wd0
+# ("Greenland ice sheet projections for EU-project PROTECT", Heiko
+# Goelzer/NORCE) -- 74.3 MB across 4 per-group tarballs (IGE.tgz, IMAU.tgz,
+# NORCE.tgz, VUB.tgz), found via the paper's own Data Availability
+# statement. The archive's README (bundled in each tarball's info_p11/,
+# also fetched directly during development) states the processing is
+# "largely identical to the ISMIP6 GrIS projections" -- confirmed directly:
+# files are named scalars_mm_GIS_<group>_<model>_<exp>.nc with the same
+# variables (limgr, sle, ...) load_ismip6_gis() already reads for the main
+# ISMIP6 ensemble, and each model directory includes matching historical/
+# and ctrl-proj/ runs, the same pieces ismip6_gis_to_csv() combines.
+#
+# Scope and processing choices below were confirmed with the user (2026-08-02)
+# rather than assumed:
+# - Main 2015-2100 ensemble ONLY -- excludes the archive's ~2300-extension
+#   variants (scenario suffixes -r2300/-o2300/-x2300/-e2200: repeated-
+#   forcing, overshoot, and other idealized post-2100 continuations), which
+#   would otherwise roughly triple the row count and mix incompatible time
+#   horizons into one "rate over a selected window" comparison.
+# - NORCE's ~50 archive "model" directories (e.g. CISM04-MAR39-p50,
+#   CISM16oc-MAR312-p95) are all the SAME CISM ice sheet model at different
+#   grid resolutions/tuning variants, not distinct models -- collapsed to
+#   Model="CISM" (GOELZER2025_LAB_ICE_MODEL below) so ice_model comparisons
+#   (e.g. the misfit ANOVA) treat them as one model, as the paper's own "4
+#   ice sheet models" framing does. The resolution/tuning token is kept in
+#   Exp instead, so individual runs stay distinguishable.
+# - Raw values used -- NOT the ctrl-proj-subtracted correction
+#   ismip6_gis_to_csv() applies to the main ISMIP6 ensemble (per Goelzer's
+#   own stated preference for how ISMIP6 numbers specifically should be
+#   communicated); despite this archive including matching ctrl-proj files
+#   per model, the user asked for the exp files' own values as reported.
+# ═════════════════════════════════════════════════════════════════════════
+
+GOELZER2025_DATASET_UUID = "19bb9a66-19b6-4029-8979-3e1fc9442f6a"
+GOELZER2025_BASE_URL = f"https://data.archive.sigma2.no/dataset/{GOELZER2025_DATASET_UUID}/download/p11"
+GOELZER2025_LABS = ["IGE", "IMAU", "NORCE", "VUB"]
+
+# Group -> ice sheet model, per the paper's Sect. 2 (Table 1): IGE runs
+# Elmer/Ice, IMAU runs IMAU-ICE, NORCE runs CISM (at many resolutions/tuning
+# variants -- see module comment above), VUB runs GISM. Naming matches the
+# `ice_model` strings ism_meta already uses elsewhere in this project (e.g.
+# VUB's ISMIP6-GIS entry also reports ice_model "GISM").
+GOELZER2025_LAB_ICE_MODEL = {"IGE": "Elmer/Ice", "IMAU": "IMAU-ICE", "NORCE": "CISM", "VUB": "GISM"}
+
+# An experiment directory name is <gcm>_<scenario>_<rcm>_<percentile> (4
+# underscore-separated tokens; GCM/RCM names themselves may contain hyphens
+# but never underscores, e.g. "UKESM1-0-LL-Robin", "MARv3.12" -- confirmed
+# by enumerating every experiment directory name across all 4 archives
+# during development: 311 of 313 non historical/ctrl-proj directories split
+# into exactly 4 "_"-separated tokens; the other 2 ("ctrl", "ctrl-proj-x2300")
+# are one-off control variants already excluded by the historical/ctrl-proj
+# skip below). Only these 5 bare scenario tokens are the main 2015-2100
+# ensemble; anything else (rcp85-r2300, ssp585-o2300, ssp585-x2300,
+# ssp585-e2200, ...) is a post-2100-extension variant excluded per the
+# scope decision above.
+GOELZER2025_MAIN_SCENARIOS = {"rcp26", "rcp85", "ssp126", "ssp245", "ssp585"}
+GOELZER2025_SCENARIO_LABEL = {
+    "rcp26": "RCP2.6", "rcp85": "RCP8.5",
+    "ssp126": "SSP1-2.6", "ssp245": "SSP2-4.5", "ssp585": "SSP5-8.5",
+}
+
+# Every historical run's LAST entry and every projection run's FIRST entry
+# represents "end of 2014" / "end of 2015" respectively, per the archive's
+# own README ("The first entry for the projections corresponds to the end
+# of the year 2015") -- confirmed to hold for every one of the 59 historical
+# and 1472 projection files in the archive by decoding each file's own
+# `time` units (despite the README's warning that those units aren't
+# reliable for exact calendar dates, they're consistently off by the same
+# ~5 days for every file -- a noleap-calendar artifact, not meaningful
+# per-file variation). So Year is assigned by counting annual steps from
+# these two fixed anchors and each file's own array length, exactly like
+# data_loader.py's own ISMIP6 loader does for historical runs of varying
+# length ("Historical simulations start at different years since
+# initialization was left up to the modelers") -- NOT from the file's own
+# time values, which the README explicitly says not to trust.
+GOELZER2025_HIST_LAST_YEAR = 2014
+GOELZER2025_PROJ_FIRST_YEAR = 2015
+
+
+def _goelzer2025_download_labs():
+    """Downloads (if not cached) the 4 per-group tarballs (~74 MB total)
+    and extracts each into CACHE_DIR/goelzer2025_p11/ -- extraction is
+    skipped for a group whose directory already exists, so a second run
+    doesn't re-extract. Returns the extraction root."""
+    extract_dir = os.path.join(CACHE_DIR, "goelzer2025_p11")
+    os.makedirs(extract_dir, exist_ok=True)
+    for lab in GOELZER2025_LABS:
+        if os.path.isdir(os.path.join(extract_dir, lab)):
+            continue
+        tar_path = _download(f"{GOELZER2025_BASE_URL}/{lab}.tgz", f"goelzer2025_{lab}.tgz", min_expected_bytes=1000)
+        with tarfile.open(tar_path) as tf:
+            tf.extractall(extract_dir)
+    return extract_dir
+
+
+def _goelzer2025_read_limgr_gt(nc_path, first_year):
+    """Reads one scalars_mm_GIS_*.nc file's `limgr` (grounded ice mass, kg
+    -- the same variable load_ismip6_gis() uses "for comparison with
+    GRACE"), converted to Gt, with Year assigned as
+    `first_year + arange(len(...))` -- see GOELZER2025_HIST_LAST_YEAR/
+    GOELZER2025_PROJ_FIRST_YEAR's docstring above for why this ignores the
+    file's own (unreliable) time metadata entirely."""
+    ds = xr.open_dataset(nc_path)
+    mass_gt = ds["limgr"].values / 1e12
+    ds.close()
+    years = first_year + np.arange(len(mass_gt))
+    return years, mass_gt
+
+
+def load_goelzer2025_gis():
+    """
+    Loads Goelzer et al. (2025)'s Greenland PROTECT ensemble (main
+    2015-2100 scenarios only, per the scope decision in this module's
+    Goelzer2025 header comment) as a dataframe shaped like ismip6_gis:
+    Year, Cumulative ice sheet mass change (Gt), Group, Model, Exp, IS --
+    plus climate_model/scenario/protocol/retreat_percentile columns for
+    classification.
+
+    Step 1 (_goelzer2025_download_labs): download and extract the 4
+    per-group tarballs.
+    Step 2: for each group's each archive "model" directory (a resolution/
+    tuning variant for NORCE, the model itself for the other 3 groups),
+    read its historical/ run once (reused across every experiment under
+    that variant) and, for each experiment directory matching
+    <gcm>_<scenario>_<rcm>_<percentile> with scenario in
+    GOELZER2025_MAIN_SCENARIOS, read its own scalars file and concatenate
+    historical + projection into one continuous 2014-back-to-start,
+    2015-2100 trajectory -- the same historical+projection concatenation
+    load_rahlves2025_gis() does, with no overlap/seam adjustment needed
+    here (historical ends exactly at 2014, projection starts exactly at
+    2015, see GOELZER2025_HIST_LAST_YEAR above).
+    Step 3: label each run's Group="Goelzer2025", Model=the group's ice
+    sheet model (GOELZER2025_LAB_ICE_MODEL -- NORCE's variant token is kept
+    in Exp, not Model, per the scope decision above), climate_model=GCM,
+    scenario=the mapped scenario label, protocol="PROTECT
+    (ISMIP6-extended)", and retreat_percentile=the archive's own p05-p95
+    token (analogous to how load_rahlves2025_gis() maps its own tiers onto
+    ocean_sensitivity).
+    """
+    extract_dir = _goelzer2025_download_labs()
+
+    rows = []
+    exp_meta_rows = []
+    for lab in GOELZER2025_LABS:
+        lab_dir = os.path.join(extract_dir, lab)
+        for variant in sorted(os.listdir(lab_dir)):
+            variant_dir = os.path.join(lab_dir, variant)
+            if not os.path.isdir(variant_dir):
+                continue
+
+            hist_nc = os.path.join(variant_dir, "historical", f"scalars_mm_GIS_{lab}_{variant}_historical.nc")
+            if os.path.exists(hist_nc):
+                hist_len = len(xr.open_dataset(hist_nc)["time"])
+                hist_years, hist_gt = _goelzer2025_read_limgr_gt(
+                    hist_nc, first_year=GOELZER2025_HIST_LAST_YEAR - hist_len + 1,
+                )
+            else:
+                hist_years, hist_gt = np.array([], dtype=int), np.array([])
+
+            for exp_dir_name in sorted(os.listdir(variant_dir)):
+                if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
+                    continue
+                parts = exp_dir_name.split("_")
+                if len(parts) != 4:
+                    continue  # not a <gcm>_<scenario>_<rcm>_<percentile> experiment dir
+                gcm, scenario, rcm, percentile = parts
+                if scenario not in GOELZER2025_MAIN_SCENARIOS:
+                    continue  # excludes -r2300/-o2300/-x2300/-e2200 extension variants
+
+                proj_nc = os.path.join(
+                    variant_dir, exp_dir_name, f"scalars_mm_GIS_{lab}_{variant}_{exp_dir_name}.nc",
+                )
+                if not os.path.exists(proj_nc):
+                    continue
+                proj_years, proj_gt = _goelzer2025_read_limgr_gt(proj_nc, first_year=GOELZER2025_PROJ_FIRST_YEAR)
+
+                years = np.concatenate([hist_years, proj_years])
+                mass_gt = np.concatenate([hist_gt, proj_gt])
+
+                exp_code = f"{lab}_{variant}_{exp_dir_name}"
+                n = len(years)
+                rows.append(pd.DataFrame({
+                    "Year": years.astype(int), "Cumulative ice sheet mass change (Gt)": mass_gt,
+                    "Group": "Goelzer2025", "Model": GOELZER2025_LAB_ICE_MODEL[lab],
+                    "Exp": exp_code, "IS": "GIS",
+                }))
+                exp_meta_rows.append({
+                    "Exp": exp_code, "climate_model": gcm,
+                    "scenario": GOELZER2025_SCENARIO_LABEL[scenario],
+                    "protocol": "PROTECT (ISMIP6-extended)", "retreat_percentile": percentile,
+                })
+
+    df = pd.concat(rows, ignore_index=True)
+    exp_meta_df = pd.DataFrame(exp_meta_rows)
+    return df.merge(exp_meta_df, on="Exp", how="left")
 
 
 def exp_meta_from_df(df, extra_cols):

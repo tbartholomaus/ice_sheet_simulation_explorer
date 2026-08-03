@@ -269,6 +269,17 @@ ism_meta = {
     ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman",                    "initialization": "Spin-up"},
     ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
     ("Aschwanden2019", "PISM"):  {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",              "initialization": "Spin-up"},
+
+    # Goelzer et al. (2025) PROTECT-Greenland ensemble (see
+    # utilities/external_sources.py for provenance/scope decisions) -- one
+    # entry per lab's ice sheet model (Group="Goelzer2025" throughout;
+    # NORCE's many internal CISM resolution/tuning variants are collapsed
+    # to Model="CISM", per the user's explicit choice), sliding
+    # law/initialization transcribed from the paper's own Table 1/Sect. 2.
+    ("Goelzer2025", "Elmer/Ice"): {"ice_model": "Elmer/Ice", "sliding_law": "Linear & Weertman (m=1/3)",   "initialization": "Inverse control method + 20-yr relaxation"},
+    ("Goelzer2025", "IMAU-ICE"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Basal inversion (variable)",  "initialization": "Hybrid: basal inversion + paleo spin-up"},
+    ("Goelzer2025", "CISM"):      {"ice_model": "CISM",      "sliding_law": "Schoof (2005)",               "initialization": "Spin-up"},
+    ("Goelzer2025", "GISM"):      {"ice_model": "GISM",      "sliding_law": "Optimized coefficients (variable)", "initialization": "Iterative assimilation + 2-cycle spin-up"},
 }
 
 
@@ -309,14 +320,17 @@ def _exp_meta_from_df(df, extra_cols):
 rahlves2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_rahlves2025_gis.csv.gz"))
 coulon2024_ais = pd.read_csv(os.path.join(DATA_DIR, "external_sources_coulon2024_ais.csv.gz"))
 aschwanden2022_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_aschwanden2022_gis.csv.gz"))
+goelzer2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_goelzer2025_gis.csv.gz"))
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
+gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
 
 EXTRA_SOURCES = [
     {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
     {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
+    {"label": "Goelzer 2025", "df": goelzer2025_gis, "color": "#3182bd"},
 ]
 
 # plot_interactive_rate_comparison's "Group by publication" category names/
