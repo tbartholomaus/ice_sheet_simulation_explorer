@@ -665,6 +665,58 @@ GOELZER2025_SCENARIO_LABEL = {
 GOELZER2025_HIST_LAST_YEAR = 2014
 GOELZER2025_PROJ_FIRST_YEAR = 2015
 
+# NORCE ran the same underlying (GCM, scenario, RCM, retreat-percentile)
+# experiment at up to 4 CISM grid resolutions (02/04/08/16 km) as an
+# explicit resolution-sensitivity study -- of NORCE's 764 main-ensemble
+# experiment directories (across all its resolution/tuning-variant
+# subfolders), only 249 are actually distinct experiments; the rest are
+# coarser-resolution reruns of one of those 249 (confirmed by matching each
+# variant folder's own (gcm, scenario, rcm, percentile) experiment
+# directories against its same-tuning-suffix siblings at other
+# resolutions -- e.g. CISM04-MAR312-p25/CISM08-MAR312-p25/CISM16-MAR312-p25
+# all contain the identical 16 (gcm, scenario) experiments). Per explicit
+# user request (2026-08-03): keep ONLY the finest (smallest km) resolution
+# run for each distinct experiment, dropping every coarser duplicate, in
+# the notebook/app/analysis alike.
+#
+# The suffix group below (c/e/x/oc/t/tc, e.g. CISM16oc) is a distinct
+# calibration/tuning approach, NOT a resolution, so it's kept as part of
+# the dedup key -- the plain and "c"-calibrated CISM configs for the same
+# (gcm, scenario, rcm, percentile) both survive as separate entries, each
+# independently deduplicated down to its own finest resolution. A given
+# experiment isn't necessarily run at every resolution (21 of the 249 exist
+# at only one resolution to begin with) -- those pass through unchanged,
+# since there's no coarser duplicate of them to drop.
+GOELZER2025_NORCE_VARIANT_PATTERN = re.compile(r"^CISM(\d+)([a-z]*)-")
+
+
+def _goelzer2025_norce_finest_exp_dirs(lab_dir):
+    """For NORCE only: returns the set of (variant, exp_dir_name) pairs
+    that survive resolution deduplication -- see module comment above for
+    why. Every other lab has no resolution variants (its "model"
+    directories are the model itself, e.g. "IMAUICE1"), so the main loop
+    below only calls this for lab == "NORCE"."""
+    best = {}  # (suffix, gcm, scenario, rcm, pct) -> (resolution, variant, exp_dir_name)
+    for variant in sorted(os.listdir(lab_dir)):
+        variant_dir = os.path.join(lab_dir, variant)
+        if not os.path.isdir(variant_dir):
+            continue
+        resolution, suffix = GOELZER2025_NORCE_VARIANT_PATTERN.match(variant).groups()
+        resolution = int(resolution)
+        for exp_dir_name in sorted(os.listdir(variant_dir)):
+            if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
+                continue
+            parts = exp_dir_name.split("_")
+            if len(parts) != 4:
+                continue
+            gcm, scenario, rcm, percentile = parts
+            if scenario not in GOELZER2025_MAIN_SCENARIOS:
+                continue
+            key = (suffix, gcm, scenario, rcm, percentile)
+            if key not in best or resolution < best[key][0]:
+                best[key] = (resolution, variant, exp_dir_name)
+    return {(variant, exp_dir_name) for _, variant, exp_dir_name in best.values()}
+
 
 def _goelzer2025_download_labs():
     """Downloads (if not cached) the 4 per-group tarballs (~74 MB total)
@@ -718,7 +770,12 @@ def load_goelzer2025_gis():
     load_rahlves2025_gis() does, with no overlap/seam adjustment needed
     here (historical ends exactly at 2014, projection starts exactly at
     2015, see GOELZER2025_HIST_LAST_YEAR above).
-    Step 3: label each run's Group="Goelzer2025", Model=the group's ice
+    Step 3: for NORCE specifically, drop every experiment directory that
+    _goelzer2025_norce_finest_exp_dirs() didn't select -- i.e. every
+    coarser-resolution duplicate of an experiment already kept at a finer
+    resolution (see that function's/GOELZER2025_NORCE_VARIANT_PATTERN's
+    module comment above).
+    Step 4: label each run's Group="Goelzer2025", Model=the group's ice
     sheet model (GOELZER2025_LAB_ICE_MODEL -- NORCE's variant token is kept
     in Exp, not Model, per the scope decision above), climate_model=GCM,
     scenario=the mapped scenario label, protocol="PROTECT
@@ -732,6 +789,7 @@ def load_goelzer2025_gis():
     exp_meta_rows = []
     for lab in GOELZER2025_LABS:
         lab_dir = os.path.join(extract_dir, lab)
+        finest_exp_dirs = _goelzer2025_norce_finest_exp_dirs(lab_dir) if lab == "NORCE" else None
         for variant in sorted(os.listdir(lab_dir)):
             variant_dir = os.path.join(lab_dir, variant)
             if not os.path.isdir(variant_dir):
@@ -749,6 +807,8 @@ def load_goelzer2025_gis():
             for exp_dir_name in sorted(os.listdir(variant_dir)):
                 if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
                     continue
+                if finest_exp_dirs is not None and (variant, exp_dir_name) not in finest_exp_dirs:
+                    continue  # coarser-resolution duplicate of another variant's run
                 parts = exp_dir_name.split("_")
                 if len(parts) != 4:
                     continue  # not a <gcm>_<scenario>_<rcm>_<percentile> experiment dir

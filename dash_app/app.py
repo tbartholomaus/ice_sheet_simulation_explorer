@@ -330,7 +330,7 @@ EXTRA_SOURCES = [
     {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
     {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
-    {"label": "Goelzer 2025", "df": goelzer2025_gis, "color": "#3182bd"},
+    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},
 ]
 
 # plot_interactive_rate_comparison's "Group by publication" category names/
