@@ -1616,33 +1616,130 @@ app.clientside_callback(
         window.__rcView.state = storeData || {};
         if (window.__rcView.bound) { return window.dash_clientside.no_update; }
 
+        // -1/362.5 = gt2mmSLE in app.py (Gt -> mm sea-level-equivalent,
+        // sign-flipped since losing ice raises sea level) -- duplicated
+        // here because the "Sea level rise" units mode's tick labels need
+        // to be recomputed for whatever range the user just zoomed to
+        // (Plotly's own "auto" tickmode already redraws fine on zoom, but
+        // that only applies to the DATA's native Gt/yr values; these ticks
+        // are custom-labeled in a different, rescaled unit, so nothing
+        // recomputes them automatically -- confirmed directly: zooming
+        // into a narrow range in "Sea level rise" mode left ZERO ticks
+        // visible, vs. 9 in "Mass change" mode over the identical range).
+        // Keep in sync with app.py's gt2cmSLE/gt2mmSLE if that ever changes.
+        var GT_TO_MM_SLE = -1 / 362.5;
+
+        // JS port of _nice_sle_ticks (see plot_interactive_rate_comparison) --
+        // picks ~targetTicks "nice" (1/2/5 x 10^n) round SLE values spanning
+        // gtRange, returning where those values fall on the (unmoved) Gt/yr
+        // axis plus their display text.
+        function niceSleTicks(gtRange, targetTicks) {
+            var a = gtRange[0] * GT_TO_MM_SLE, b = gtRange[1] * GT_TO_MM_SLE;
+            var lo = Math.min(a, b), hi = Math.max(a, b);
+            var span = hi - lo;
+            if (!(span > 0)) { return {tickvals: [], ticktext: []}; }
+            var rawStep = span / targetTicks;
+            var magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            var step = 10 * magnitude;
+            [1, 2, 5, 10].some(function(m) {
+                if (rawStep <= m * magnitude) { step = m * magnitude; return true; }
+                return false;
+            });
+            var start = Math.ceil(lo / step) * step;
+            var values = [];
+            for (var v = start; v <= hi + step * 1e-6; v += step) {
+                values.push(Math.round(v / step) * step);
+            }
+            return {
+                tickvals: values.map(function(v) { return v / GT_TO_MM_SLE; }),
+                ticktext: values.map(function(v) { return String(Math.round(v * 1e8) / 1e8); }),
+            };
+        }
+
         function bind(plotDiv) {
             window.__rcView.bound = true;
 
             plotDiv.on('plotly_relayout', function(e) {
                 var state = Object.assign({}, window.__rcView.state);
                 var changed = false;
+                var xAxesZoomed = [];
+                function noteXAxis(axis) {
+                    if (axis.indexOf('xaxis') === 0 && xAxesZoomed.indexOf(axis) === -1) {
+                        xAxesZoomed.push(axis);
+                    }
+                }
                 Object.keys(e).forEach(function(key) {
                     var m = key.match(/^(xaxis\\d*|yaxis\\d*)\\.autorange$/);
                     if (m && e[key]) {
-                        // Double-click reset -- forget the stored range so
-                        // future rebuilds go back to computing their own
-                        // default view, instead of freezing on whatever
-                        // that default happened to be at reset time.
+                        // Double-click reset, form 1 (older Plotly.js/some
+                        // reset paths) -- forget the stored range so future
+                        // rebuilds go back to computing their own default
+                        // view, instead of freezing on whatever that
+                        // default happened to be at reset time.
                         delete state[m[1] + '.range[0]'];
                         delete state[m[1] + '.range[1]'];
                         changed = true;
+                        noteXAxis(m[1]);
                         return;
                     }
-                    if (/^(xaxis\\d*|yaxis\\d*)\\.range\\[\\d\\]$/.test(key)) {
+                    var rm = key.match(/^(xaxis\\d*|yaxis\\d*)\\.range\\[\\d\\]$/);
+                    if (rm) {
+                        // Box zoom/pan -- one event per endpoint.
                         state[key] = e[key];
                         changed = true;
+                        noteXAxis(rm[1]);
+                        return;
+                    }
+                    var pm = key.match(/^(xaxis\\d*|yaxis\\d*)\\.range$/);
+                    if (pm && Array.isArray(e[key]) && e[key].length === 2) {
+                        // Double-click reset, form 2 (confirmed the one
+                        // actually fired by this app's Plotly.js version) --
+                        // both endpoints as one whole-array value instead of
+                        // two separate bracketed keys.
+                        state[pm[1] + '.range[0]'] = e[key][0];
+                        state[pm[1] + '.range[1]'] = e[key][1];
+                        changed = true;
+                        noteXAxis(pm[1]);
                     }
                 });
                 if (changed) {
                     window.__rcView.state = state;
                     window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
                 }
+
+                // Re-tick the "Sea level rise" units mode's custom labels
+                // for whichever x-axis just zoomed/panned/reset, so at
+                // least a handful of tick marks stay visible regardless of
+                // zoom level (matching "Mass change" mode's native
+                // auto-ticking) -- see GT_TO_MM_SLE's comment above.
+                var unitsMenu = (plotDiv._fullLayout.updatemenus || [])[2];
+                if (xAxesZoomed.length === 0 || !unitsMenu || unitsMenu.active !== 1) { return; }
+                var layoutUpdate = {};
+                xAxesZoomed.forEach(function(axis) {
+                    var ticks = niceSleTicks(plotDiv._fullLayout[axis].range, 6);
+                    layoutUpdate[axis + '.tickmode'] = 'array';
+                    layoutUpdate[axis + '.tickvals'] = ticks.tickvals;
+                    layoutUpdate[axis + '.ticktext'] = ticks.ticktext;
+                });
+                // Re-assert every updatemenu's currently-active button in
+                // this SAME relayout call -- confirmed directly that
+                // otherwise this call alone resets Units:/Group by:/
+                // Distribution medians: back to their hardcoded server
+                // defaults: a button click only updates Plotly's internal
+                // `_fullLayout`, never writing back into the "source"
+                // `plotDiv.layout.updatemenus[i].active` the button
+                // definitions actually live on -- so ANY later
+                // Plotly.relayout call (for entirely unrelated properties,
+                // like these ticks) triggers a full supplyDefaults recompute
+                // that re-derives `_fullLayout` from that stale "source"
+                // layout, discarding the click that was never persisted
+                // there in the first place.
+                Object.keys(window.__rcView.state).forEach(function(key) {
+                    if (/^updatemenus\\[\\d+\\]\\.active$/.test(key)) {
+                        layoutUpdate[key] = window.__rcView.state[key];
+                    }
+                });
+                window.Plotly.relayout(plotDiv, layoutUpdate);
             });
 
             plotDiv.on('plotly_buttonclicked', function(e) {
@@ -1712,7 +1809,9 @@ def _apply_view_state(fig, view_state):
     own args -- e.g. Group by's `visible` list length matches however many
     traces THIS rebuild has, whatever `extra_sources` are currently
     checked), so there's no risk of stale indices from a differently-shaped
-    earlier figure.
+    earlier figure. A final pass re-ticks Sea-level-rise mode's x-axes for
+    whatever zoomed range just got re-applied -- see the inline comment
+    below for why the button replay alone isn't enough for that.
     """
     if not view_state:
         return
@@ -1735,6 +1834,26 @@ def _apply_view_state(fig, view_state):
         menu.active = active_idx
         button = menu.buttons[active_idx]
         _replay_button_args(fig, button.method, button.args)
+
+    # If Units: Sea level rise ended up selected, the button replay above
+    # just set every x-axis's tickvals/ticktext to "nice" ticks for the
+    # figure's FULL default range (baked into that button's own args at
+    # build time) -- if a zoomed range is ALSO being re-applied from
+    # view_state, redo that tick computation for the ZOOMED range instead,
+    # or the ticks would revert to (mostly off-screen) full-range values
+    # the instant a year-window/checklist rebuild happens while zoomed in
+    # in Sea-level-rise mode, until the user next touches zoom (the
+    # clientside callback above fixes this same problem for live zoom/pan,
+    # but a fresh server-rebuilt figure needs its own copy of the fix).
+    units_menu = fig.layout.updatemenus[2] if len(fig.layout.updatemenus) > 2 else None
+    if units_menu is not None and units_menu.active == 1:
+        for axis in axes:
+            if not axis.startswith("xaxis"):
+                continue
+            tickvals, ticktext = _nice_sle_ticks(fig.layout[axis].range, gt2mmSLE)
+            fig.layout[axis].tickmode = "array"
+            fig.layout[axis].tickvals = tickvals
+            fig.layout[axis].ticktext = ticktext
 
 
 def _replay_button_args(fig, method, args):
