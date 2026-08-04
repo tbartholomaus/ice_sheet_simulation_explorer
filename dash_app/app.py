@@ -53,6 +53,7 @@ Embed on an existing page once deployed:
 
 import math
 import os
+import re
 
 # Pin every BLAS/OpenMP-based library this app touches (numpy, scipy,
 # pandas' numexpr backend) to a single thread each, BEFORE they're
@@ -85,7 +86,7 @@ from scipy.stats import linregress
 
 import dash
 from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
@@ -1108,6 +1109,19 @@ def plot_interactive_rate_comparison(
         margin=dict(t=300 if show_subtitle else 130),
         height=750, template="plotly_white",
         legend=dict(bgcolor="rgba(255,255,255,0.85)", bordercolor="#ccc", borderwidth=1),
+        # A FIXED (never-changing) uirevision -- not one derived from
+        # year_start/year_end/extra_sources -- is what tells Plotly.js this
+        # is "the same plot" across the Dash callback's repeated
+        # Plotly.react() redraws (dcc.Graph pushing a whole new `figure`
+        # every time the "Years:" slider or "Simulation studies:" checklist
+        # changes), so it preserves the user's current zoom/pan (axis
+        # ranges) and each updatemenu's currently-selected button (Units:/
+        # Group by:/Distribution medians:) instead of snapping back to this
+        # function's own hardcoded defaults (active=0/1 above, autorange
+        # axes) on every rebuild. Deliberately a single hardcoded string,
+        # not e.g. f"{year_start}-{year_end}" -- keying it to the very
+        # things that change on every rebuild would defeat the point.
+        uirevision="rate_comparison",
     )
     if show_title:
         layout_kwargs["title"] = dict(text=title, x=0.02, xanchor="left", y=0.99, yanchor="top")
@@ -1542,9 +1556,227 @@ app.layout = html.Div(
             ],
             style={"display": "flex", "alignItems": "flex-start"},
         ),
+        # Remembers the user's current zoom/pan and in-figure dropdown
+        # selections (Units:/Group by:/Distribution medians:) across the
+        # "Years:"/"Simulation studies:" callback below rebuilding the whole
+        # figure from scratch. Tried a plain `layout.uirevision` first (no
+        # extra callback/store needed at all if it worked) -- doesn't help
+        # here: this figure always explicitly sets a fresh axis `range` and
+        # each updatemenu's `active` index on every rebuild (both are
+        # data-dependent, e.g. axis range depends on the new year window's
+        # KDE spread), and an explicit value in a freshly-supplied figure
+        # wins over whatever uirevision would otherwise have preserved.
+        # Populated by the clientside callback below; consumed by
+        # _apply_view_state via _update_figure's State.
+        dcc.Store(id="rate-comparison-view-state", data={}),
+        # Dummy target for clientside callbacks that have nothing meaningful
+        # to output (they act entirely via side effects/dash_clientside.
+        # set_props) -- Dash requires every callback to have a real Output.
+        html.Div(id="_clientside_noop", style={"display": "none"}),
     ],
     style={"margin": 0, "padding": 0},
 )
+
+# Tracks zoom/pan and updatemenu (Units:/Group by:/Distribution medians:)
+# selections entirely client-side, into rate-comparison-view-state.
+#
+# Why this can't be a normal Dash callback: box-zoom/pan/double-click-reset
+# fire a `plotly_relayout` event, which dcc.Graph DOES expose as a Python-
+# observable `relayoutData` prop -- but clicking an updatemenu button does
+# NOT reliably surface through Dash's `relayoutData`/`restyleData` props at
+# all (confirmed directly: a "restyle"-method button, e.g. "Distribution
+# medians:", fires a raw `plotly_restyle` DOM event but no `plotly_relayout`;
+# an "update"-method button, e.g. "Units:", fires NEITHER -- only a raw
+# `plotly_buttonclicked` event, which Dash's dcc.Graph doesn't expose as a
+# prop at all). `plotly_buttonclicked` is the one event that reliably fires
+# for every updatemenu click regardless of its `method`, so this attaches a
+# listener for it directly via `dash_clientside.set_props` (Dash's escape
+# hatch for pushing a prop update from an arbitrary DOM/JS event, since
+# there's no Dash-native Input to bind to here) -- alongside a
+# `plotly_relayout` listener doing the same for axis zoom/pan, so both kinds
+# of view state funnel through the one mechanism/store.
+#
+# Fires once at mount (Input("rate-comparison-graph", "id") never changes
+# again) to attach the listeners, and again on every subsequent store
+# update (Input("rate-comparison-graph", "data")) purely to keep the
+# closure's view of "the current state to merge into" fresh -- see the
+# `gd.__viewState` comment inline. Output("_clientside_noop", "title") is
+# an unused dummy target -- all of this function's real effects are
+# dash_clientside.set_props side effects, not its return value.
+app.clientside_callback(
+    """
+    function(_graphId, storeData) {
+        // State lives on `window`, NOT as an expando property on the graph
+        // div -- React replaces that div with a new node shortly after its
+        // very first mount (confirmed directly: a `gd` reference captured
+        // at this callback's first firing no longer `===` a fresh
+        // document.getElementById lookup moments later), which would
+        // silently orphan anything stashed on the original node.
+        window.__rcView = window.__rcView || {bound: false, state: {}};
+        window.__rcView.state = storeData || {};
+        if (window.__rcView.bound) { return window.dash_clientside.no_update; }
+
+        function bind(plotDiv) {
+            window.__rcView.bound = true;
+
+            plotDiv.on('plotly_relayout', function(e) {
+                var state = Object.assign({}, window.__rcView.state);
+                var changed = false;
+                Object.keys(e).forEach(function(key) {
+                    var m = key.match(/^(xaxis\\d*|yaxis\\d*)\\.autorange$/);
+                    if (m && e[key]) {
+                        // Double-click reset -- forget the stored range so
+                        // future rebuilds go back to computing their own
+                        // default view, instead of freezing on whatever
+                        // that default happened to be at reset time.
+                        delete state[m[1] + '.range[0]'];
+                        delete state[m[1] + '.range[1]'];
+                        changed = true;
+                        return;
+                    }
+                    if (/^(xaxis\\d*|yaxis\\d*)\\.range\\[\\d\\]$/.test(key)) {
+                        state[key] = e[key];
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    window.__rcView.state = state;
+                    window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
+                }
+            });
+
+            plotDiv.on('plotly_buttonclicked', function(e) {
+                // e.menu is Plotly's own internal (merged/"_full") updatemenu
+                // object -- NOT the same object identity as anything in
+                // plotDiv.layout.updatemenus, so matching it via indexOf()
+                // against that array always fails (confirmed directly).
+                // e.menu._index is Plotly's own internal position for this
+                // exact menu and is what we actually need.
+                if (typeof e.menu._index !== 'number') { return; }
+                var state = Object.assign({}, window.__rcView.state);
+                state['updatemenus[' + e.menu._index + '].active'] = e.active;
+                window.__rcView.state = state;
+                window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
+            });
+        }
+
+        function findBindablePlotDiv() {
+            var gd = document.getElementById('rate-comparison-graph');
+            var pd = gd ? gd.querySelector('.js-plotly-plot') : null;
+            return (pd && pd.on) ? pd : null;
+        }
+
+        var plotDiv = findBindablePlotDiv();
+        if (plotDiv) {
+            bind(plotDiv);
+        } else {
+            // First mount can beat Plotly's own async initial render (and
+            // that first graph div itself gets replaced shortly after) --
+            // poll with a FRESH lookup each tick rather than giving up or
+            // reusing a possibly-already-stale reference.
+            var tries = 0;
+            var timer = setInterval(function() {
+                tries++;
+                var pd = findBindablePlotDiv();
+                if (pd) {
+                    clearInterval(timer);
+                    bind(pd);
+                } else if (tries > 40) {
+                    clearInterval(timer);
+                }
+            }, 100);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("_clientside_noop", "title"),
+    Input("rate-comparison-graph", "id"),
+    Input("rate-comparison-view-state", "data"),
+)
+
+
+def _apply_view_state(fig, view_state):
+    """Re-applies the zoom/pan and updatemenu selections the clientside
+    callback above tracked onto a freshly-built figure, so a year-window/
+    checklist-driven rebuild resumes from the user's current view instead
+    of plot_interactive_rate_comparison's own hardcoded defaults (autorange
+    axes, active=0/1 dropdowns) -- see that callback's module comment for
+    why this can't just rely on `uirevision`.
+
+    Axis ranges are a direct property set. Updatemenu selections need more
+    than just setting `active` -- that only changes which button LOOKS
+    selected, since Plotly only actually applies a button's `args` when the
+    user clicks it. _replay_button_args re-executes the stored button's own
+    args against this SAME freshly-built `fig` (which already has correct,
+    current-rebuild trace counts/text/visibility baked into each button's
+    own args -- e.g. Group by's `visible` list length matches however many
+    traces THIS rebuild has, whatever `extra_sources` are currently
+    checked), so there's no risk of stale indices from a differently-shaped
+    earlier figure.
+    """
+    if not view_state:
+        return
+    axes = {
+        m.group(1) for key in view_state
+        if (m := re.match(r"^(xaxis\d*|yaxis\d*)\.range\[\d\]$", key))
+    }
+    for axis in axes:
+        lo_key, hi_key = f"{axis}.range[0]", f"{axis}.range[1]"
+        if lo_key in view_state and hi_key in view_state:
+            fig.layout[axis].range = [view_state[lo_key], view_state[hi_key]]
+            fig.layout[axis].autorange = False
+    for key, active_idx in view_state.items():
+        m = re.match(r"^updatemenus\[(\d+)\]\.active$", key)
+        if not m:
+            continue
+        menu = fig.layout.updatemenus[int(m.group(1))]
+        if active_idx is None or active_idx >= len(menu.buttons):
+            continue  # stale index from an incompatible earlier menu definition
+        menu.active = active_idx
+        button = menu.buttons[active_idx]
+        _replay_button_args(fig, button.method, button.args)
+
+
+def _replay_button_args(fig, method, args):
+    """Executes one updatemenu button's own `args` directly against `fig`,
+    the same effect Plotly applies internally when a user clicks that
+    button -- see _apply_view_state above for why this replay is needed
+    (setting `updatemenus[i].active` alone doesn't trigger it)."""
+    data_update = args[0] if len(args) > 0 and args[0] else {}
+    if method == "restyle":
+        trace_idx = args[1] if len(args) > 1 else list(range(len(fig.data)))
+        for attr, values in data_update.items():
+            per_trace = isinstance(values, (list, tuple)) and len(values) == len(trace_idx)
+            for pos, ti in enumerate(trace_idx):
+                setattr(fig.data[ti], attr, values[pos] if per_trace else values)
+    elif method == "update":
+        # This app's own "Units:" buttons are the only "update"-method
+        # buttons -- their data_update lists (mass_text_all/sle_text_all
+        # etc.) are already one entry per trace, covering every trace with
+        # no separate index list (see plot_interactive_rate_comparison).
+        for attr, values in data_update.items():
+            for ti, tr in enumerate(fig.data):
+                setattr(tr, attr, values[ti])
+        layout_update = args[1] if len(args) > 1 and args[1] else {}
+        for dotted_key, value in layout_update.items():
+            _set_dotted_layout_key(fig.layout, dotted_key, value)
+
+
+def _set_dotted_layout_key(layout, dotted_key, value):
+    """Applies one Plotly-style dotted/bracketed layout key (as used in
+    updatemenu button args, e.g. "xaxis.title.text" or
+    "annotations[2].text") to a go.Layout object via attribute access."""
+    parts = re.split(r"\.(?![^\[]*\])", dotted_key)  # split on '.' not inside [...]
+    obj = layout
+    for part in parts[:-1]:
+        m = re.match(r"^(\w+)\[(\d+)\]$", part)
+        obj = getattr(obj, m.group(1))[int(m.group(2))] if m else getattr(obj, part)
+    last = parts[-1]
+    m = re.match(r"^(\w+)\[(\d+)\]$", last)
+    if m:
+        getattr(obj, m.group(1))[int(m.group(2))] = value
+    else:
+        setattr(obj, last, value)
 
 
 @app.callback(
@@ -1553,8 +1785,9 @@ app.layout = html.Div(
     Output("loading-trigger", "children"),
     Input("year-range-slider", "value"),
     Input("data-sources-checklist", "value"),
+    State("rate-comparison-view-state", "data"),
 )
-def _update_figure(year_range, checked_sources):
+def _update_figure(year_range, checked_sources, view_state):
     """Rebuilds the figure for the selected (year_start, year_end) and the
     currently-checked "Simulation studies:" checkboxes, enforcing a minimum
     MIN_YEAR_SPAN-year window.
@@ -1592,6 +1825,12 @@ def _update_figure(year_range, checked_sources):
     its own -- it exists purely so the dcc.Loading wrapping that div (see
     app.layout) shows its spinner for exactly the duration of this callback,
     the standard dcc.Loading(children=...) pattern.
+
+    `view_state` (rate-comparison-view-state's Store data, tracked by the
+    clientside callback above) is re-applied via _apply_view_state after the
+    fresh figure is built, so the user's current zoom/pan and Units:/Group
+    by:/Distribution medians: selections survive this rebuild instead of
+    resetting to this function's own defaults.
     """
     lo, hi = year_range
     if hi - lo < MIN_YEAR_SPAN:
@@ -1617,6 +1856,7 @@ def _update_figure(year_range, checked_sources):
         show_title=False, show_subtitle=False, extra_sources=active_extra_sources,
         precomputed_dim_color_maps=DIM_COLOR_MAPS, precomputed_rows=active_rows,
     )
+    _apply_view_state(fig, view_state)
     # The third return value is meaningless on its own -- its only purpose is
     # being this callback's Output("loading-trigger", "children"), which is
     # what makes the dcc.Loading wrapping that div show its spinner for the
