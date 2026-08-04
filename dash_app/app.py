@@ -1656,6 +1656,43 @@ app.clientside_callback(
             };
         }
 
+        // Recomputes and applies "Sea level rise" mode's custom tick labels
+        // for `axes` against THEIR CURRENT range (not the figure's original
+        // default range those ticks were last computed for) -- shared by
+        // both call sites that can leave stale, wrong-range ticks in place:
+        // zooming/panning/resetting while already in SLE mode (relayout
+        // handler below), and switching TO SLE mode while already zoomed
+        // (buttonclicked handler below -- that button's own baked-in args
+        // only know the figure's original default range, computed at
+        // server build time, not whatever the user has since zoomed to).
+        function retickSleAxes(plotDiv, axes) {
+            var layoutUpdate = {};
+            axes.forEach(function(axis) {
+                var ticks = niceSleTicks(plotDiv._fullLayout[axis].range, 6);
+                layoutUpdate[axis + '.tickmode'] = 'array';
+                layoutUpdate[axis + '.tickvals'] = ticks.tickvals;
+                layoutUpdate[axis + '.ticktext'] = ticks.ticktext;
+            });
+            // Re-assert every updatemenu's currently-active button in this
+            // SAME relayout call -- confirmed directly that otherwise this
+            // call alone resets Units:/Group by:/Distribution medians: back
+            // to their hardcoded server defaults: a button click only
+            // updates Plotly's internal `_fullLayout`, never writing back
+            // into the "source" `plotDiv.layout.updatemenus[i].active` the
+            // button definitions actually live on -- so ANY later
+            // Plotly.relayout call (for entirely unrelated properties, like
+            // these ticks) triggers a full supplyDefaults recompute that
+            // re-derives `_fullLayout` from that stale "source" layout,
+            // discarding the click that was never persisted there in the
+            // first place.
+            Object.keys(window.__rcView.state).forEach(function(key) {
+                if (/^updatemenus\\[\\d+\\]\\.active$/.test(key)) {
+                    layoutUpdate[key] = window.__rcView.state[key];
+                }
+            });
+            window.Plotly.relayout(plotDiv, layoutUpdate);
+        }
+
         function bind(plotDiv) {
             window.__rcView.bound = true;
 
@@ -1714,32 +1751,7 @@ app.clientside_callback(
                 // auto-ticking) -- see GT_TO_MM_SLE's comment above.
                 var unitsMenu = (plotDiv._fullLayout.updatemenus || [])[2];
                 if (xAxesZoomed.length === 0 || !unitsMenu || unitsMenu.active !== 1) { return; }
-                var layoutUpdate = {};
-                xAxesZoomed.forEach(function(axis) {
-                    var ticks = niceSleTicks(plotDiv._fullLayout[axis].range, 6);
-                    layoutUpdate[axis + '.tickmode'] = 'array';
-                    layoutUpdate[axis + '.tickvals'] = ticks.tickvals;
-                    layoutUpdate[axis + '.ticktext'] = ticks.ticktext;
-                });
-                // Re-assert every updatemenu's currently-active button in
-                // this SAME relayout call -- confirmed directly that
-                // otherwise this call alone resets Units:/Group by:/
-                // Distribution medians: back to their hardcoded server
-                // defaults: a button click only updates Plotly's internal
-                // `_fullLayout`, never writing back into the "source"
-                // `plotDiv.layout.updatemenus[i].active` the button
-                // definitions actually live on -- so ANY later
-                // Plotly.relayout call (for entirely unrelated properties,
-                // like these ticks) triggers a full supplyDefaults recompute
-                // that re-derives `_fullLayout` from that stale "source"
-                // layout, discarding the click that was never persisted
-                // there in the first place.
-                Object.keys(window.__rcView.state).forEach(function(key) {
-                    if (/^updatemenus\\[\\d+\\]\\.active$/.test(key)) {
-                        layoutUpdate[key] = window.__rcView.state[key];
-                    }
-                });
-                window.Plotly.relayout(plotDiv, layoutUpdate);
+                retickSleAxes(plotDiv, xAxesZoomed);
             });
 
             plotDiv.on('plotly_buttonclicked', function(e) {
@@ -1754,6 +1766,23 @@ app.clientside_callback(
                 state['updatemenus[' + e.menu._index + '].active'] = e.active;
                 window.__rcView.state = state;
                 window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
+
+                // Menu index 2 is "Units:"; button index 1 is "Sea level
+                // rise". That button's own baked-in tickvals/ticktext (just
+                // applied natively by this same click, before this handler
+                // runs) were computed for the figure's ORIGINAL default
+                // range at server-build time -- if an x-axis is currently
+                // zoomed, those ticks are mostly/entirely off-screen (the
+                // same root cause as the zoom-triggered fix in the
+                // `plotly_relayout` handler below, hit from the other
+                // direction: this time the RANGE didn't change, the UNITS
+                // did). Recompute for whatever's currently zoomed instead.
+                if (e.menu._index === 2 && e.active === 1) {
+                    var xAxes = Object.keys(plotDiv._fullLayout).filter(function(k) {
+                        return /^xaxis\\d*$/.test(k);
+                    });
+                    retickSleAxes(plotDiv, xAxes);
+                }
             });
         }
 
