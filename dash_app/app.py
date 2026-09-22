@@ -97,35 +97,44 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 proj_start = 2015  # utilities/helper.py
 
-# IMBIE community assessment mass balance time series (Otosaka et al., 2023, ESSD,
-# https://doi.org/10.5194/essd-15-1597-2023), 1992-2020, from the BAS Polar Data Centre
-# (https://doi.org/10.5285/77B64C55-7166-4A06-9DEF-2E400398E452).
-IMBIE2023_GT_URLS = {
+# IMBIE 3 community assessment mass balance time series (Otosaka et al.,
+# 2026, Scientific Data, https://doi.org/10.1038/s41597-026-08088-0),
+# covering 1971-2023 (Greenland) / 1979-2023 (Antarctica), from the NERC EDS
+# UK Polar Data Centre
+# (https://doi.org/10.5285/128c5e33-5224-4197-82f0-19dcc95b80a0, Open
+# Government Licence v3.0, no restrictions). Successor to the Otosaka et al.
+# (2023) ESSD product -- see utilities/imbie2026_loader.py's module comment
+# for the full provenance/scope-decision writeup (that module is the
+# authoritative version; this is the same lean, totals-only subset the old
+# _load_imbie2023 here used, now pointed at IMBIE3 instead).
+IMBIE2026_GT_URLS = {
     "antarctica": (
-        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie_antarctica_2021_Gt.csv"
-        "?entryid=synth:77b64c55-7166-4a06-9def-2e400398e452:L2ltYmllX2FudGFyY3RpY2FfMjAyMV9HdC5jc3Y="
+        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie3_antarctica_Gt_partitioned.csv"
+        "?entryid=synth:128c5e33-5224-4197-82f0-19dcc95b80a0:L2ltYmllM19hbnRhcmN0aWNhX0d0X3BhcnRpdGlvbmVkLmNzdg=="
     ),
     "greenland": (
-        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie_greenland_2021_Gt.csv"
-        "?entryid=synth:77b64c55-7166-4a06-9def-2e400398e452:L2ltYmllX2dyZWVubGFuZF8yMDIxX0d0LmNzdg=="
+        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie3_greenland_Gt_partitioned.csv"
+        "?entryid=synth:128c5e33-5224-4197-82f0-19dcc95b80a0:L2ltYmllM19ncmVlbmxhbmRfR3RfcGFydGl0aW9uZWQuY3N2"
     ),
 }
 
 
-def _load_imbie2023(region):
+def _load_imbie2026(region):
     """
-    Loads the IMBIE 2023 community-assessment mass balance CSV for the given
+    Loads the IMBIE 3 community-assessment mass balance CSV for the given
     region ("antarctica" or "greenland"). Only the headline mass-balance
-    columns are needed here (not the Greenland SMB/dynamics partitioning, which
-    this figure doesn't use), so unlike utilities/imbie2023_loader.py this
-    doesn't merge in the older dynamics workbook -- no openpyxl dependency.
+    columns are needed here (not the SMB/dynamics partitioning IMBIE3 also
+    provides for both ice sheets natively -- this figure doesn't use it),
+    so unlike utilities/imbie2026_loader.py this doesn't select those.
     """
-    df = pd.read_csv(IMBIE2023_GT_URLS[region])
+    df = pd.read_csv(IMBIE2026_GT_URLS[region], comment="#")
+    date = pd.to_datetime(df["Date"])
+    df["Year"] = date.dt.year + (date.dt.month - 1) / 12
     imbie = df.rename(
         columns={
             "Mass balance (Gt/yr)": "Rate of ice sheet mass change (Gt/yr)",
-            "Cumulative mass balance (Gt)": "Cumulative ice sheet mass change (Gt)",
-            "Cumulative mass balance uncertainty (Gt)": "Cumulative ice sheet mass change uncertainty (Gt)",
+            "Cumulative mass balance anomaly (Gt)": "Cumulative ice sheet mass change (Gt)",
+            "Cumulative mass balance anomaly uncertainty (Gt)": "Cumulative ice sheet mass change uncertainty (Gt)",
         }
     )[
         [
@@ -1285,8 +1294,8 @@ class LazyRowsCache(dict):
 # to recompute per-request), then serve it as a static Dash app.
 # ─────────────────────────────────────────────────────────────────────────────
 
-imbie_ais = _load_imbie2023("antarctica")
-imbie_gis = _load_imbie2023("greenland")
+imbie_ais = _load_imbie2026("antarctica")
+imbie_gis = _load_imbie2026("greenland")
 imbie_ais["IS"] = "AIS"
 imbie_gis["IS"] = "GIS"
 imbie = pd.concat([imbie_ais, imbie_gis])
@@ -1514,7 +1523,7 @@ app.layout = html.Div(
                         html.P(
                             "This app allows comparison between simulations of recent ice "
                             "sheet change, including from ISMIP6, and observations of ice "
-                            "sheet change (Otosaka et al., 2023). The goal of this app is to "
+                            "sheet change (Otosaka et al., 2026). The goal of this app is to "
                             "facilitate exploration of how different modeling decisions "
                             "affect simulated mass change."
                         ),
