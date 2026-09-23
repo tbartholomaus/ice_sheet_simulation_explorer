@@ -441,9 +441,18 @@ def _build_hover(row_group, row_model, row_exp, ice_sheet):
 
 
 def imbie_mass_loss_slope(df, year_start=2000, year_end=2025):
-    """Linear-regression slope (Gt/yr) of observed cumulative ice sheet mass change."""
+    """Linear-regression slope (Gt/yr) of observed cumulative ice sheet mass change.
+
+    year_end means "through the end of that calendar year" -- `< year_end + 1`,
+    not `<= year_end`, since IMBIE3's Year values are a fractional monthly grid
+    (e.g. December is ~year_end + 0.917), so a plain `<= year_end` would only
+    ever match that year's January row and silently drop the other 11 months
+    (confirmed directly: `<= 2023` matched through Year == 2023.0 and no
+    further). year_start's own `>=` doesn't need the same adjustment --
+    January's Year value already equals year_start exactly, so `>=` already
+    includes the whole start year."""
     mask = (
-        (df["Year"] >= year_start) & (df["Year"] <= year_end)
+        (df["Year"] >= year_start) & (df["Year"] < year_end + 1)
         & df["Cumulative ice sheet mass change (Gt)"].notna()
     )
     x = df.loc[mask, "Year"]
@@ -1306,8 +1315,8 @@ ismip6_gis = load_ismip6_gis()
 ismip6_gis["IS"] = "GIS"
 ismip6 = pd.concat([ismip6_ais, ismip6_gis])
 
-YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2020, 5
-YEAR_DEFAULT = [2015, 2020]
+YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2023, 5  # 2023 == IMBIE3's (Otosaka et al. 2026) last full year of data
+YEAR_DEFAULT = [2015, 2023]  # Jan 1 2015 through Dec 31 2023 (see imbie_mass_loss_slope's year_end semantics)
 
 TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
 
@@ -1401,7 +1410,7 @@ app.layout = html.Div(
             ],
             style={
                 "display": "flex", "alignItems": "center", "gap": "14px",
-                "margin": "24px 0 0 40px",
+                "margin": "24px 0 0 20px",
             },
         ),
         # Three text boxes around the Years:/Simulation studies: controls: a
@@ -1506,8 +1515,15 @@ app.layout = html.Div(
                 ),
             ],
             style={
-                "display": "flex", "alignItems": "center", "justifyContent": "center",
-                "width": "100%", "margin": "20px auto 0 auto",
+                # Left-anchored at the same 20px margin as the title above
+                # and the "This app allows..." sidebar text below -- this
+                # row previously centered itself as a whole
+                # (justifyContent:center + width:100% + auto left/right
+                # margins), which left its actual left edge wherever its
+                # (variable-width) content happened to land rather than
+                # matching those other two blocks.
+                "display": "flex", "alignItems": "center",
+                "margin": "20px 0 0 20px",
             },
         ),
         # "Units:" is a native in-figure Plotly dropdown now (see the
@@ -1545,7 +1561,7 @@ app.layout = html.Div(
                         ),
                     ],
                     style={
-                        "width": "15%", "minWidth": "220px", "padding": "24px 16px 0 40px",
+                        "width": "15%", "minWidth": "220px", "padding": "24px 16px 0 20px",
                         "boxSizing": "border-box",
                         "color": "#555555", "fontFamily": "Arial, sans-serif",
                         "fontSize": "14px", "lineHeight": "1.5",
