@@ -1691,31 +1691,154 @@ app.clientside_callback(
         // only know the figure's original default range, computed at
         // server build time, not whatever the user has since zoomed to).
         function retickSleAxes(plotDiv, axes) {
-            var layoutUpdate = {};
+            var tickUpdate = {};
             axes.forEach(function(axis) {
                 var ticks = niceSleTicks(plotDiv._fullLayout[axis].range, 6);
-                layoutUpdate[axis + '.tickmode'] = 'array';
-                layoutUpdate[axis + '.tickvals'] = ticks.tickvals;
-                layoutUpdate[axis + '.ticktext'] = ticks.ticktext;
+                tickUpdate[axis + '.tickmode'] = 'array';
+                tickUpdate[axis + '.tickvals'] = ticks.tickvals;
+                tickUpdate[axis + '.ticktext'] = ticks.ticktext;
             });
-            // Re-assert every updatemenu's currently-active button in this
-            // SAME relayout call -- confirmed directly that otherwise this
-            // call alone resets Units:/Group by:/Distribution medians: back
-            // to their hardcoded server defaults: a button click only
-            // updates Plotly's internal `_fullLayout`, never writing back
-            // into the "source" `plotDiv.layout.updatemenus[i].active` the
-            // button definitions actually live on -- so ANY later
-            // Plotly.relayout call (for entirely unrelated properties, like
-            // these ticks) triggers a full supplyDefaults recompute that
-            // re-derives `_fullLayout` from that stale "source" layout,
-            // discarding the click that was never persisted there in the
-            // first place.
-            Object.keys(window.__rcView.state).forEach(function(key) {
-                if (/^updatemenus\\[\\d+\\]\\.active$/.test(key)) {
-                    layoutUpdate[key] = window.__rcView.state[key];
-                }
-            });
-            window.Plotly.relayout(plotDiv, layoutUpdate);
+            // TWO SEPARATE, SEQUENTIAL Plotly.relayout calls -- confirmed
+            // directly that a single COMBINED call (ticks + updatemenus
+            // together) is unsafe in both directions:
+            //  - Include updatemenus[2].active (Units:) in that same call:
+            //    Plotly doesn't just mark it selected, it RE-RUNS that
+            //    button's own baked-in `args` -- the "Sea level rise"
+            //    button's OWN tickvals/ticktext for the figure's original
+            //    full-range default -- silently overwriting the ticks this
+            //    function just computed for the current zoom (caught
+            //    directly: reverted to the un-zoomed default's -5/0/5/10
+            //    immediately after).
+            //  - Omit it: a button click only updates Plotly's internal
+            //    `_fullLayout`, never writing back into the "source"
+            //    `plotDiv.layout.updatemenus[i].active` the button
+            //    definitions actually live on -- so this relayout call (for
+            //    the unrelated tick properties) triggers a full
+            //    supplyDefaults recompute that re-derives `_fullLayout` from
+            //    that stale "source" layout, silently reverting Units: (and
+            //    Group by:/Distribution medians:, if also omitted) back to
+            //    their hardcoded server defaults.
+            // Splitting it into a ticks-only call, awaited, THEN a bare
+            // active-indices-only call (confirmed directly this ordering
+            // does NOT re-trigger any button's args -- unlike a combined
+            // call, an active-only relayout leaves tickvals/tickmode alone)
+            // gets both right: correct ticks AND correct active state --
+            // for a SINGLE retickSleAxes call in isolation. But this
+            // function can be invoked twice in close succession (e.g. the
+            // Units: click itself triggers one call, then the user zooms a
+            // moment later before that first call's pair has settled,
+            // triggering a second, overlapping call) -- confirmed directly
+            // that two such pairs CAN interleave (the second pair's
+            // tick-only call landing, then the FIRST pair's now-late
+            // active-only call still firing afterward, whose supplyDefaults
+            // recompute reverts the second pair's just-applied ticks back to
+            // the first pair's stale values). Queuing every pair onto one
+            // shared promise chain forces each pair to fully finish (both
+            // calls) before the next one starts, regardless of how close
+            // together the triggering events are.
+            //
+            // The Promise a Plotly.relayout call returns also resolves
+            // BEFORE Plotly's own internal redraw from that call has fully
+            // settled -- confirmed directly that firing the active-only
+            // call immediately in that promise's .then() (a ~10ms gap)
+            // leaves `active` reverted to 0 despite the call completing
+            // with no error, while inserting an animation-frame + macrotask
+            // gap first (letting that redraw actually finish) makes the
+            // exact same active-only call stick every time.
+            function nextTick() {
+                return new Promise(function(resolve) {
+                    requestAnimationFrame(function() { setTimeout(resolve, 0); });
+                });
+            }
+            // A FOURTH, separate hazard from Dash's own dcc.Graph wrapper
+            // (not Plotly.js itself): it binds its own 'plotly_relayout'
+            // listener (before ours, at componentDidMount) that reacts to
+            // EVERY relayout event -- including ones OUR OWN calls below
+            // trigger, not just the user's zoom -- by cloning the live
+            // `plotDiv.layout[topLevelKey]` (e.g. the whole `xaxis` object)
+            // into its OWN internally-tracked `figure` prop, then
+            // (re-)calling `Plotly.react(plotDiv, thatFigure)` once React
+            // gets around to it. That react() call is queued behind Dash's
+            // own async setProps/render pipeline and confirmed directly to
+            // sometimes land TENS of ms later -- late enough to fire WHILE
+            // our own tickUpdate relayout call below is still internally
+            // in flight (its returned promise hadn't even resolved yet),
+            // clobbering `plotDiv.layout.xaxis` back to whatever STALE
+            // pre-correction ticks Dash had captured when the user's zoom
+            // first fired its own relayout event, moments before ours.
+            // Since that stale react() call can interleave in the middle
+            // of our OWN relayout's internal processing, even OUR call's
+            // own completion is not trustworthy -- confirmed directly the
+            // ticks can be back to stale again by the time our call's own
+            // event fires. There is no reliable hook to wait on (Dash's
+            // internal queue isn't exposed), so this re-applies the SAME
+            // tick update and re-checks after a short real (setTimeout)
+            // delay -- not just an animation-frame tick -- retrying a
+            // bounded number of times until the live ticks actually match
+            // what was just requested, which converges once Dash's own
+            // stale-triggered react() call(s) have finished landing.
+            function settleDelay() {
+                return new Promise(function(resolve) { setTimeout(resolve, 120); });
+            }
+            function ticksSettled() {
+                return axes.every(function(axis) {
+                    var want = tickUpdate[axis + '.tickvals'];
+                    var got = (plotDiv._fullLayout[axis] || {}).tickvals;
+                    return Array.isArray(got) && got.length === want.length &&
+                        got.every(function(v, i) { return v === want[i]; });
+                });
+            }
+            function applyTicksUntilSettled(attemptsLeft) {
+                return window.Plotly.relayout(plotDiv, tickUpdate)
+                    .then(settleDelay)
+                    .then(function() {
+                        if (ticksSettled() || attemptsLeft <= 1) { return; }
+                        return applyTicksUntilSettled(attemptsLeft - 1);
+                    });
+            }
+            // Whether a menu's active index needs re-asserting is decided
+            // HERE -- AFTER the ticks-only call above has run and settled,
+            // not before it. Confirmed directly this ordering matters, not
+            // just the check's existence: right after a genuine button
+            // click, `_fullLayout.updatemenus[i].active` is ALREADY at its
+            // new value (Plotly's native click handling sets it
+            // immediately), so a check done BEFORE the ticks call sees no
+            // difference and skips the active call entirely -- but the
+            // ticks-only relayout's supplyDefaults recompute (see above)
+            // then silently reverts `_fullLayout` back down to the stale
+            // "source" `plotDiv.layout` value (never written by a native
+            // click, only by an explicit active-only relayout), leaving
+            // Units: stuck on the OLD selection with no correction ever
+            // fired. Checking after the ticks call (and its settle delay)
+            // sees that reverted value instead, correctly detects the now-
+            // real difference, and fires the correction.
+            // This same after-the-fact check also still protects the OTHER
+            // direction: on a later re-zoom while already in SLE mode (no
+            // button click involved), the ticks call's supplyDefaults
+            // recompute re-derives `_fullLayout.active` from `source`,
+            // which by then already holds the correct value (written by
+            // the PRIOR active-only call below) -- so this check correctly
+            // finds no difference and skips re-asserting active, avoiding
+            // the "same-value active re-set reverts ticks to a stale
+            // snapshot" side effect that motivated skipping no-op sets in
+            // the first place.
+            window.__rcView.relayoutQueue = (window.__rcView.relayoutQueue || Promise.resolve())
+                .then(function() { return applyTicksUntilSettled(3); })
+                .then(nextTick)
+                .then(function() {
+                    var activeUpdate = {};
+                    Object.keys(window.__rcView.state).forEach(function(key) {
+                        var m = key.match(/^updatemenus\\[(\\d+)\\]\\.active$/);
+                        if (!m) { return; }
+                        var menu = plotDiv._fullLayout.updatemenus[Number(m[1])];
+                        if (menu && menu.active !== window.__rcView.state[key]) {
+                            activeUpdate[key] = window.__rcView.state[key];
+                        }
+                    });
+                    if (Object.keys(activeUpdate).length > 0) {
+                        return window.Plotly.relayout(plotDiv, activeUpdate);
+                    }
+                });
         }
 
         function bind(plotDiv) {
