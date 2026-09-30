@@ -879,6 +879,19 @@ def load_goelzer2025_gis():
 # sensitivity variant) is the paper's headline/default result -- the same
 # choice every other source in this module makes (use the paper's primary
 # result, not a named sensitivity test).
+#
+# dash_app's bundled CSV derivation note (there is no checked-in script for
+# this -- regenerate via the one-liners below if EDWARDS2021_KEEP_THROUGH_YEAR
+# or the n_samples choice ever changes):
+#   from utilities.external_sources import load_edwards2021_ais, load_edwards2021_gis
+#   load_edwards2021_ais(n_samples=50).to_csv(
+#       "dash_app/data/external_sources_edwards2021_ais.csv.gz", index=False, compression="gzip")
+#   load_edwards2021_gis(n_samples=50).to_csv(
+#       "dash_app/data/external_sources_edwards2021_gis.csv.gz", index=False, compression="gzip")
+# n_samples=50 (not the full 500) is load-bearing, not cosmetic -- see
+# _load_edwards2021()'s docstring for the real (PlotlyJSONEncoder-measured)
+# payload-size numbers that drove this choice, after the full-sample version
+# caused a production OOM crash.
 # ═════════════════════════════════════════════════════════════════════════
 
 EDWARDS2021_TIMESERIES_BASE = (
@@ -909,7 +922,7 @@ def _edwards2021_download_scenario(scenario_key):
     return _download(url, f"edwards2021_projections_FAIR_{scenario_key}.csv", min_expected_bytes=10_000_000)
 
 
-def _load_edwards2021(ice_source):
+def _load_edwards2021(ice_source, n_samples=None):
     """Loads Edwards et al. (2021)'s full Monte Carlo sample set for the
     given ice_source ("AIS" or "GrIS") across all 6 scenarios, as a
     dataframe shaped like ismip6_ais/ismip6_gis: Year, Cumulative ice sheet
@@ -930,6 +943,43 @@ def _load_edwards2021(ice_source):
     window are ever computed from this (see load_aschwanden2022_gis()'s
     docstring) -- but it does mean this source has no data before 2016, one
     year later than IMBIE/ISMIP6's own 2015 baseline.
+
+    `n_samples`: if given, keep only this many of the 500 samples per
+    scenario (evenly spaced across sample ids 1-500, via np.linspace, so
+    the subset is deterministic/reproducible rather than randomly seeded)
+    instead of all 500. Each of the 500 x 6 scenarios = 3000 samples
+    becomes its own synthetic Exp (see load_coulon2024_ais()'s docstring
+    for why -- the same trick every large-ensemble source in this module
+    uses); 3000 Exps/ice-sheet caused a real production OOM crash on
+    Render (2026-09-30) the first time this shipped at full sample count.
+
+    The actual culprit, confirmed directly with `plotly.utils.
+    PlotlyJSONEncoder` (the same encoder Dash uses for its real HTTP
+    response -- a naive `json.dumps(..., default=str)` UNDER-reports this
+    badly: numpy silently truncates str() of arrays over ~1000 elements,
+    so it looked deceptively small during the first round of measurement)
+    isn't raw memory so much as response PAYLOAD SIZE: every "Group by ..."
+    dimension is pre-built into EVERY response for client-side toggling
+    (see plot_interactive_rate_comparison's docstring), and Edwards2021 has
+    almost no metadata diversity of its own (one ice_model, one
+    sliding_law, one initialization, one climate_model value across ALL
+    scenarios) -- so unlike Aschwanden2019/Goelzer2025 (whose points spread
+    across many GCM/RCP categories), nearly all of Edwards2021's points
+    pile into ONE undivided category per dimension, 4-5 times over. At the
+    full 3000 Exps/ice-sheet this measured 67 MB for one response with
+    both Edwards checkboxes on (vs. 2.8 MB with none checked) -- at
+    n_samples=50 (300 Exps/ice-sheet) it's 9.4 MB, in the same ballpark as
+    Aschwanden2019's own ~13 MB contribution alone, while checking ALL SIX
+    sources at once (a realistic worst case) only grows from ~22 MB
+    (pre-Edwards) to ~28 MB. n_samples=50 is what dash_app's bundled CSV
+    derivation actually uses -- see the derivation note in this module's
+    Edwards2021 header comment. A KDE's shape and quantiles stay
+    reasonably stable at n_samples=50 vs. the full 500 (spot-checked
+    directly: 2023 SSP5-8.5 median/[5,95] percentiles shift by less than
+    ~25%, well within what 50-vs-500-sample estimation noise alone would
+    produce). The notebook's own load_edwards2021_ais()/_gis() calls still
+    default to every sample, since it runs locally without Render's memory
+    ceiling and the user explicitly asked for true, full-sample PDFs.
     """
     rows = []
     exp_meta_rows = []
@@ -937,6 +987,9 @@ def _load_edwards2021(ice_source):
         path = _edwards2021_download_scenario(scenario_key)
         raw = pd.read_csv(path)
         raw = raw[raw["year"] <= EDWARDS2021_KEEP_THROUGH_YEAR]
+        if n_samples is not None:
+            keep_samples = set(np.linspace(1, 500, n_samples, dtype=int))
+            raw = raw[raw["sample"].isin(keep_samples)]
 
         if ice_source == "GrIS":
             sub = raw[(raw["ice_source"] == "GrIS") & (raw["region"] == "ALL")][["year", "sample", "SLE"]]
@@ -966,18 +1019,20 @@ def _load_edwards2021(ice_source):
     return df.merge(exp_meta_df, on="Exp", how="left")
 
 
-def load_edwards2021_ais():
-    """Loads Edwards et al. (2021)'s Antarctic full-sample projections
-    (500 Monte Carlo samples x 6 SSP scenarios = 3000 synthetic Exps). See
-    _load_edwards2021() for the shared derivation."""
-    return _load_edwards2021("AIS")
+def load_edwards2021_ais(n_samples=None):
+    """Loads Edwards et al. (2021)'s Antarctic full-sample projections (500
+    Monte Carlo samples/scenario by default, or `n_samples` evenly-spaced
+    of them -- see _load_edwards2021()'s docstring for why dash_app's own
+    derivation script passes a smaller n_samples) x 6 SSP scenarios."""
+    return _load_edwards2021("AIS", n_samples=n_samples)
 
 
-def load_edwards2021_gis():
-    """Loads Edwards et al. (2021)'s Greenland full-sample projections
-    (500 Monte Carlo samples x 6 SSP scenarios = 3000 synthetic Exps). See
-    _load_edwards2021() for the shared derivation."""
-    return _load_edwards2021("GrIS")
+def load_edwards2021_gis(n_samples=None):
+    """Loads Edwards et al. (2021)'s Greenland full-sample projections (500
+    Monte Carlo samples/scenario by default, or `n_samples` evenly-spaced
+    of them -- see _load_edwards2021()'s docstring for why dash_app's own
+    derivation script passes a smaller n_samples) x 6 SSP scenarios."""
+    return _load_edwards2021("GrIS", n_samples=n_samples)
 
 
 def exp_meta_from_df(df, extra_cols):
