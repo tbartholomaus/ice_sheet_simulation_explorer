@@ -844,6 +844,142 @@ def load_goelzer2025_gis():
     return df.merge(exp_meta_df, on="Exp", how="left")
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# Edwards, Nowicki, Marzeion, Hock, Goelzer, Seroussi, Jourdain, Slater,
+# Turner, Smith, McKenna, Simon, Abe-Ouchi, Gregory, Larour, Lipscomb,
+# Payne, Shepherd et al. (2021), "Projected land ice contributions to
+# twenty-first-century sea level rise", Nature 593, 74-82,
+# https://doi.org/10.1038/s41586-021-03302-y.
+#
+# Not a set of discrete labeled ice-sheet-model runs like every other source
+# in this module -- `emulandice`, the paper's own Gaussian-process emulator
+# (calibrated against the same ISMIP6/GlacierMIP ensembles this project
+# already uses), produces a full Monte Carlo POSTERIOR SAMPLE per SSP
+# scenario (500 draws/scenario/year). Per explicit user decision
+# (2026-09-29): use BOTH ice sheets (AIS and GIS, i.e. the paper's Antarctic
+# and Greenland totals), ALL 6 published scenarios, and draw genuine PDFs
+# from these samples (not a distribution fitted to published quantiles).
+# Each of the 500 x 6 = 3000 samples per ice sheet is treated as its own
+# synthetic Exp, exactly the trick load_coulon2024_ais()/
+# load_aschwanden2022_gis() already use for their own large ensembles --
+# this reuses 100% of the existing merge/row_weight/KDE/checklist pipeline,
+# including the pre-existing "Group by climate scenario" dropdown to split
+# by SSP, with no new rendering code needed.
+#
+# Archive: the paper's own Nature Supplementary Information (a small zip,
+# static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03302-y/
+# MediaObjects/41586_2021_3302_MOESM1_ESM.zip) only bundles 2100-snapshot
+# summaries -- but its own Supplementary_Information.docx states "Full time
+# series files (2016-2100) and Monte Carlo samples ... are available in
+# results directory of https://github.com/tamsinedwards/emulandice", which
+# is what's used here: results/proj_MAIN_TIMESERIES/projections_FAIR_
+# SSP*.csv, one file per scenario, columns ice_source/region/year/sample/
+# GSAT/melt/collapse/SLE (confirmed directly by inspecting the raw files).
+# "MAIN" (not the archive's alternate "S11_RISK", a risk-averse-Antarctica
+# sensitivity variant) is the paper's headline/default result -- the same
+# choice every other source in this module makes (use the paper's primary
+# result, not a named sensitivity test).
+# ═════════════════════════════════════════════════════════════════════════
+
+EDWARDS2021_TIMESERIES_BASE = (
+    "https://raw.githubusercontent.com/tamsinedwards/emulandice/master/"
+    "results/proj_MAIN_TIMESERIES/"
+)
+# scenario_key (matches the raw filename's suffix) -> display label (paper's
+# own SSP naming, Fig. 3/Table 1).
+EDWARDS2021_SCENARIO_FILES = {
+    "SSP119": "SSP1-1.9", "SSP126": "SSP1-2.6", "SSP245": "SSP2-4.5",
+    "SSP370": "SSP3-7.0", "SSP585": "SSP5-8.5", "SSPNDC": "NDC (current pledges)",
+}
+# The raw files run 2016-2100; the app's year-range slider currently only
+# ever goes up to 2023 (IMBIE3's last full year), so keeping a small buffer
+# past that instead of the full 85-year run keeps the derived data a small
+# fraction of the ~45 MB/scenario raw download. Bump this if the slider's
+# max year is ever extended.
+EDWARDS2021_KEEP_THROUGH_YEAR = 2025
+EDWARDS2021_CLIMATE_MODEL_LABEL = "FAIR-forced GSAT (no discrete GCM)"
+EDWARDS2021_PROTOCOL_LABEL = "Main projections (Gaussian process emulator)"
+
+
+def _edwards2021_download_scenario(scenario_key):
+    """Downloads results/proj_MAIN_TIMESERIES/projections_FAIR_<scenario_key>.csv
+    (~45 MB) -- one row per (ice_source, region, year, sample), 500 samples/
+    year, 2016-2100."""
+    url = f"{EDWARDS2021_TIMESERIES_BASE}projections_FAIR_{scenario_key}.csv"
+    return _download(url, f"edwards2021_projections_FAIR_{scenario_key}.csv", min_expected_bytes=10_000_000)
+
+
+def _load_edwards2021(ice_source):
+    """Loads Edwards et al. (2021)'s full Monte Carlo sample set for the
+    given ice_source ("AIS" or "GrIS") across all 6 scenarios, as a
+    dataframe shaped like ismip6_ais/ismip6_gis: Year, Cumulative ice sheet
+    mass change (Gt), Group, Model, Exp, IS -- plus climate_model/scenario/
+    protocol columns for classification (see this section's module comment
+    for the full provenance/scope).
+
+    AIS's total isn't a precomputed column in the raw file (unlike GrIS's
+    own "ALL" region row) -- summed here per (year, sample) from the WAIS +
+    EAIS + PEN region rows, the same 3 regions the paper's own Extended
+    Data Table 3 sums to report its Antarctic total.
+
+    SLE is CUMULATIVE, in cm, rebased to 0 at 2016 -- converted to Gt via
+    the same expression load_coulon2024_ais() uses (there: m SLE; here: cm
+    SLE, so an extra /100 first), sign-flipped since rising SLE = ice loss
+    = negative Gt. The absolute baseline doesn't matter -- like every other
+    source in this module, only rate differences over a selected year
+    window are ever computed from this (see load_aschwanden2022_gis()'s
+    docstring) -- but it does mean this source has no data before 2016, one
+    year later than IMBIE/ISMIP6's own 2015 baseline.
+    """
+    rows = []
+    exp_meta_rows = []
+    for scenario_key, scenario_label in EDWARDS2021_SCENARIO_FILES.items():
+        path = _edwards2021_download_scenario(scenario_key)
+        raw = pd.read_csv(path)
+        raw = raw[raw["year"] <= EDWARDS2021_KEEP_THROUGH_YEAR]
+
+        if ice_source == "GrIS":
+            sub = raw[(raw["ice_source"] == "GrIS") & (raw["region"] == "ALL")][["year", "sample", "SLE"]]
+        else:
+            sub = (
+                raw[(raw["ice_source"] == "AIS") & (raw["region"].isin(["WAIS", "EAIS", "PEN"]))]
+                .groupby(["year", "sample"], as_index=False)["SLE"].sum()
+            )
+
+        exp = scenario_key + "_s" + sub["sample"].astype(int).astype(str).str.zfill(3)
+        sle_m = sub["SLE"].to_numpy() / 100  # cm -> m
+        cum_gt = -sle_m * 1000 * GT_PER_M_SLE  # m SLE -> mm -> Gt, sign-flipped
+
+        rows.append(pd.DataFrame({
+            "Year": sub["year"].astype(int), "Cumulative ice sheet mass change (Gt)": cum_gt,
+            "Group": "Edwards2021", "Model": "emulandice",
+            "Exp": exp, "IS": "AIS" if ice_source == "AIS" else "GIS",
+        }))
+        exp_meta_rows.append(pd.DataFrame({
+            "Exp": exp.unique(),
+            "climate_model": EDWARDS2021_CLIMATE_MODEL_LABEL,
+            "scenario": scenario_label, "protocol": EDWARDS2021_PROTOCOL_LABEL,
+        }))
+
+    df = pd.concat(rows, ignore_index=True)
+    exp_meta_df = pd.concat(exp_meta_rows, ignore_index=True)
+    return df.merge(exp_meta_df, on="Exp", how="left")
+
+
+def load_edwards2021_ais():
+    """Loads Edwards et al. (2021)'s Antarctic full-sample projections
+    (500 Monte Carlo samples x 6 SSP scenarios = 3000 synthetic Exps). See
+    _load_edwards2021() for the shared derivation."""
+    return _load_edwards2021("AIS")
+
+
+def load_edwards2021_gis():
+    """Loads Edwards et al. (2021)'s Greenland full-sample projections
+    (500 Monte Carlo samples x 6 SSP scenarios = 3000 synthetic Exps). See
+    _load_edwards2021() for the shared derivation."""
+    return _load_edwards2021("GrIS")
+
+
 def exp_meta_from_df(df, extra_cols):
     """Builds a get_exp_meta()-style {Exp: {...}} dict from one of this
     module's loaded dataframes, whose exp-level classification (scenario,

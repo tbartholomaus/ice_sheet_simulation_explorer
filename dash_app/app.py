@@ -290,6 +290,14 @@ ism_meta = {
     ("Goelzer2025", "IMAU-ICE"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Basal inversion (variable)",  "initialization": "Hybrid: basal inversion + paleo spin-up"},
     ("Goelzer2025", "CISM"):      {"ice_model": "CISM",      "sliding_law": "Schoof (2005)",               "initialization": "Spin-up"},
     ("Goelzer2025", "GISM"):      {"ice_model": "GISM",      "sliding_law": "Optimized coefficients (variable)", "initialization": "Iterative assimilation + 2-cycle spin-up"},
+
+    # Edwards et al. (2021) -- a Gaussian-process EMULATOR, not a physical
+    # ice-sheet model, so it has no sliding law/spin-up to report; labeled
+    # honestly rather than borrowed from an unrelated model (see
+    # utilities/external_sources.py for provenance/scope decisions).
+    ("Edwards2021", "emulandice"): {"ice_model": "emulandice (GP emulator of ISMIP6/GlacierMIP)",
+                                     "sliding_law": "Not applicable (statistical emulator)",
+                                     "initialization": "Not applicable (statistical emulator)"},
 }
 
 
@@ -331,16 +339,29 @@ rahlves2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_rahlves20
 coulon2024_ais = pd.read_csv(os.path.join(DATA_DIR, "external_sources_coulon2024_ais.csv.gz"))
 aschwanden2022_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_aschwanden2022_gis.csv.gz"))
 goelzer2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_goelzer2025_gis.csv.gz"))
+edwards2021_ais = pd.read_csv(os.path.join(DATA_DIR, "external_sources_edwards2021_ais.csv.gz"))
+edwards2021_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_edwards2021_gis.csv.gz"))
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
 gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
+ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
+gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
 EXTRA_SOURCES = [
     {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
     {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
     {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},
+    # The first extra_sources paper covering BOTH ice sheets -- every other
+    # entry above is single-ice-sheet already, so no label needed an
+    # ice-sheet suffix to stay unambiguous; these two do, since otherwise
+    # two checkboxes would both read plain "Edwards 2021". Same color for
+    # both -- they render on separate AIS/GIS subplot panels, so there's no
+    # legend collision (matching how every other source picks one color
+    # regardless of panel).
+    {"label": "Edwards 2021 (AIS)", "df": edwards2021_ais, "color": "#e7298a"},
+    {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
 ]
 
 # plot_interactive_rate_comparison's "Group by publication" category names/
