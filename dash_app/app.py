@@ -849,7 +849,6 @@ def plot_interactive_rate_comparison(
             x_range = (merged_df["rate"].min() - pad, merged_df["rate"].max() + pad)
             x_range_by_panel[k] = x_range
 
-            total_weight = merged_df["row_weight"].sum()
             xs, dens_full_raw = _rate_kde_raw(
                 merged_df["rate"].values, x_range, weights=merged_df["row_weight"].values,
             )
@@ -919,7 +918,8 @@ def plot_interactive_rate_comparison(
                 x=[merged_df["rate"].median()], y=[rate_median_y], mode="markers",
                 marker=dict(symbol="triangle-down", size=11, color="gray", line=dict(width=1, color="black")),
                 opacity=1, name="All simulations median", legendgroup="median:all", showlegend=show_median_all,
-                visible=True, hovertemplate="All simulations median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
+                visible=True, customdata=[merged_df["rate"].median() * gt2mmSLE],
+                hovertemplate="All simulations median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
             ), row=k, col=1)
             all_only_idx.append(idx)
             median_trace_idx.append(idx)
@@ -946,27 +946,37 @@ def plot_interactive_rate_comparison(
                 # initialization, ~4) keep the full 0.5.
                 n_cats = max(len(color_map), 1)
                 kde_fill_opacity = min(0.5, 2.0 / n_cats)
+
+                # Every category's KDE curve is normalized to ITS OWN peak
+                # reaching rate_kde_height (the same height the "All
+                # simulations" gray curve and the median triangle markers'
+                # reference line use) -- not scaled by how much of the
+                # population that category represents. Per explicit user
+                # request/decision (2026-10-01): guarantee every curve is
+                # fully visible/comparable by SHAPE, not have some
+                # categories read as "very low and flat" next to others.
+                # Confirmed directly this was a real, visible problem before:
+                # earlier versions scaled each category's curve down by its
+                # share of either the whole pooled population (full_max) or
+                # even just the dimension's own tallest category, and
+                # Edwards2021 AIS's individual SSP-scenario curves (each
+                # already a small slice of a source whose total weight is
+                # de-emphasized to one typical-institution's worth, see
+                # row_weight above, then split 6 further ways) stayed
+                # visibly short under either scheme. The trade-off, accepted
+                # explicitly: a category backed by 20 ISMIP6 institutions
+                # now reads the same height as one backed by a single paper
+                # or a single SSP scenario -- relative prevalence is no
+                # longer conveyed by curve height in ANY "Group by" view
+                # (this subsumes "Group by publication"'s older, narrower
+                # equal-area special case, which no longer needs separate
+                # handling).
                 for cat, g in merged_df.groupby(dim):
                     color = color_map.get(cat, "#888888")
-                    cat_weight = g["row_weight"].sum()
                     if len(g) >= 2 and g["rate"].std() > 0:
                         _, dens2_raw = _rate_kde_raw(g["rate"].values, x_range, weights=g["row_weight"].values)
-                        # "Group by publication" compares whole sources/studies
-                        # to each other, not simulation counts -- ISMIP6 (summed
-                        # across ~15-20 institutions) has vastly more total
-                        # row_weight than any one paper's own (already
-                        # de-weighted-to-typical_model_n) equivalent, so
-                        # weighting by row_weight share here would make every
-                        # paper's curve nearly invisible next to ISMIP6's.
-                        # Every OTHER dimension keeps proportional-by-weight
-                        # scaling (a category with more simulations legitimately
-                        # gets a bigger curve there), but publication instead
-                        # gives every category (ISMIP6 counts as one) equal
-                        # area, so it's each source's distribution SHAPE being
-                        # compared, not how many institutions/ensemble members
-                        # went into computing it.
-                        weight = (1.0 / n_cats) if dim == "publication" else (cat_weight / total_weight)
-                        dens2 = (dens2_raw * weight) / full_max * rate_kde_height
+                        cat_peak = dens2_raw.max()
+                        dens2 = (dens2_raw / cat_peak * rate_kde_height) if cat_peak > 0 else dens2_raw
                         idx = len(fig.data)
                         fig.add_trace(go.Scatter(
                             x=xs, y=np.full_like(xs, rate_kde_y0), mode="lines", line=dict(width=0),
@@ -1001,7 +1011,8 @@ def plot_interactive_rate_comparison(
                         x=[g["rate"].median()], y=[rate_median_y], mode="markers",
                         marker=dict(symbol="triangle-down", size=11, color=color, line=dict(width=1, color="black")),
                         opacity=1, name=f"{cat} median", legendgroup=f"median:{dim}:{cat}", showlegend=False,
-                        visible=False, hovertemplate=f"{cat} median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
+                        visible=False, customdata=[g["rate"].median() * gt2mmSLE],
+                        hovertemplate=f"{cat} median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
                     ), row=k, col=1)
                     target_idx.append(idx)
                     median_trace_idx.append(idx)
@@ -1088,8 +1099,18 @@ def plot_interactive_rate_comparison(
     mass_hovertemplate_all = [tr.hovertemplate for tr in fig.data]
     # Only the median markers' hovertemplate hardcodes a unit (the point
     # traces' hovertemplate is just "%{text}...", already unit-agnostic).
+    # %{x} is NOT swapped to mm/yr here -- per the "nothing moves" rule
+    # above, a median marker's x stays in Gt/yr always, so %{x:.2f} mm/yr
+    # would just relabel that same raw Gt/yr NUMBER as "mm/yr" without
+    # actually converting it (confirmed directly: this previously showed,
+    # e.g., "-13.1 mm/yr" for a marker plotted at the Gt/yr position
+    # equivalent to +0.04 mm/yr -- a ~350x-wrong hover value, the
+    # gt2mmSLE conversion factor itself, silently missing). References
+    # %{customdata} instead -- each median trace's `customdata` is set at
+    # creation to that same median already multiplied by gt2mmSLE, the
+    # same pattern the point traces already use for their own hover_sle.
     sle_hovertemplate_all = [
-        ht.replace("%{x:.0f} Gt/yr", "%{x:.2f} mm/yr") if ht is not None else None
+        ht.replace("%{x:.0f} Gt/yr", "%{customdata:.2f} mm/yr") if ht is not None else None
         for ht in mass_hovertemplate_all
     ]
 
