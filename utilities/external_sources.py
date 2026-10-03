@@ -922,7 +922,7 @@ def _edwards2021_download_scenario(scenario_key):
     return _download(url, f"edwards2021_projections_FAIR_{scenario_key}.csv", min_expected_bytes=10_000_000)
 
 
-def _load_edwards2021(ice_source, n_samples=None):
+def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
     """Loads Edwards et al. (2021)'s full Monte Carlo sample set for the
     given ice_source ("AIS" or "GrIS") across all 6 scenarios, as a
     dataframe shaped like ismip6_ais/ismip6_gis: Year, Cumulative ice sheet
@@ -980,13 +980,19 @@ def _load_edwards2021(ice_source, n_samples=None):
     produce). The notebook's own load_edwards2021_ais()/_gis() calls still
     default to every sample, since it runs locally without Render's memory
     ceiling and the user explicitly asked for true, full-sample PDFs.
+
+    `keep_through_year`: overrides EDWARDS2021_KEEP_THROUGH_YEAR (2025,
+    sized for the app's own "Years:" slider, which never exceeds 2023) --
+    pass e.g. 2100 for a full-century projection plot, the raw files'
+    own natural end year.
     """
+    keep_through_year = EDWARDS2021_KEEP_THROUGH_YEAR if keep_through_year is None else keep_through_year
     rows = []
     exp_meta_rows = []
     for scenario_key, scenario_label in EDWARDS2021_SCENARIO_FILES.items():
         path = _edwards2021_download_scenario(scenario_key)
         raw = pd.read_csv(path)
-        raw = raw[raw["year"] <= EDWARDS2021_KEEP_THROUGH_YEAR]
+        raw = raw[raw["year"] <= keep_through_year]
         if n_samples is not None:
             keep_samples = set(np.linspace(1, 500, n_samples, dtype=int))
             raw = raw[raw["sample"].isin(keep_samples)]
@@ -1019,20 +1025,22 @@ def _load_edwards2021(ice_source, n_samples=None):
     return df.merge(exp_meta_df, on="Exp", how="left")
 
 
-def load_edwards2021_ais(n_samples=None):
+def load_edwards2021_ais(n_samples=None, keep_through_year=None):
     """Loads Edwards et al. (2021)'s Antarctic full-sample projections (500
     Monte Carlo samples/scenario by default, or `n_samples` evenly-spaced
     of them -- see _load_edwards2021()'s docstring for why dash_app's own
-    derivation script passes a smaller n_samples) x 6 SSP scenarios."""
-    return _load_edwards2021("AIS", n_samples=n_samples)
+    derivation script passes a smaller n_samples) x 6 SSP scenarios, through
+    `keep_through_year` (default 2025; pass 2100 for the full projection)."""
+    return _load_edwards2021("AIS", n_samples=n_samples, keep_through_year=keep_through_year)
 
 
-def load_edwards2021_gis(n_samples=None):
+def load_edwards2021_gis(n_samples=None, keep_through_year=None):
     """Loads Edwards et al. (2021)'s Greenland full-sample projections (500
     Monte Carlo samples/scenario by default, or `n_samples` evenly-spaced
     of them -- see _load_edwards2021()'s docstring for why dash_app's own
-    derivation script passes a smaller n_samples) x 6 SSP scenarios."""
-    return _load_edwards2021("GrIS", n_samples=n_samples)
+    derivation script passes a smaller n_samples) x 6 SSP scenarios, through
+    `keep_through_year` (default 2025; pass 2100 for the full projection)."""
+    return _load_edwards2021("GrIS", n_samples=n_samples, keep_through_year=keep_through_year)
 
 
 def exp_meta_from_df(df, extra_cols):
