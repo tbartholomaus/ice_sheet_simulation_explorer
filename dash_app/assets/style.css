@@ -115,6 +115,27 @@ a { color: var(--accent); }
 .bar-cell { display: flex; align-items: center; gap: 8px; min-width: 160px; }
 .bar-cell .bar { height: 8px; border-radius: 4px; background: var(--accent); min-width: 2px; max-width: 120px; }
 
+/* in-section Group by (mirrors the sidebar's) */
+.group-picker {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  margin: 22px 0 4px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--accent-soft);
+}
+.group-picker-label { font-weight: 600; font-size: 14px; }
+.group-picker-dropdown { width: 220px; }
+.group-picker-hint { flex: 1 1 320px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+.anova tr.current td { background: var(--accent-soft); }
+.link-button {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer;
+  text-decoration: underline; text-decoration-color: rgba(11, 99, 182, 0.35); text-underline-offset: 2px;
+}
+.link-button:hover { text-decoration-color: var(--accent); }
+.tag {
+  display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  background: var(--accent); color: white; font-size: 11px; font-weight: 600; vertical-align: 1px;
+}
+
 /* Dash dropdown polish */
 .Select-control { border-radius: 8px !important; border-color: var(--line) !important; }
 

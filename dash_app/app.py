@@ -1,6 +1,6 @@
 """
 Ice Sheet Simulation Explorer -- compares ice-sheet simulations (ISMIP6 and
-other published ensembles) against IMBIE3 observations.
+other published ensembles) against IMBIE3 or IMBIE2 observations.
 
 Layout: a sidebar of shared controls and one scrolling page of sections --
 rates, mass change through time, mass change by 2100, and what drives bias
@@ -24,29 +24,42 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 
 import numpy as np  # noqa: E402
 import dash  # noqa: E402
-from dash import Input, Output, dcc, html, no_update  # noqa: E402
+from dash import Input, Output, ctx, dcc, html, no_update  # noqa: E402
 
 import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, DIM_LABEL, GROUP_DIMENSIONS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, DEFAULT_OBS, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
-YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2023, 5  # 2023 == IMBIE3's last full year
+YEAR_MIN, MIN_YEAR_SPAN = 2000, 5
+YEAR_MAX = max(p["last_year"] for p in OBS_PRODUCTS.values())  # 2023, IMBIE3's last full year
 YEAR_DEFAULT = [2015, 2023]
 LOW_BIAS_FRAC = 0.10
 _ICE = RUNS["ice_sheet"].to_numpy()
 
 
-def clamp_window(year_range):
-    """Widen a too-narrow window around its center, kept inside the slider range."""
+def year_max(obs):
+    """Last year the window may reach: the chosen product's last full year."""
+    return OBS_PRODUCTS.get(obs, OBS_PRODUCTS[DEFAULT_OBS])["last_year"]
+
+
+def clamp_window(year_range, obs=DEFAULT_OBS):
+    """Cut the window off at the observation product's last year, and widen a
+    too-narrow window around its center, kept inside the slider range."""
+    top = year_max(obs)
     lo, hi = year_range
+    hi = min(hi, top)
+    lo = min(lo, hi)
     if hi - lo >= MIN_YEAR_SPAN:
         return int(lo), int(hi)
     center = (lo + hi) / 2
-    lo = max(YEAR_MIN, min(round(center - MIN_YEAR_SPAN / 2), YEAR_MAX - MIN_YEAR_SPAN))
+    lo = max(YEAR_MIN, min(round(center - MIN_YEAR_SPAN / 2), top - MIN_YEAR_SPAN))
     return int(lo), int(lo + MIN_YEAR_SPAN)
+
+
+GROUP_OPTIONS = [{"label": label, "value": key or "all"} for key, label in GROUP_DIMENSIONS]
 
 
 def _dim(value):
@@ -90,16 +103,20 @@ sidebar = html.Aside(className="sidebar", children=[
         options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
                   "value": s} for s in SOURCE_LABELS])),
     control("Group by", dcc.Dropdown(
-        id="groupby", clearable=False, searchable=False, value="all",
-        options=[{"label": label, "value": key or "all"} for key, label in GROUP_DIMENSIONS])),
+        id="groupby", clearable=False, searchable=False, value="all", options=GROUP_OPTIONS)),
     control("Units", dcc.RadioItems(
         id="units", className="segmented", value="gt", inline=True,
         options=[{"label": "Mass change", "value": "gt"}, {"label": "Sea level", "value": "sle"}])),
+    control("Observations", dcc.RadioItems(
+        id="obs", className="segmented", value=DEFAULT_OBS, inline=True,
+        options=[{"label": p["label"], "value": k} for k, p in OBS_PRODUCTS.items()]),
+        "IMBIE3 (2026) runs through 2023; IMBIE2 (2023) through 2020, so it caps the window at 2020."),
     control("Display", dcc.Checklist(
         id="medians", className="toggle", value=["on"], options=[{"label": "Show medians", "value": "on"}])),
     html.Div(className="sidebar-foot", children=[
-        html.P(["Observations: IMBIE3, ", html.A("Otosaka et al. (2026)", href="https://doi.org/10.1038/s41597-026-08088-0",
-                                                 target="_blank"), "."]),
+        html.P(["Observations: ", *[x for k, p in OBS_PRODUCTS.items() for x in (
+            f"{'; ' if k != next(iter(OBS_PRODUCTS)) else ''}{p['label']}, ",
+            html.A(p["citation"], href=p["url"], target="_blank"))], "."]),
         html.P("Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and other published ensembles. "
                "Large ensembles are weighted so each study counts about as much as one ISMIP6 institution."),
     ]),
@@ -118,8 +135,10 @@ main = html.Main(className="content", children=[
             "Each dot is one simulation; curves are weighted density estimates; triangles mark medians.",
             [graph("rates-graph", 760)]),
     section("timeseries", "Mass change through time",
-            "Median (line) and 5–95% range (band) of simulated cumulative change, zeroed at the start of the "
-            "averaging window (shaded), against IMBIE observations.",
+            "Median (line), 25–75% (darker band) and 5–95% (faint band) of simulated cumulative change, zeroed at "
+            "the start of the averaging window (shaded), against IMBIE observations (black, hatched ±2σ). "
+            "With more than 8 groups only the 25–75% band is drawn (hover for 5–95%). "
+            "Click a legend entry to hide it; double-click to show it alone.",
             [graph("ts-graph", 460),
              html.H3("Mass change by 2100"),
              html.P("Change from 2015 to 2100 for each group (box: 25–75%; whiskers: 5–95%; line: median).",
@@ -137,8 +156,19 @@ main = html.Main(className="content", children=[
              ]),
              html.Div(id="bias-summary", className="summary"),
              dcc.Loading(type="dot", color="#0b63b6", children=html.Div(id="anova-table")),
+             # A second Group by, kept in sync with the sidebar's, placed where
+             # its effect on the plots below is visible.
+             html.Div(className="group-picker", children=[
+                 html.Label("Group by", htmlFor="bias-groupby", className="group-picker-label"),
+                 dcc.Dropdown(id="bias-groupby", clearable=False, searchable=False, value="all",
+                              options=GROUP_OPTIONS, className="group-picker-dropdown"),
+                 html.Span("Choose which modeling characteristic to break the bias down by (or click a row "
+                           "in the table). This is the same setting as Group by in the sidebar, so it also "
+                           "regroups the plots above.", className="group-picker-hint"),
+             ]),
              html.Div(className="two-col", children=[
-                 html.Div([html.H3(id="bias-box-title"), graph("bias-graph", 430)]),
+                 html.Div([html.H3(id="bias-box-title"), html.Div(id="bias-box-note", className="note"),
+                           graph("bias-graph", 430)]),
                  html.Div([html.H3(id="enrich-title"),
                            html.P("Share of each category among the best-matching simulations vs. among all "
                                   "selected simulations. Green bars longer than gray = over-represented "
@@ -155,25 +185,27 @@ server = app.server
 
 # ── callbacks ─────────────────────────────────────────────────────────────
 
-@app.callback(Output("years", "value"), Output("years-readout", "children"), Input("years", "value"))
-def _years(value):
-    lo, hi = clamp_window(value)
+@app.callback(Output("years", "value"), Output("years-readout", "children"), Output("years", "max"),
+              Input("years", "value"), Input("obs", "value"))
+def _years(value, obs):
+    lo, hi = clamp_window(value, obs)
     fixed = [lo, hi] if [lo, hi] != list(value) else no_update
-    return fixed, f"Jan {lo} – Dec {hi}"
+    return fixed, f"Jan {lo} – Dec {hi}", year_max(obs)
 
 
 @app.callback(Output("rates-graph", "figure"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
-              Input("units", "value"), Input("medians", "value"))
-def _rates(years, sources, groupby, units, medians):
-    lo, hi = clamp_window(years)
-    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby), units, bool(medians))
+              Input("units", "value"), Input("medians", "value"), Input("obs", "value"))
+def _rates(years, sources, groupby, units, medians, obs):
+    lo, hi = clamp_window(years, obs)
+    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby), units, bool(medians), obs)
 
 
 @app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
-              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"))
-def _timeseries(years, sources, groupby, units):
-    lo, hi = clamp_window(years)
+              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
+              Input("obs", "value"))
+def _timeseries(years, sources, groupby, units, obs):
+    lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or [])
     gaps = []
     for pub in sorted(set(RUNS.loc[valid, "publication"])):
@@ -182,7 +214,7 @@ def _timeseries(years, sources, groupby, units):
         if n_missing:
             gaps.append(f"{n_missing} of {int(m.sum())} {pub} runs")
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
-    return (F.timeseries_figure(valid, lo, hi, _dim(groupby), units),
+    return (F.timeseries_figure(valid, lo, hi, _dim(groupby), units, obs),
             F.change_2100_figure(valid, _dim(groupby), units), note)
 
 
@@ -192,7 +224,7 @@ def _fmt_p(p):
     return "< 0.001" if p < 0.001 else f"{p:.3f}"
 
 
-def _anova_table(one_way, combined):
+def _anova_table(one_way, combined, shown=None):
     terms = {t["characteristic"]: t for t in combined["terms"]}
     head = html.Tr([html.Th("Characteristic"), html.Th("Variance explained alone"), html.Th("p"),
                     html.Th("Unique effect with all others (F)"), html.Th("p")])
@@ -205,8 +237,14 @@ def _anova_table(one_way, combined):
             joint = [html.Td("confounded with others", className="muted", colSpan=2)]
         else:
             joint = [html.Td(f"{t['F']:.1f}"), html.Td(_fmt_p(t["p"]), className="sig" if t["p"] < 0.05 else "")]
-        rows.append(html.Tr([
-            html.Td(f"{DIM_LABEL[r['characteristic']]} ({r['n_categories']})"),
+        c = r["characteristic"]
+        name = [html.Button(DIM_LABEL[c], id={"type": "anova-pick", "dim": c}, className="link-button",
+                            title=f"Show bias by {_lower(DIM_LABEL[c])} below"),
+                html.Span(f" ({r['n_categories']})", className="muted")]
+        if c == shown:
+            name.append(html.Span("shown below", className="tag"))
+        rows.append(html.Tr(className="current" if c == shown else None, children=[
+            html.Td(name),
             html.Td(html.Div(className="bar-cell", children=[
                 html.Div(className="bar", style={"width": f"{100 * r['r2']:.1f}%"}),
                 html.Span(f"{100 * r['r2']:.0f}%")])),
@@ -215,13 +253,24 @@ def _anova_table(one_way, combined):
     return html.Table(className="anova", children=[html.Thead(head), html.Tbody(rows)])
 
 
+def _lower(label):
+    return label if label.isupper() else label.lower()  # keep "GCM"
+
+
+def _height(fig, default=300):
+    return {"height": f"{(fig.layout.height if fig is not None else None) or default}px"}
+
+
 @app.callback(Output("bias-summary", "children"), Output("anova-table", "children"),
-              Output("bias-graph", "figure"), Output("bias-box-title", "children"),
+              Output("bias-graph", "figure"), Output("bias-box-title", "children"), Output("bias-box-note", "children"),
               Output("enrich-graph", "figure"), Output("enrich-title", "children"),
+              # Both figures grow with their number of categories; the
+              # container has to grow with them or the rows get squashed.
+              Output("bias-graph", "style"), Output("enrich-graph", "style"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
-              Input("units", "value"), Input("bias-scope", "value"))
-def _bias(years, sources, groupby, units, scope):
-    lo, hi = clamp_window(years)
+              Input("units", "value"), Input("bias-scope", "value"), Input("obs", "value"))
+def _bias(years, sources, groupby, units, scope, obs):
+    lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
     both = scope == "both"
     mask = valid & (np.isin(_ICE, ["AIS", "GIS"]) if both else _ICE == scope)
@@ -234,15 +283,15 @@ def _bias(years, sources, groupby, units, scope):
         for c in chars:
             mask &= RUNS[c].isin(shared[c]).to_numpy()
         label = "mm/yr water equivalent"
-        b = A.bias(mask, lo, hi, area_normalized=True)
+        b = A.bias(mask, lo, hi, obs, area_normalized=True)
     else:
         f, label, _ = F.units_info(units)
-        b = A.bias(mask, lo, hi) * f
+        b = A.bias(mask, lo, hi, obs) * f
     w = A.run_weights(mask)
     empty = F.go.Figure(layout=dict(template=F.TEMPLATE))
     if mask.sum() < 3:
         msg = html.P("Not enough simulations selected for this comparison.", className="muted")
-        return msg, None, empty, "", empty, ""
+        return msg, None, empty, "", "", empty, "", _height(None), _height(None)
 
     one_way_chars = chars + (["publication"] if len(set(RUNS.loc[mask, "publication"])) >= 2 else [])
     factors = {c: RUNS[c].to_numpy()[mask] for c in one_way_chars}
@@ -250,23 +299,44 @@ def _bias(years, sources, groupby, units, scope):
     _, combined = A.anova(b[mask], w[mask], {c: factors[c] for c in chars})
     if not one_way:
         return html.P("No characteristic varies across the selected simulations.", className="muted"), None, \
-            empty, "", empty, ""
+            empty, "", "", empty, "", _height(None), _height(None)
 
     top = one_way[0]
     summary = [html.Span("Strongest single factor: "), html.B(DIM_LABEL[top["characteristic"]]),
                f" explains {100 * top['r2']:.0f}% of the spread in bias (p {_fmt_p(top['p'])})."]
     if np.isfinite(combined["r2"]):
         summary.append(f" Together the modeling characteristics explain {100 * combined['r2']:.0f}%.")
-    summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}.")
+    summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}, against {OBS_PRODUCTS[obs]['label']}.")
 
-    dim = _dim(groupby)
+    dim, note = _dim(groupby), ""
     if dim is None or dim not in one_way_chars:
+        if dim is None:
+            note = "“All simulations” has no categories to compare, so the strongest factor is shown."
+        else:
+            note = (f"{DIM_LABEL[dim]} doesn't vary across this selection (or isn't shared by both ice "
+                    "sheets), so the strongest factor is shown.")
         dim = top["characteristic"]
-    box = F.bias_figure(b, w, mask, dim, label)
+    box = F.bias_figure(b, w, mask, dim, label, obs)
     rows, cut = A.low_bias_enrichment(b[mask], w[mask], RUNS[dim].to_numpy()[mask], LOW_BIAS_FRAC)
     enrich = F.enrichment_figure(rows, dim, LOW_BIAS_FRAC)
-    return (summary, _anova_table(one_way, combined), box, f"Bias by {DIM_LABEL[dim].lower()}", enrich,
-            f"What do the best-matching runs share? (|bias| ≤ {cut:.3g} {label})")
+    return (summary, _anova_table(one_way, combined, dim), box, f"Bias by {_lower(DIM_LABEL[dim])}", note, enrich,
+            f"What do the best-matching runs share? (|bias| ≤ {cut:.3g} {label})", _height(box), _height(enrich))
+
+
+@app.callback(Output("groupby", "value"), Output("bias-groupby", "value"),
+              Input("groupby", "value"), Input("bias-groupby", "value"),
+              Input({"type": "anova-pick", "dim": dash.ALL}, "n_clicks"), prevent_initial_call=True)
+def _sync_groupby(sidebar, local, _clicks):
+    """One Group by setting, three ways to change it: the sidebar dropdown,
+    the dropdown in the bias section, or a click on an ANOVA table row."""
+    src = ctx.triggered_id
+    if isinstance(src, dict):
+        if not ctx.triggered[0]["value"]:  # table re-rendered, not clicked
+            return no_update, no_update
+        return src["dim"], src["dim"]
+    if src == "bias-groupby":
+        return local, no_update
+    return no_update, sidebar
 
 
 if __name__ == "__main__":

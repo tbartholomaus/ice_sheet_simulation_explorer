@@ -4,7 +4,7 @@ simulations (ISMIP6 + every extra source) into one run table plus aligned
 per-run arrays, so the analysis/figure code never has to re-group pandas
 frames per request.
 
-Everything is read from dash_app/data/ -- including IMBIE3, bundled there
+Everything is read from dash_app/data/ -- including IMBIE3 and IMBIE2, bundled there
 rather than fetched from ramadda.data.bas.ac.uk at startup, since that host
 being down (it returned site-wide 503s on 2026-10-02) would otherwise stop the
 app from starting at all.
@@ -42,7 +42,36 @@ def _load_imbie2026(region):
     return imbie
 
 
-IMBIE = {"AIS": _load_imbie2026("antarctica"), "GIS": _load_imbie2026("greenland")}
+def _load_imbie2023(region):
+    """IMBIE2 (Otosaka et al., 2023, ESSD, https://doi.org/10.5194/essd-15-1597-2023;
+    data DOI 10.5285/77B64C55-7166-4A06-9DEF-2E400398E452, Open Government
+    Licence v3.0), 1992-2020, re-zeroed at proj_start. Raw files as served
+    by the BAS Polar Data Centre (URLs in utilities/imbie2023_loader.py).
+    Its cumulative uncertainty accumulates in quadrature like IMBIE3's
+    (checked: sqrt(cumsum(rate_unc**2 / 12)) reproduces it to 1e-4 Gt), so
+    analysis.imbie_timeseries treats both products alike."""
+    df = pd.read_csv(os.path.join(DATA_DIR, f"imbie2_{region}_2021_Gt.csv.gz"))
+    imbie = df.rename(columns={
+        "Cumulative mass balance (Gt)": MASS_COL,
+        "Cumulative mass balance uncertainty (Gt)": "Cumulative ice sheet mass change uncertainty (Gt)",
+    })[["Year", MASS_COL, "Cumulative ice sheet mass change uncertainty (Gt)"]].copy()
+    imbie[MASS_COL] -= imbie.loc[imbie["Year"] == proj_start, MASS_COL].values
+    return imbie
+
+
+# Observational benchmarks, selectable in the app. last_year = the last full
+# calendar year of data, which caps the rate window.
+OBS_PRODUCTS = {
+    "imbie3": {"label": "IMBIE3", "citation": "Otosaka et al. (2026)",
+               "url": "https://doi.org/10.1038/s41597-026-08088-0", "last_year": 2023},
+    "imbie2": {"label": "IMBIE2", "citation": "Otosaka et al. (2023)",
+               "url": "https://doi.org/10.5194/essd-15-1597-2023", "last_year": 2020},
+}
+DEFAULT_OBS = "imbie3"
+IMBIE = {
+    "imbie3": {"AIS": _load_imbie2026("antarctica"), "GIS": _load_imbie2026("greenland")},
+    "imbie2": {"AIS": _load_imbie2023("antarctica"), "GIS": _load_imbie2023("greenland")},
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

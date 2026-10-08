@@ -12,7 +12,7 @@ import scipy.stats
 from scipy.stats import linregress
 
 from data import (
-    CUM, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, MASS_COL, RUN_VALS, RUN_YEARS, RUNS, YEAR_GRID, proj_start,
+    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, MASS_COL, RUN_VALS, RUN_YEARS, RUNS, YEAR_GRID, proj_start,
 )
 
 _ICE = RUNS["ice_sheet"].to_numpy()
@@ -43,10 +43,11 @@ def run_rates(lo, hi):
     return out
 
 
-@lru_cache(maxsize=64)
-def imbie_rate(ice_sheet, lo, hi):
-    """(slope, stderr) of IMBIE cumulative mass over Jan lo .. Dec hi."""
-    df = IMBIE[ice_sheet]
+@lru_cache(maxsize=128)
+def imbie_rate(ice_sheet, lo, hi, obs=DEFAULT_OBS):
+    """(slope, stderr) of IMBIE cumulative mass over Jan lo .. Dec hi, from
+    observation product `obs` (a data.OBS_PRODUCTS key)."""
+    df = IMBIE[obs][ice_sheet]
     m = (df["Year"] >= lo) & (df["Year"] < hi + 1)
     r = linregress(df.loc[m, "Year"], df.loc[m, MASS_COL])
     return r.slope, r.stderr
@@ -116,11 +117,11 @@ def category_masks(valid, ice_sheet, dim):
 # ── time series ───────────────────────────────────────────────────────────
 
 TS_PAD_YEARS = 6
-TS_QUANTILES = (0.05, 0.5, 0.95)
+TS_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 
 
 def timeseries(valid, ice_sheet, dim, lo, hi):
-    """Per category: years and weighted 5/50/95 % of cumulative change
+    """Per category: years and weighted 5/25/50/75/95 % of cumulative change
     rebased to 0 at `lo`, over [lo - 6, hi + 6]. A run with no value at
     `lo` but one at `lo + 1` (Edwards 2021 starts in 2016) is rebased there
     instead -- the same one-year fallback change_2015_2100 uses; runs with
@@ -144,15 +145,15 @@ def timeseries(valid, ice_sheet, dim, lo, hi):
     return out
 
 
-def imbie_timeseries(ice_sheet, lo, hi):
+def imbie_timeseries(ice_sheet, lo, hi, obs=DEFAULT_OBS):
     """IMBIE cumulative change rebased to 0 at Jan `lo`, with 1-sigma
     uncertainty of that change. IMBIE accumulates its cumulative uncertainty
     in quadrature (checked: the file's end value matches annual errors summed
     in quadrature), so the uncertainty of change since `lo` is
     sqrt(|U(t)^2 - U(lo)^2|)."""
-    df = IMBIE[ice_sheet]
-    df = df[(df["Year"] >= lo - TS_PAD_YEARS) & (df["Year"] < hi + TS_PAD_YEARS + 1)]
-    at0 = IMBIE[ice_sheet].loc[IMBIE[ice_sheet]["Year"] == lo]
+    full = IMBIE[obs][ice_sheet]
+    df = full[(full["Year"] >= lo - TS_PAD_YEARS) & (full["Year"] < hi + TS_PAD_YEARS + 1)]
+    at0 = full.loc[full["Year"] == lo]
     if at0.empty:
         return None
     u = df["Cumulative ice sheet mass change uncertainty (Gt)"].to_numpy()
@@ -185,7 +186,7 @@ CHANGE_2100 = change_2015_2100()
 
 # ── bias & ANOVA ──────────────────────────────────────────────────────────
 
-def bias(valid, lo, hi, area_normalized=False):
+def bias(valid, lo, hi, obs=DEFAULT_OBS, area_normalized=False):
     """Run rate minus the IMBIE rate for the run's ice sheet (Gt/yr), or
     per unit area (mm/yr water equivalent: 1 Gt/yr / area[m^2] * 1e12 ==
     mm/yr w.e.) so AIS and GIS can be pooled."""
@@ -193,7 +194,7 @@ def bias(valid, lo, hi, area_normalized=False):
     b = np.full(len(RUNS), np.nan)
     for ice_sheet in ("AIS", "GIS"):
         m = valid & (_ICE == ice_sheet)
-        b[m] = rates[m] - imbie_rate(ice_sheet, lo, hi)[0]
+        b[m] = rates[m] - imbie_rate(ice_sheet, lo, hi, obs)[0]
         if area_normalized:
             b[m] *= 1e12 / ICE_SHEET_AREA_M2[ice_sheet]
     return b
