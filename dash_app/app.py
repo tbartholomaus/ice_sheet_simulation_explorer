@@ -1,2208 +1,273 @@
 """
-Standalone Dash app serving the "Interactive Figure - Rate Comparison" from
-exploring_fits/analyze_slr_predictions_interactive.ipynb.
+Ice Sheet Simulation Explorer -- compares ice-sheet simulations (ISMIP6 and
+other published ensembles) against IMBIE3 observations.
 
-The figure is pure Plotly. Its "Units:", "Distribution medians:", and
-"Group by:" dropdowns are all native Plotly updatemenus toggling/restyling
-pre-built traces, so they run entirely client-side with no callbacks back
-to this server. (An earlier version tried moving "Units:" to a Dash-level
-dcc.RadioItems + clientside_callback specifically to avoid precomputing a
-second Sea-level-rise copy of every trace's x/text/hovertemplate
-server-side -- ~10 MB of extra payload. That never actually worked in a
-real browser despite checking out in every way testable without one, so it
-reverted to the plain in-figure dropdown below, matching the notebook.) The
-"Years:" range slider and the "Simulation studies:" checklist are different
-from all of the above -- the KDEs, jitter, medians, and IMBIE slope all
-depend on the selected year window and which sources are included, so
-those genuinely need a real Dash callback that reruns
-plot_interactive_rate_comparison() on the server.
+Layout: a sidebar of shared controls and one scrolling page of sections --
+rates, mass change through time, mass change by 2100, and what drives bias
+(weighted ANOVA). Every control is a plain Dash input; each section has its
+own callback so it updates (and shows its spinner) independently.
 
-That server-side rebuild is the app's main cost: building weighted KDEs
-across 7 "Group by:" dimensions x 2 panels, potentially over ~1700+ pooled
-ISMIP6 + extra_sources simulations, plus JSON-serializing the ~23 MB result
-(back up from ~13 MB after reverting "Units:" -- see above). On a
-resource-constrained deploy target this can exceed a WSGI server's
-default request timeout (gunicorn's is 30s) well before it exceeds what
-actually feels "slow" locally, so raising --timeout matters (see render.yaml
-alongside this file). This is specifically why the app moved off Plotly
-Cloud: that platform's plotly-cloud.toml schema only accepts name/
-description/app_id/app_url/team_id/team_name (checked directly against the
-installed `plotly-cloud` CLI package's own AppDeploymentConfig/AppRequest
-type definitions) -- no user-facing way to configure gunicorn's timeout at
-all there, so a slow-but-legitimate request had no way to avoid getting
-killed mid-response.
+Modules: data.py (loading + run table), analysis.py (numerics),
+figures.py (plots), this file (layout + callbacks).
 
-Run locally:
-    pip install -r requirements.txt
-    python app.py
-    # -> http://127.0.0.1:8050
-
-Deploy on Render: connect this directory's repo (see render.yaml alongside
-this file, which sets `gunicorn app:server --timeout 120` as the start
-command -- Render's own edge proxy allows responses up to 100 minutes, so
-this app's own --timeout is genuinely the controlling limit, unlike Plotly
-Cloud above).
-
-Deploy elsewhere (any WSGI host you control, e.g. gunicorn behind nginx on
-your own server):
-    gunicorn app:server -b 0.0.0.0:8000 --timeout 120
-
-Embed on an existing page once deployed:
-    <iframe src="https://your-domain.example/" style="width:100%; height:900px; border:0;"></iframe>
+Run locally:   pip install -r requirements.txt && python app.py
+Deploy:        gunicorn app:server --timeout 120   (see render.yaml)
 """
 
-import math
 import os
-import re
 
-# Pin every BLAS/OpenMP-based library this app touches (numpy, scipy,
-# pandas' numexpr backend) to a single thread each, BEFORE they're
-# imported -- these libraries size their internal thread pools once, the
-# first time they're used, by reading these env vars (or falling back to
-# "one thread per detected CPU core" if unset). A container's CPU CORE
-# COUNT (what /proc/cpuinfo reports) and its actual CPU QUOTA (a thin
-# fraction of a core, on Render's free tier) are different numbers --
-# spawning threads sized to the former onto the latter causes thread
-# contention/context-switching overhead that can make things far slower
-# than the raw throttling alone would (observed: ~100x, not the ~10x a
-# straightforward CPU-quota cut would predict). None of this app's own
-# code benefits from BLAS/OpenMP parallelism -- every gaussian_kde/
-# linregress call here operates on at most a few hundred points, well
-# below where multi-threading would pay for its own overhead -- so pinning
-# to 1 has no downside even on an unconstrained machine.
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
-os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
-
-import numpy as np
-import pandas as pd
-import scipy.stats
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-from scipy.stats import linregress
-
-import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output, State
-
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Data loading
-# ─────────────────────────────────────────────────────────────────────────────
-
-proj_start = 2015  # utilities/helper.py
-
-# IMBIE 3 community assessment mass balance time series (Otosaka et al.,
-# 2026, Scientific Data, https://doi.org/10.1038/s41597-026-08088-0),
-# covering 1971-2023 (Greenland) / 1979-2023 (Antarctica), from the NERC EDS
-# UK Polar Data Centre
-# (https://doi.org/10.5285/128c5e33-5224-4197-82f0-19dcc95b80a0, Open
-# Government Licence v3.0, no restrictions). Successor to the Otosaka et al.
-# (2023) ESSD product -- see utilities/imbie2026_loader.py's module comment
-# for the full provenance/scope-decision writeup (that module is the
-# authoritative version; this is the same lean, totals-only subset the old
-# _load_imbie2023 here used, now pointed at IMBIE3 instead).
-IMBIE2026_GT_URLS = {
-    "antarctica": (
-        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie3_antarctica_Gt_partitioned.csv"
-        "?entryid=synth:128c5e33-5224-4197-82f0-19dcc95b80a0:L2ltYmllM19hbnRhcmN0aWNhX0d0X3BhcnRpdGlvbmVkLmNzdg=="
-    ),
-    "greenland": (
-        "https://ramadda.data.bas.ac.uk/repository/entry/get/imbie3_greenland_Gt_partitioned.csv"
-        "?entryid=synth:128c5e33-5224-4197-82f0-19dcc95b80a0:L2ltYmllM19ncmVlbmxhbmRfR3RfcGFydGl0aW9uZWQuY3N2"
-    ),
-}
-
-
-def _load_imbie2026(region):
-    """
-    Loads the IMBIE 3 community-assessment mass balance CSV for the given
-    region ("antarctica" or "greenland"). Only the headline mass-balance
-    columns are needed here (not the SMB/dynamics partitioning IMBIE3 also
-    provides for both ice sheets natively -- this figure doesn't use it),
-    so unlike utilities/imbie2026_loader.py this doesn't select those.
-    """
-    df = pd.read_csv(IMBIE2026_GT_URLS[region], comment="#")
-    date = pd.to_datetime(df["Date"])
-    df["Year"] = date.dt.year + (date.dt.month - 1) / 12
-    imbie = df.rename(
-        columns={
-            "Mass balance (Gt/yr)": "Rate of ice sheet mass change (Gt/yr)",
-            "Cumulative mass balance anomaly (Gt)": "Cumulative ice sheet mass change (Gt)",
-            "Cumulative mass balance anomaly uncertainty (Gt)": "Cumulative ice sheet mass change uncertainty (Gt)",
-        }
-    )[
-        [
-            "Year",
-            "Cumulative ice sheet mass change (Gt)",
-            "Cumulative ice sheet mass change uncertainty (Gt)",
-            "Rate of ice sheet mass change (Gt/yr)",
-        ]
-    ].copy()
-
-    imbie["Cumulative ice sheet mass change (Gt)"] -= imbie.loc[
-        imbie["Year"] == proj_start, "Cumulative ice sheet mass change (Gt)"
-    ].values
-
-    imbie["Cumulative ice sheet mass change uncertainty (Gt)"] -= imbie[
-        "Cumulative ice sheet mass change uncertainty (Gt)"
-    ].values[-1]
-    imbie["Cumulative ice sheet mass change uncertainty (Gt)"] *= -1
-
-    return imbie
-
-
-def load_ismip6_ais():
-    """Reads the pre-generated ISMIP6 AIS scalar CSV bundled in data/."""
-    return pd.read_csv(os.path.join(DATA_DIR, "ismip6_ais.csv.gz"))
-
-
-def load_ismip6_gis():
-    """Reads the pre-generated ISMIP6 GIS scalar CSV bundled in data/."""
-    return pd.read_csv(os.path.join(DATA_DIR, "ismip6_gis_ctrl.csv.gz"))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Experiment metadata look-up tables
-# Sources:
-#   GIS – Goelzer et al. (2020) The Cryosphere 14, 3071-3096
-#   AIS – Seroussi et al. (2020) The Cryosphere 14, 3033-3070
-# ─────────────────────────────────────────────────────────────────────────────
-
-# GIS experiment descriptions (Goelzer et al. 2020, Table 1 & Appendix)
-gis_exp_meta = {
-    # "exp01":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp02":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    # "exp03":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp04":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    "exp05":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp06":  {"climate_model": "NorESM",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp07":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp08":  {"climate_model": "HadGEM2-ES",   "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp09":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "exp10":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Low"},
-    # "exp11":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp12":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    # "exp13":  {"climate_model": "CESM2",        "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "expa01": {"climate_model": "IPSL-CM5A-MR", "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa02": {"climate_model": "CSIRO-Mk3.6",  "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa03": {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-}
-
-# AIS experiment descriptions (Seroussi et al. 2020, Table 1)
-ais_exp_meta = {
-    "exp01": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp02": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp03": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp04": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp05": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp06": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp07": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp08": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp09": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL medium"},
-    "exp10": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL high"},
-    "exp11": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp12": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp13": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL very high"},
-    "expA1": {"climate_model": "HadGEM2-ES",     "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA2": {"climate_model": "CSIRO-MK3",      "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA3": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA4": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA5": {"climate_model": "HadGEM2-ES",     "scenario": "SSP5-8.5", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA6": {"climate_model": "CSIRO-MK3",      "scenario": "SSP5-8.5", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA7": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA8": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Standard", "basal_melt_param": "Standard"},
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Ice sheet model (Group + Model) metadata
-# Sources: Goelzer et al. 2020 Table A1; Seroussi et al. 2020 Table A1
-# ─────────────────────────────────────────────────────────────────────────────
-ism_meta = {
-    # Group          Model        ice_sheet_model  sliding_law                  initialization
-    ("AWI",      "ISSM1"):     {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("AWI",      "ISSM2"):     {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("DMI",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Budd)",    "initialization": "Spin-up"},
-    ("ILTS_PIK", "SICOPOLIS"): {"ice_model": "SICOPOLIS", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("IMAU",     "IMAUICE1"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("IMAU",     "IMAUICE2"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("JPL1",     "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Budd / Schoof",            "initialization": "Data assimilation"},
-    ("LSCE",     "GRISLI"):    {"ice_model": "GRISLI",    "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("MIROC",    "ICIES1"):    {"ice_model": "IcIES",     "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("MIROC",    "ICIES2"):    {"ice_model": "IcIES",     "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("NCAR",     "CISM"):      {"ice_model": "CISM",      "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("PIK",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("PIK",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("UAF",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    ("UAF",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    ("UCIJPL",   "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("ULB",      "FETISH1"):   {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("ULB",      "FETISH2"):   {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("UNN",      "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("VUW",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    # Tim edits to Greenland
-    ("BGC",      "BISICLES"):  {"ice_model": "BISICLES",  "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("MUN",      "GSM1"):      {"ice_model": "GSM",       "sliding_law": "Coulomb and Weertman",        "initialization": "Spin-up"},
-    ("MUN",      "GSM2"):      {"ice_model": "GSM",       "sliding_law": "Linear viscous and Weertman", "initialization": "Spin-up"},
-    ("VUB",      "GISM"):      {"ice_model": "GISM",      "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
-    # Goelzer et al. 2020 Table A1/A6/A7/A12 -- previously missing exact
-    # keys, silently mislabeled via get_ism_meta()'s substring fallback
-    # (e.g. JPL/ISSM was borrowing JPL1's unrelated AIS entry).
-    ("JPL",      "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("JPL",      "ISSMPALEO"): {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Spin-up"},
-    ("UCIJPL",   "ISSM1"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("UCIJPL",   "ISSM2"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    # AIS additional groups
-    ("ARC",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("ARC",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("AWI",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("DOE",      "MALI"):      {"ice_model": "MALI",      "sliding_law": "Coulomb",                  "initialization": "Data assimilation"},
-    ("GRL",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("GSFC",     "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("IGE",      "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("ILTS",     "SICOPOLIS"): {"ice_model": "SICOPOLIS", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("NEMO",     "fETISh"):    {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("PSU",      "PSU3D1"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
-    ("PSU",      "PSU3D2"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
-    ("UTAS",     "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("VUB",      "AISMPALEO"): {"ice_model": "AISMPALEO", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-
-    # Non-ISMIP6 published simulations (see utilities/external_sources.py for
-    # provenance/derivation of each). "initialization" for Rahlves2025 covers
-    # both its ERA5- and ESM-forced branches with one description, since Model
-    # is "CISM" either way (unlike ISMIP6, this dict doesn't split them further).
-    ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman",                    "initialization": "Spin-up"},
-    ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
-    ("Aschwanden2019", "PISM"):  {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",              "initialization": "Spin-up"},
-
-    # Goelzer et al. (2025) PROTECT-Greenland ensemble (see
-    # utilities/external_sources.py for provenance/scope decisions) -- one
-    # entry per lab's ice sheet model (Group="Goelzer2025" throughout;
-    # NORCE's many internal CISM resolution/tuning variants are collapsed
-    # to Model="CISM", per the user's explicit choice), sliding
-    # law/initialization transcribed from the paper's own Table 1/Sect. 2.
-    ("Goelzer2025", "Elmer/Ice"): {"ice_model": "Elmer/Ice", "sliding_law": "Linear & Weertman (m=1/3)",   "initialization": "Inverse control method + 20-yr relaxation"},
-    ("Goelzer2025", "IMAU-ICE"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Basal inversion (variable)",  "initialization": "Hybrid: basal inversion + paleo spin-up"},
-    ("Goelzer2025", "CISM"):      {"ice_model": "CISM",      "sliding_law": "Schoof (2005)",               "initialization": "Spin-up"},
-    ("Goelzer2025", "GISM"):      {"ice_model": "GISM",      "sliding_law": "Optimized coefficients (variable)", "initialization": "Iterative assimilation + 2-cycle spin-up"},
-
-    # Edwards et al. (2021) -- a Gaussian-process EMULATOR, not a physical
-    # ice-sheet model, so it has no sliding law/spin-up to report; labeled
-    # honestly rather than borrowed from an unrelated model (see
-    # utilities/external_sources.py for provenance/scope decisions).
-    ("Edwards2021", "emulandice"): {"ice_model": "emulandice (GP emulator of ISMIP6/GlacierMIP)",
-                                     "sliding_law": "Not applicable (statistical emulator)",
-                                     "initialization": "Not applicable (statistical emulator)"},
-}
-
-
-def get_exp_meta(ice_sheet, exp):
-    """Return experiment metadata dict for the given ice sheet and experiment code."""
-    meta = ais_exp_meta if ice_sheet == "AIS" else gis_exp_meta
-    return meta.get(exp, {"climate_model": "Unknown", "scenario": "Unknown", "protocol": "Unknown"})
-
-
-def get_ism_meta(group, model):
-    """Return ice sheet model metadata; falls back gracefully if unknown."""
-    key = (group, model)
-    if key in ism_meta:
-        return ism_meta[key]
-    # Try case-insensitive partial match on group
-    for (g, m), v in ism_meta.items():
-        if g.upper() in group.upper() or group.upper() in g.upper():
-            return v
-    return {"ice_model": model, "sliding_law": "See paper", "initialization": "See paper"}
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Non-ISMIP6 published simulations -- toggleable overlays on the interactive
-# rate-comparison figure. Self-contained like the rest of this file (reads
-# the same bundled CSVs as utilities/external_sources.py's loaders, which
-# this deliberately doesn't import -- see that module's docstrings for what
-# each source is and how the bundled CSV was derived from the original
-# archive; this app just reads the result from its own data/ directory so it
-# stays deployable by copying dash_app/ alone).
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _exp_meta_from_df(df, extra_cols):
-    cols = ["Exp", "climate_model", "scenario", "protocol"] + extra_cols
-    unique = df[cols].drop_duplicates("Exp").set_index("Exp")
-    return unique.to_dict(orient="index")
-
-
-rahlves2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_rahlves2025_gis.csv.gz"))
-coulon2024_ais = pd.read_csv(os.path.join(DATA_DIR, "external_sources_coulon2024_ais.csv.gz"))
-aschwanden2022_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_aschwanden2022_gis.csv.gz"))
-goelzer2025_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_goelzer2025_gis.csv.gz"))
-edwards2021_ais = pd.read_csv(os.path.join(DATA_DIR, "external_sources_edwards2021_ais.csv.gz"))
-edwards2021_gis = pd.read_csv(os.path.join(DATA_DIR, "external_sources_edwards2021_gis.csv.gz"))
-gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
-ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
-gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
-gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
-ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
-gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
-
-EXTRA_SOURCES = [
-    {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
-    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
-    {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
-    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},
-    # The first extra_sources paper covering BOTH ice sheets -- every other
-    # entry above is single-ice-sheet already, so no label needed an
-    # ice-sheet suffix to stay unambiguous; these two do, since otherwise
-    # two checkboxes would both read plain "Edwards 2021". Same color for
-    # both -- they render on separate AIS/GIS subplot panels, so there's no
-    # legend collision (matching how every other source picks one color
-    # regardless of panel).
-    {"label": "Edwards 2021 (AIS)", "df": edwards2021_ais, "color": "#e7298a"},
-    {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
-]
-
-# plot_interactive_rate_comparison's "Group by publication" category names/
-# color for each panel's own ISMIP6 population (defined here, ahead of that
-# function, so the checklist labels below can share the same strings).
-PUBLICATION_LABEL = {"AIS": "Seroussi 2020 (ISMIP6 AIS)", "GIS": "Goelzer 2020 (ISMIP6 GIS)"}
-ISMIP6_PUBLICATION_COLOR = "#636363"  # ISMIP6's own color under "Group by publication" -- distinct from unify-gray and from each extra_sources paper's own color
-
-# The two core ISMIP6 panels (each *is* one whole precomputed_rows["AIS"/"GIS"]
-# entry -- see _update_figure) get checkbox labels alongside the extra_sources
-# papers above, named after each panel's own source paper (Seroussi et al.
-# 2020 / Goelzer et al. 2020) rather than "ISMIP6 AIS"/"ISMIP6 GIS", to read
-# as one flat list of papers rather than singling ISMIP6 out as different in
-# kind from Rahlves2025/Coulon2024/Aschwanden2019. Sourced from
-# PUBLICATION_LABEL (plot_interactive_rate_comparison's own "Group by
-# publication" category names) so the checklist and the figure never drift
-# apart on what to call each panel's ISMIP6 population.
-ISMIP6_AIS_LABEL = PUBLICATION_LABEL["AIS"]
-ISMIP6_GIS_LABEL = PUBLICATION_LABEL["GIS"]
-# ISMIP6 first (it's the app's core dataset, per its own title/intro text),
-# then the three extra_sources papers.
-DATA_SOURCE_LABELS = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL] + [src["label"] for src in EXTRA_SOURCES]
-# Only the two ISMIP6 panels checked by default -- the extra_sources papers
-# are opt-in, not on-by-default, so a first-time visitor sees the app's core
-# ISMIP6-vs-IMBIE comparison before discovering the added papers.
-DATA_SOURCE_DEFAULT_CHECKED = [ISMIP6_AIS_LABEL, ISMIP6_GIS_LABEL]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Plotting helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-RCP_COLOR = {
-    "RCP2.6":  "#003466",
-    "RCP4.5":  "#b8860b",
-    "RCP8.5":  "#990002",
-    "SSP1-2.6": "#1a7f5e",
-    "SSP2-4.5": "#8a6d3a",
-    "SSP5-8.5": "#8b1a00",
-    "Control":  "#555555",
-    "Unknown":  "#888888",
-}
-IMBIE_COLOR = "#08519c"
-
-gt2cmSLE = 1.0 / 362.5 / 10.0  # Gt -> cm sea-level-equivalent (magnitude only, see the sign flip below)
-# Negative: mass change and sea-level rise are physically opposite in sign
-# (losing ice -- negative Gt/yr -- raises sea level -- positive mm/yr -- and
-# vice versa), so the "Sea level rise" unit view has to flip sign, not just
-# rescale. The "Units:" toggle uses mm, not cm -- typical rates are well
-# under 1 cm/yr.
-gt2mmSLE = -gt2cmSLE * 10
-
-INIT_COLOR = {
-    "Data assimilation": "#1a7f5e",
-    "Spin-up": "#003466",
-    "See paper": "#6a6a6a",
-}
-
-rate_strip_y0, rate_strip_jitter, rate_kde_y0, rate_kde_height = 0.0, 0.15, 0.30, 0.55
-rate_y_lim = (-0.35, 1.05)
-rate_median_y = rate_kde_y0 + rate_kde_height + 0.08  # above the tallest possible KDE curve
-
-# Each entry is (dropdown label, sim_df column to group by, fixed color map or
-# None to assign colors dynamically). "All simulations" (dim=None) is the
-# ungrouped gray default.
-GROUP_DIMENSIONS = [
-    ("All simulations", None, None),
-    ("Group by initialization", "initialization", INIT_COLOR),
-    ("Group by ice sheet model", "ice_model", None),
-    ("Group by sliding law", "sliding_law", None),
-    ("Group by climate scenario", "scenario", RCP_COLOR),
-    ("Group by GCM", "climate_model", None),
-]
-
-
-def _build_hover(row_group, row_model, row_exp, ice_sheet):
-    """Compose the hover-text shown for a single simulation trace."""
-    exp_m = get_exp_meta(ice_sheet, row_exp)
-    ism_m = get_ism_meta(row_group, row_model)
-
-    extra = ""
-    if ice_sheet == "AIS" and "basal_melt_param" in exp_m:
-        extra = f"<br>Basal melt param : {exp_m['basal_melt_param']}"
-    if ice_sheet == "GIS" and "ocean_sensitivity" in exp_m:
-        extra = f"<br>Ocean sensitivity : {exp_m['ocean_sensitivity']}"
-
-    return (
-        f"<b>{row_group} / {row_model}</b><br>"
-        f"Experiment : {row_exp}<br>"
-        f"Ice model  : {ism_m['ice_model']}<br>"
-        f"Sliding law: {ism_m['sliding_law']}<br>"
-        f"Init. method: {ism_m['initialization']}<br>"
-        f"Climate model: {exp_m['climate_model']}<br>"
-        f"Scenario   : {exp_m['scenario']}<br>"
-        f"Protocol   : {exp_m['protocol']}"
-        f"{extra}"
-    )
-
-
-def imbie_mass_loss_slope(df, year_start=2000, year_end=2025):
-    """Linear-regression slope (Gt/yr) of observed cumulative ice sheet mass change.
-
-    year_end means "through the end of that calendar year" -- `< year_end + 1`,
-    not `<= year_end`, since IMBIE3's Year values are a fractional monthly grid
-    (e.g. December is ~year_end + 0.917), so a plain `<= year_end` would only
-    ever match that year's January row and silently drop the other 11 months
-    (confirmed directly: `<= 2023` matched through Year == 2023.0 and no
-    further). year_start's own `>=` doesn't need the same adjustment --
-    January's Year value already equals year_start exactly, so `>=` already
-    includes the whole start year."""
-    mask = (
-        (df["Year"] >= year_start) & (df["Year"] < year_end + 1)
-        & df["Cumulative ice sheet mass change (Gt)"].notna()
-    )
-    x = df.loc[mask, "Year"]
-    y = df.loc[mask, "Cumulative ice sheet mass change (Gt)"]
-    result = linregress(x, y)
-    return result.slope, result.stderr
-
-
-def _categorical_color_map(categories, fixed=None, palette=None):
-    """Assigns a color to each category, reusing `fixed` entries where given
-    and cycling through a qualitative palette for the rest."""
-    palette = palette or px.colors.qualitative.Dark24
-    color_map = dict(fixed or {})
-    i = 0
-    for cat in categories:
-        if cat in color_map:
-            continue
-        color_map[cat] = palette[i % len(palette)]
-        i += 1
-    return color_map
-
-
-def _rate_kde_raw(values, x_range, n=100, weights=None):
-    """Raw KDE curve (integrates to 1 over its own support) -- NOT renormalized
-    to its own peak. Callers weight and rescale this against a shared reference
-    so peak heights stay comparable across subgroups of very different spread.
-
-    `weights` lets each point in `values` contribute unequally to the
-    estimate (passed straight through to gaussian_kde) -- used to blend
-    ISMIP6 points (weight 1) with extra_sources points (weight
-    typical_model_n/n_src, see plot_interactive_rate_comparison) into a
-    single properly-proportioned curve, rather than computing two separate
-    curves and summing them.
-
-    Falls back to an all-zero (flat) curve if the covariance is singular --
-    e.g. a narrow year window can leave a subgroup with near-but-not-exactly-
-    zero variance, which passes a `std() > 0` guard but still isn't enough
-    for gaussian_kde's Cholesky step."""
-    xs = np.linspace(x_range[0], x_range[1], n)
-    try:
-        dens = scipy.stats.gaussian_kde(values, weights=weights)(xs)
-    except np.linalg.LinAlgError:
-        dens = np.zeros_like(xs)
-    return xs, dens
-
-
-def _rgba(color, alpha):
-    """Bakes an alpha channel directly into an rgba(...) string. Plotly's
-    trace-level `opacity` does not reliably apply to `fill` (a lone fill at
-    opacity=0.14 still renders fully solid), so every translucent fill in
-    this figure uses this instead of the `opacity` kwarg.
-
-    Every color constant in this file (RCP_COLOR/INIT_COLOR/extra_sources'
-    "color"/px.colors.qualitative.Dark24) is a hex string or literal "gray",
-    so this deliberately doesn't pull in matplotlib (unlike the notebook's
-    own _rgba, which uses colors.to_rgb and so accepts any named CSS color)
-    -- that's real import/memory weight for a case that never happens today.
-    It does handle 3-digit hex shorthand and passthrough rgb(...)/rgba(...)
-    strings, and raises a clear error for anything else instead of a
-    confusing IndexError/ValueError deep in string slicing, in case a
-    future color constant is added in one of those other forms."""
-    if color in ("gray", "grey"):
-        r, g, b = 128, 128, 128
-    elif color.startswith("#"):
-        c = color.lstrip("#")
-        if len(c) == 3:
-            c = "".join(ch * 2 for ch in c)
-        if len(c) != 6:
-            raise ValueError(f"_rgba: unsupported hex color {color!r} (expected #rgb or #rrggbb)")
-        r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
-    elif color.startswith(("rgb(", "rgba(")):
-        r, g, b = (int(v) for v in color[color.index("(") + 1:color.index(")")].split(",")[:3])
-    else:
-        raise ValueError(
-            f"_rgba: unsupported color format {color!r} -- only hex (#rgb/#rrggbb), "
-            f"'gray'/'grey', or rgb(...)/rgba(...) strings are supported"
-        )
-    return f"rgba({r}, {g}, {b}, {alpha})"
-
-
-def _nice_sle_ticks(gt_range, factor, target_ticks=6):
-    """Picks ~target_ticks "nice" (1/2/5 x 10^n) round sea-level-rise
-    (mm/yr) values spanning gt_range (a (min, max) tuple in Gt/yr, i.e. a
-    panel's x_range_by_panel entry), and returns (gt_positions, sle_labels):
-    gt_positions are where those nice SLE values actually fall on the
-    (never-moved) Gt/yr axis (sle_value / factor), and sle_labels are their
-    display text. Used so the "Units:" dropdown's "Sea level rise" option
-    can relabel the x-axis with sign-flipped, rescaled tick text WITHOUT
-    moving a single point -- see that dropdown's construction below."""
-    lo, hi = sorted(v * factor for v in gt_range)
-    span = hi - lo
-    if span <= 0:
-        return [], []
-    raw_step = span / target_ticks
-    magnitude = 10 ** math.floor(math.log10(raw_step))
-    step = 10 * magnitude
-    for m in (1, 2, 5, 10):
-        if raw_step <= m * magnitude:
-            step = m * magnitude
-            break
-    start = math.ceil(lo / step) * step
-    sle_values = []
-    v = start
-    while v <= hi + step * 1e-6:
-        sle_values.append(round(v, 10))
-        v += step
-    gt_positions = [v / factor for v in sle_values]
-    labels = [f"{v:g}" for v in sle_values]
-    return gt_positions, labels
-
-
-def _dim_color_maps(simulated, extra_sources=None):
-    """Category -> color, per grouping dimension, built from the FULL
-    simulated dataframe AND every extra_sources entry (not windowed by
-    year) so a category's color stays consistent across both panels, every
-    year-range selection, and regardless of which papers are currently
-    checked in the caller's own UI (pass the caller's *complete* list here,
-    not a checkbox-filtered subset, so toggling a paper on/off never
-    reassigns another paper's or ISMIP6's colors). Factored out of
-    plot_interactive_rate_comparison so a caller (e.g. the Dash app) can
-    compute this once and pass it back in via the
-    `precomputed_dim_color_maps` kwarg, instead of paying its groupby cost
-    on every request -- it's the same regardless of year_start/year_end."""
-    dims = [d for _, d, _ in GROUP_DIMENSIONS if d is not None]
-    dim_color_maps = {}
-    dim_cats = {d: set() for d in dims}
-
-    def _collect(df):
-        if df is None:
-            return
-        for (ice_sheet_, group, model, exp), _ in df.groupby(["IS", "Group", "Model", "Exp"]):
-            ism_m = get_ism_meta(group, model)
-            exp_m = get_exp_meta(ice_sheet_, exp)
-            row_meta = {**ism_m, **exp_m}
-            for d in dims:
-                dim_cats[d].add(row_meta.get(d, "See paper"))
-
-    _collect(simulated)
-    for src in (extra_sources or []):
-        _collect(src["df"])
-
-    for label, dim, fixed in GROUP_DIMENSIONS:
-        if dim is None:
-            continue
-        dim_color_maps[dim] = _categorical_color_map(sorted(dim_cats[dim]), fixed=fixed)
-    return dim_color_maps
-
-
-def _sim_rows(simulated, ice_sheet, year_start, year_end):
-    """Per-simulation rate + metadata rows for one ice sheet and year window
-    -- the pandas-groupby-plus-linregress-per-simulation step that has to
-    rerun for every distinct (year_start, year_end), factored out of
-    plot_interactive_rate_comparison so a caller can precompute rows for
-    many year windows up front (e.g. the Dash app precomputes every valid
-    "Years:" slider position at startup) rather than redoing this specific
-    step -- profiling showed it's roughly a third of a single call's total
-    time -- on every request. The remaining trace/KDE-building work still
-    has to happen per-request either way."""
-    rows = []
-    if simulated is None:
-        return rows
-    df = simulated[simulated["IS"] == ice_sheet]
-    for (group, model, exp), g in df.groupby(["Group", "Model", "Exp"]):
-        n_pts = (
-            (g["Year"] >= year_start) & (g["Year"] <= year_end)
-            & g["Cumulative ice sheet mass change (Gt)"].notna()
-        ).sum()
-        if n_pts < 2:
-            continue
-        slope, _ = imbie_mass_loss_slope(g, year_start=year_start, year_end=year_end)
-        if slope is None or not np.isfinite(slope):
-            continue
-        ism_m = get_ism_meta(group, model)
-        exp_m = get_exp_meta(ice_sheet, exp)
-        base_hover = _build_hover(group, model, exp, ice_sheet)
-        rows.append({
-            "rate": slope, "group": group, "model": model, "exp": exp,
-            "initialization": ism_m.get("initialization", "See paper"),
-            "ice_model": ism_m.get("ice_model", "See paper"),
-            "sliding_law": ism_m.get("sliding_law", "See paper"),
-            "scenario": exp_m.get("scenario", "Unknown"),
-            "climate_model": exp_m.get("climate_model", "Unknown"),
-            "hover": base_hover + f"<br>Rate: {slope:.0f} Gt/yr",
-            "hover_sle": base_hover + f"<br>Rate: {slope * gt2mmSLE:.2f} mm/yr",
-        })
-    return rows
-
-
-# "Group by publication" is a special-cased dimension (see the weighting note
-# in the merged_df.groupby(dim) loop below), not one of GROUP_DIMENSIONS's
-# generic entries -- inserted right after "All simulations" (GROUP_DIMENSIONS[0])
-# rather than appended at the end, so it reads as the second-most-fundamental
-# way to view the data, ahead of the more granular modeling-choice dimensions.
-GROUP_BY_LABELS = (
-    [GROUP_DIMENSIONS[0][0], "Group by publication"]
-    + [label for label, _dim, _fixed in GROUP_DIMENSIONS[1:]]
+# Single-threaded BLAS/OpenMP, set before numpy is imported -- on Render's
+# thin CPU quota, oversized thread pools caused a ~100x slowdown.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
+import numpy as np  # noqa: E402
+import dash  # noqa: E402
+from dash import Input, Output, dcc, html, no_update  # noqa: E402
+
+import analysis as A  # noqa: E402
+import figures as F  # noqa: E402
+from data import (  # noqa: E402
+    ANOVA_CHARACTERISTICS, DIM_LABEL, GROUP_DIMENSIONS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    SOURCE_LABELS,
 )
 
+YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2023, 5  # 2023 == IMBIE3's last full year
+YEAR_DEFAULT = [2015, 2023]
+LOW_BIAS_FRAC = 0.10
+_ICE = RUNS["ice_sheet"].to_numpy()
 
-def plot_interactive_rate_comparison(
-    simulated=None, observed=None, year_start=2000, year_end=2020,
-    title="Compare observed and simulated rates of ice sheet change", seed=42,
-    show_title=True, show_subtitle=True,
-    precomputed_dim_color_maps=None, precomputed_rows=None,
-    extra_sources=None,
-):
-    """
-    Interactive dual-panel (AIS / GIS) raincloud comparison of the mean
-    ice-sheet mass-change rate, matching the static plot_rate_comparison
-    figure's default look, plus two independent controls:
 
-    - "Group by:" dropdown -- every option pools ISMIP6 (`simulated`) AND
-      every entry in `extra_sources` into one population, then either
-      leaves it ungrouped ("All simulations": gray jittered points + gray
-      KDE) or recolors/splits it by a category (initialization method, ice
-      sheet model, sliding law, climate scenario, GCM, or -- "Group by
-      publication" -- which paper the simulation is from at all: ISMIP6
-      counts as one category per panel, Seroussi et al. 2020 for AIS /
-      Goelzer et al. 2020 for GIS, alongside one category per
-      extra_sources entry). Every dimension shares the same machinery
-      (see GROUP_DIMENSIONS/GROUP_BY_LABELS): each category's KDE is a
-      properly weighted density estimate (scipy.stats.gaussian_kde's
-      `weights`, via _rate_kde_raw) over however many ISMIP6 and/or
-      extra_sources points fall into it, scaled by that category's share
-      of the total weighted population and referenced against the SAME
-      peak (the full pooled population's) as every other category -- not
-      its own peak. This keeps the AREA under each colored curve
-      proportional to its share of simulations, so a widely-scattered
-      subgroup reads as low and wide rather than being inflated to look as
-      prominent as any other category, and a tightly-clustered subgroup can
-      legitimately show as a sharp, narrow spike even with relatively few
-      points. Summing every category's curve approximately reconstructs
-      the "All simulations" gray curve. Because an extra_sources entry can
-      have far more points than a typical ISMIP6 institution (e.g. a
-      100-member parameter ensemble), each of ITS points individually
-      counts for only `typical_model_n / n_src` of an ISMIP6 point's
-      weight (`typical_model_n` = ISMIP6's own average points-per-Group for
-      this panel, `n_src` = that source's own total point count here) --
-      so its ensemble collectively counts for about as much as one typical
-      ISMIP6 institution, in every dimension, not just "Group by
-      publication" -- otherwise one paper's internal ensemble size would
-      visually dominate ISMIP6's ~30-40 independent models regardless of
-      which dimension is selected. Point markers are similarly
-      shrunk/faded for large-N sources.
-    - "Medians:" dropdown -- independently shows/hides a downward-pointing
-      triangle marker at each currently-visible category's median rate,
-      drawn above the KDE curves. Implemented as a targeted `restyle` on
-      trace `opacity` (not `visible`) for just the median-marker traces, so
-      it never conflicts with the "Group by:" dropdown's own visibility
-      updates -- the two controls are fully independent.
-
-    Each simulation's vertical jitter offset is computed once and reused
-    across every grouping dimension, so points don't jump up/down when the
-    "Group by:" dropdown is toggled. IMBIE's mean-rate line and 2-sigma band
-    are drawn as real traces (not shapes) so they get proper legend entries,
-    and stay visible regardless of the dropdown state. A category's legend
-    entry is shown the first time it appears (AIS is processed first), so a
-    category that only exists in the GIS panel (e.g. an experiment code with
-    no scenario/GCM metadata, falling back to "Unknown") still gets a legend
-    entry instead of appearing as an unlabeled curve.
-
-    show_title/show_subtitle -- set False to omit the in-figure title and/or
-    explanatory-text annotation (e.g. the Dash app renders both itself as
-    plain HTML instead, alongside rather than above the figure, so it passes
-    both as False). Omitting either also shrinks the top margin back down,
-    since that space exists only to hold whichever of the two is shown.
-
-    precomputed_dim_color_maps/precomputed_rows -- optional outputs of
-    _dim_color_maps()/_sim_rows(), letting a caller that already computed
-    these (e.g. once at startup, or once per year-range ahead of time) skip
-    redoing that work on every call. Both fall back to computing from
-    `simulated`/`extra_sources` as usual when omitted. If passing a
-    precomputed value, build it from the caller's *complete* extra_sources
-    list (see _dim_color_maps), not a checkbox-filtered subset.
-
-    extra_sources -- optional list of {"label", "df", "color"} dicts for
-    non-ISMIP6 published simulations (see utilities/external_sources.py).
-    Which papers are included is entirely up to the caller -- there is no
-    separate on/off control inside the figure itself (the Dash app's
-    "Simulation studies:" checkboxes filter this list before calling here;
-    the notebook always passes all of them). Each source's `df` must have
-    the same shape as `simulated` (Year, Cumulative ice sheet mass change
-    (Gt), Group, Model, Exp, IS) -- rows for an ice sheet a source doesn't
-    cover (e.g. Rahlves2025 is GIS-only) are simply absent, so that panel is
-    skipped for it.
-    """
-    rng = np.random.default_rng(seed)
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=False,
-        subplot_titles=["Antarctic Ice Sheet (AIS)", "Greenland Ice Sheet (GIS)"],
-        vertical_spacing=0.20,
-    )
-
-    # Global color maps (shared between AIS/GIS panels) per grouping dimension,
-    # built from the full simulated dataframe (+ extra_sources) so a
-    # category's color is consistent across both panels.
-    dim_color_maps = (
-        precomputed_dim_color_maps if precomputed_dim_color_maps is not None
-        else _dim_color_maps(simulated, extra_sources=extra_sources)
-    )
-
-    dim_only_idx = {label: [] for label, dim, _ in GROUP_DIMENSIONS if dim is not None}
-    all_only_idx = []  # "All simulations": ISMIP6 + every extra_sources entry, pooled and gray
-    publication_only_idx = []  # "Group by publication": one category per paper (ISMIP6 counts as one)
-    median_trace_idx = []  # every median-marker trace, across all dimensions -- toggled by the "Medians:" dropdown
-    legend_shown = set()  # (dim, cat) pairs already given a legend entry, across both panels
-    # legendgroups for the fixed "All simulations" traces (kde_all/all_pts/
-    # median:all) already given a legend entry. NOT hardcoded to "whichever
-    # trace belongs to k==1 (AIS)" -- a panel can have zero data (e.g. its
-    # ISMIP6 checkbox is unchecked and no extra source covers that ice
-    # sheet), skipping these traces entirely for that k, which silently
-    # dropped the legend entry for BOTH panels when k==1 was assumed to
-    # always be the one bearing it. Tracked dynamically instead, same
-    # principle as legend_shown above.
-    fixed_legend_shown = set()
-    x_range_by_panel = {}  # row (1=AIS, 2=GIS) -> (min, max), for the Units: dropdown's explicit axis ranges
-    observed_annotation_x = {}  # annotation index -> its Gt/yr x-position (slope), for the Units: dropdown
-
-    for k, ice_sheet in enumerate(["AIS", "GIS"], start=1):
-        if precomputed_rows is not None and ice_sheet in precomputed_rows:
-            rows = precomputed_rows[ice_sheet]
-        else:
-            rows = _sim_rows(simulated, ice_sheet, year_start, year_end)
-        sim_df = pd.DataFrame(rows)
-        n_total = len(sim_df)
-        # Reference point count for de-weighting extra_sources below --
-        # ISMIP6's own average points-per-institution for this panel. With
-        # no ISMIP6 rows in this panel (e.g. that panel's checkbox is
-        # unchecked in the Dash app), there's no such reference, so
-        # extra_sources fall back to their natural (unweighted) contribution.
-        typical_model_n = max(1, n_total / max(1, sim_df["group"].nunique())) if n_total else None
-
-        # One merged population: every ISMIP6 row (weight 1) + every
-        # extra_sources row (weight typical_model_n/n_src, see docstring),
-        # each tagged with its own "publication" -- lets "Group by
-        # publication" reuse the exact same generic per-dimension machinery
-        # every other "Group by ..." option below uses, and lets every
-        # OTHER dimension (ice model, scenario, ...) include extra_sources'
-        # rows too rather than being ISMIP6-only.
-        frames = []
-        publication_color_map = {}
-        if n_total:
-            sim_df["jitter"] = rate_strip_y0 + rng.uniform(-rate_strip_jitter, rate_strip_jitter, size=n_total)
-            sim_df["row_weight"] = 1.0
-            sim_df["publication"] = PUBLICATION_LABEL[ice_sheet]
-            frames.append(sim_df)
-            publication_color_map[PUBLICATION_LABEL[ice_sheet]] = ISMIP6_PUBLICATION_COLOR
-        for src in (extra_sources or []):
-            # Use the lazily-memoized cache when this source has one (see
-            # its construction above, near ROWS_CACHE) -- indexing with
-            # [key], not .get(key), so a first-time window actually
-            # triggers LazyRowsCache's __missing__ compute-and-memoize
-            # rather than silently falling through every time. Falls back
-            # to _sim_rows() itself only when there's no cache at all
-            # (e.g. the notebook's own extra_sources, which never sets
-            # "rows_cache").
-            rows_cache = src.get("rows_cache")
-            src_rows = rows_cache[(year_start, year_end)][ice_sheet] if rows_cache is not None else _sim_rows(src["df"], ice_sheet, year_start, year_end)
-            if not src_rows:
-                continue
-            src_df = pd.DataFrame(src_rows)
-            n_src = len(src_df)
-            src_df["jitter"] = rate_strip_y0 + rng.uniform(-rate_strip_jitter, rate_strip_jitter, size=n_src)
-            src_df["row_weight"] = (typical_model_n / n_src) if typical_model_n else 1.0
-            src_df["publication"] = src["label"]
-            frames.append(src_df)
-            publication_color_map[src["label"]] = src.get("color", "#888888")
-
-        if frames:
-            merged_df = pd.concat(frames, ignore_index=True)
-
-            pad = max(0.15 * (merged_df["rate"].max() - merged_df["rate"].min()), 1.0)
-            x_range = (merged_df["rate"].min() - pad, merged_df["rate"].max() + pad)
-            x_range_by_panel[k] = x_range
-
-            xs, dens_full_raw = _rate_kde_raw(
-                merged_df["rate"].values, x_range, weights=merged_df["row_weight"].values,
-            )
-            full_max = dens_full_raw.max()
-            if full_max <= 0:
-                # Degenerate window (e.g. all simulations converged to the
-                # same rate) -- avoid a division by zero; nothing meaningful
-                # to scale against, so every curve stays flat.
-                full_max = 1.0
-            dens = dens_full_raw / full_max * rate_kde_height
-
-            # "All simulations" -- ISMIP6 + every extra_sources entry, pooled
-            # and gray. By construction this curve always peaks at exactly
-            # rate_kde_height (it IS the full_max reference), matching how
-            # the ISMIP6-only version worked before extra_sources existed.
-            idx = len(fig.data)
-            fig.add_trace(go.Scatter(
-                x=xs, y=np.full_like(xs, rate_kde_y0), mode="lines", line=dict(width=0),
-                hoverinfo="skip", showlegend=False,
-            ), row=k, col=1)
-            all_only_idx.append(idx)
-            show_kde_all = "kde_all" not in fixed_legend_shown
-            fixed_legend_shown.add("kde_all")
-            idx = len(fig.data)
-            fig.add_trace(go.Scatter(
-                x=xs, y=rate_kde_y0 + dens, mode="lines", line=dict(color="gray", width=1),
-                fill="tonexty", fillcolor=_rgba("gray", 0.5), hoverinfo="skip",
-                name="PDF of all simulations", legendgroup="kde_all", showlegend=show_kde_all,
-            ), row=k, col=1)
-            all_only_idx.append(idx)
-
-            # Gray jittered points -- every row in the merged population.
-            # ISMIP6 rows render at the usual fixed size/opacity; each
-            # extra_sources row is shrunk/faded by its OWN source's n_src
-            # (same de-emphasis every other dimension below applies to that
-            # source), so a large ensemble reads as a density cloud here
-            # too, not a wall of dots outnumbering ISMIP6's own.
-            size_by_pub, opacity_by_pub = {}, {}
-            if n_total:
-                size_by_pub[PUBLICATION_LABEL[ice_sheet]] = 4
-                opacity_by_pub[PUBLICATION_LABEL[ice_sheet]] = 0.6
-            for src in (extra_sources or []):
-                n_src = (merged_df["publication"] == src["label"]).sum()
-                if n_src == 0:
-                    continue
-                size_by_pub[src["label"]] = 3 if n_src > 30 else 4
-                opacity_by_pub[src["label"]] = max(0.12, min(0.6, 15 / n_src))
-            show_all_pts = "all_pts" not in fixed_legend_shown
-            fixed_legend_shown.add("all_pts")
-            idx = len(fig.data)
-            fig.add_trace(go.Scatter(
-                x=merged_df["rate"], y=merged_df["jitter"], mode="markers",
-                marker=dict(
-                    color="gray", line_width=0,
-                    size=merged_df["publication"].map(size_by_pub).tolist(),
-                    opacity=merged_df["publication"].map(opacity_by_pub).tolist(),
-                ),
-                name="Simulation", legendgroup="all_pts", showlegend=show_all_pts, visible=True,
-                text=merged_df["hover"], customdata=merged_df["hover_sle"], hovertemplate="%{text}<extra></extra>",
-            ), row=k, col=1)
-            all_only_idx.append(idx)
-
-            show_median_all = "median:all" not in fixed_legend_shown
-            fixed_legend_shown.add("median:all")
-            idx = len(fig.data)
-            fig.add_trace(go.Scatter(
-                x=[merged_df["rate"].median()], y=[rate_median_y], mode="markers",
-                marker=dict(symbol="triangle-down", size=11, color="gray", line=dict(width=1, color="black")),
-                opacity=1, name="All simulations median", legendgroup="median:all", showlegend=show_median_all,
-                visible=True, customdata=[merged_df["rate"].median() * gt2mmSLE],
-                hovertemplate="All simulations median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
-            ), row=k, col=1)
-            all_only_idx.append(idx)
-            median_trace_idx.append(idx)
-
-            # Colored KDE + colored jittered points + median marker per
-            # category, for each grouping dimension (including the new
-            # "publication" one), drawn on top of the gray KDE -- every
-            # dimension shares this exact loop body, over the same merged
-            # population, differing only in which column it groups by and
-            # which color map/target trace-index list it uses.
-            all_dims = [
-                (label, dim, dim_color_maps[dim], dim_only_idx[label])
-                for label, dim, _fixed in GROUP_DIMENSIONS if dim is not None
-            ]
-            all_dims.append(("Group by publication", "publication", publication_color_map, publication_only_idx))
-
-            for label, dim, color_map, target_idx in all_dims:
-                # Semi-transparent fills compound when many categories overlap in the
-                # same x-range (n stacked layers at opacity a look like 1-(1-a)^n, so
-                # even a=0.5 reads as ~90% opaque by the 4th overlapping layer). Scale
-                # each category's fill opacity down for dimensions with more
-                # categories (e.g. ice sheet model, ~14) so the *stacked* result stays
-                # translucent, while dimensions with few categories (e.g.
-                # initialization, ~4) keep the full 0.5.
-                n_cats = max(len(color_map), 1)
-                kde_fill_opacity = min(0.5, 2.0 / n_cats)
-
-                # Every category's KDE curve is normalized to ITS OWN peak
-                # reaching rate_kde_height (the same height the "All
-                # simulations" gray curve and the median triangle markers'
-                # reference line use) -- not scaled by how much of the
-                # population that category represents. Per explicit user
-                # request/decision (2026-10-01): guarantee every curve is
-                # fully visible/comparable by SHAPE, not have some
-                # categories read as "very low and flat" next to others.
-                # Confirmed directly this was a real, visible problem before:
-                # earlier versions scaled each category's curve down by its
-                # share of either the whole pooled population (full_max) or
-                # even just the dimension's own tallest category, and
-                # Edwards2021 AIS's individual SSP-scenario curves (each
-                # already a small slice of a source whose total weight is
-                # de-emphasized to one typical-institution's worth, see
-                # row_weight above, then split 6 further ways) stayed
-                # visibly short under either scheme. The trade-off, accepted
-                # explicitly: a category backed by 20 ISMIP6 institutions
-                # now reads the same height as one backed by a single paper
-                # or a single SSP scenario -- relative prevalence is no
-                # longer conveyed by curve height in ANY "Group by" view
-                # (this subsumes "Group by publication"'s older, narrower
-                # equal-area special case, which no longer needs separate
-                # handling).
-                for cat, g in merged_df.groupby(dim):
-                    color = color_map.get(cat, "#888888")
-                    if len(g) >= 2 and g["rate"].std() > 0:
-                        _, dens2_raw = _rate_kde_raw(g["rate"].values, x_range, weights=g["row_weight"].values)
-                        cat_peak = dens2_raw.max()
-                        dens2 = (dens2_raw / cat_peak * rate_kde_height) if cat_peak > 0 else dens2_raw
-                        idx = len(fig.data)
-                        fig.add_trace(go.Scatter(
-                            x=xs, y=np.full_like(xs, rate_kde_y0), mode="lines", line=dict(width=0),
-                            hoverinfo="skip", showlegend=False, visible=False,
-                        ), row=k, col=1)
-                        target_idx.append(idx)
-                        idx = len(fig.data)
-                        fig.add_trace(go.Scatter(
-                            x=xs, y=rate_kde_y0 + dens2, mode="lines", line=dict(color=color, width=1),
-                            fill="tonexty", fillcolor=_rgba(color, kde_fill_opacity), hoverinfo="skip",
-                            name=f"{cat} KDE", legendgroup=f"{dim}:{cat}", showlegend=False, visible=False,
-                        ), row=k, col=1)
-                        target_idx.append(idx)
-
-                    show_this = (dim, cat) not in legend_shown
-                    if show_this:
-                        legend_shown.add((dim, cat))
-                    idx = len(fig.data)
-                    fig.add_trace(go.Scatter(
-                        x=g["rate"], y=g["jitter"], mode="markers",
-                        marker=dict(color=color, size=4, opacity=0.85, line_width=0),
-                        name=str(cat), legendgroup=f"{dim}:{cat}", showlegend=show_this, visible=False,
-                        text=g["hover"], customdata=g["hover_sle"], hovertemplate="%{text}<extra></extra>",
-                    ), row=k, col=1)
-                    target_idx.append(idx)
-
-                    # Median marker: visibility tied to the grouping dropdown
-                    # (like its KDE/points siblings), but opacity toggled
-                    # independently by the "Medians:" dropdown.
-                    idx = len(fig.data)
-                    fig.add_trace(go.Scatter(
-                        x=[g["rate"].median()], y=[rate_median_y], mode="markers",
-                        marker=dict(symbol="triangle-down", size=11, color=color, line=dict(width=1, color="black")),
-                        opacity=1, name=f"{cat} median", legendgroup=f"median:{dim}:{cat}", showlegend=False,
-                        visible=False, customdata=[g["rate"].median() * gt2mmSLE],
-                        hovertemplate=f"{cat} median<br>" + "Rate: %{x:.0f} Gt/yr<extra></extra>",
-                    ), row=k, col=1)
-                    target_idx.append(idx)
-                    median_trace_idx.append(idx)
-
-        if observed is not None:
-            imbie_df = observed[observed["IS"] == ice_sheet]
-            slope, stderr = imbie_mass_loss_slope(imbie_df, year_start=year_start, year_end=year_end)
-
-            # Real traces (not add_vline/add_vrect shapes) so IMBIE gets legend
-            # entries, matching the other interactive figures' convention.
-            fig.add_trace(go.Scatter(
-                x=[slope - 2 * stderr, slope - 2 * stderr, slope + 2 * stderr, slope + 2 * stderr],
-                y=[rate_y_lim[0], rate_y_lim[1], rate_y_lim[1], rate_y_lim[0]],
-                mode="lines", line=dict(width=0), fill="toself", fillcolor=_rgba(IMBIE_COLOR, 0.2),
-                hoverinfo="skip",
-                name="IMBIE ±2σ", legendgroup="imbie", showlegend=(k == 1), legendrank=9999,
-            ), row=k, col=1)
-            fig.add_trace(go.Scatter(
-                x=[slope, slope], y=[rate_y_lim[0], rate_y_lim[1]],
-                mode="lines", line=dict(color=IMBIE_COLOR, width=2), hoverinfo="skip",
-                name="IMBIE (observed)", legendgroup="imbie", showlegend=(k == 1), legendrank=10000,
-            ), row=k, col=1)
-            fig.add_annotation(
-                x=slope, y=0.55, xref=f"x{k}", yref=f"y{k}",
-                text="<b>Observed mass change</b>",
-                showarrow=True, arrowhead=2, arrowsize=1.1, arrowwidth=2.5,
-                arrowcolor=IMBIE_COLOR,
-                ax=60, ay=-50,
-                font=dict(size=11, color=IMBIE_COLOR),
-                bgcolor="rgba(255,255,255,0.85)",
-            )
-            observed_annotation_x[len(fig.layout.annotations) - 1] = slope
-
-        fig.add_vline(x=0, line_dash="dot", line_color="black", line_width=0.8, row=k, col=1)
-        fig.update_xaxes(
-            title_text="Rate of ice sheet mass change (Gt/yr)",
-            range=list(x_range_by_panel[k]) if k in x_range_by_panel else None,
-            row=k, col=1,
-        )
-        fig.update_yaxes(showticklabels=False, range=list(rate_y_lim), row=k, col=1)
-
-    n_traces = len(fig.data)
-    # "Group by:" buttons manage every trace built above (dim_only_idx,
-    # all_only_idx, publication_only_idx) -- exactly one of these groups is
-    # visible at a time. Traces outside all of these (IMBIE) are left alone.
-    managed_groups = dict(dim_only_idx)
-    managed_groups["All simulations"] = all_only_idx
-    managed_groups["Group by publication"] = publication_only_idx
-    managed_idx = sum(managed_groups.values(), [])
-    buttons = []
-    for label in GROUP_BY_LABELS:
-        visible = [i in managed_groups[label] for i in managed_idx]
-        # method="restyle" (not "update"): this only ever touches trace data
-        # (visible), never layout, and restyle's args signature is exactly
-        # [dataUpdate, traceIndices] -- "update"'s signature is instead
-        # [dataUpdate, layoutUpdate, traceIndices], so passing managed_idx as
-        # the 2nd positional arg to "update" put a list of integers where
-        # Plotly expects a layout-patch object, silently breaking which
-        # traces the visibility patch actually applied to (this is what
-        # caused a real bug: empty panels and stray legend entries from
-        # non-selected dimensions after clicking "Group by:").
-        buttons.append(dict(label=label, method="restyle", args=[{"visible": visible}, managed_idx]))
-
-    # "Units:" dropdown -- switches between showing rates as ice-sheet mass
-    # change (Gt/yr) and as their sea-level-rise equivalent (mm/yr). Every
-    # trace's x data stays in Gt/yr NO MATTER which unit is selected -- an
-    # explicit user request that points never move or get replotted when
-    # this is toggled. "Sea level rise" is achieved purely by RELABELING
-    # the same physical x-axis positions: explicit tickvals/ticktext (see
-    # _nice_sle_ticks) showing each position's sign-flipped, rescaled
-    # sea-level-equivalent value, instead of Plotly's own auto-ticking
-    # (which can only label an axis by the data's actual values, not some
-    # other unit's equivalent). Not moving x also means neither button
-    # needs to ship its own copy of every trace's x array (previously the
-    # single largest contributor to this dropdown's payload cost).
-    mass_text_all = [tr.text for tr in fig.data]
-    # Point traces stash their alt-unit hover string in customdata (set
-    # alongside "text" at trace-creation); every other trace type either
-    # has no text at all or doesn't depend on units (KDE fills, IMBIE),
-    # so it falls back to its own (untouched) text.
-    sle_text_all = [
-        tr.customdata if tr.customdata is not None else tr.text for tr in fig.data
-    ]
-    mass_hovertemplate_all = [tr.hovertemplate for tr in fig.data]
-    # Only the median markers' hovertemplate hardcodes a unit (the point
-    # traces' hovertemplate is just "%{text}...", already unit-agnostic).
-    # %{x} is NOT swapped to mm/yr here -- per the "nothing moves" rule
-    # above, a median marker's x stays in Gt/yr always, so %{x:.2f} mm/yr
-    # would just relabel that same raw Gt/yr NUMBER as "mm/yr" without
-    # actually converting it (confirmed directly: this previously showed,
-    # e.g., "-13.1 mm/yr" for a marker plotted at the Gt/yr position
-    # equivalent to +0.04 mm/yr -- a ~350x-wrong hover value, the
-    # gt2mmSLE conversion factor itself, silently missing). References
-    # %{customdata} instead -- each median trace's `customdata` is set at
-    # creation to that same median already multiplied by gt2mmSLE, the
-    # same pattern the point traces already use for their own hover_sle.
-    sle_hovertemplate_all = [
-        ht.replace("%{x:.0f} Gt/yr", "%{customdata:.2f} mm/yr") if ht is not None else None
-        for ht in mass_hovertemplate_all
-    ]
-
-    sle_ticks_1 = _nice_sle_ticks(x_range_by_panel[1], gt2mmSLE) if 1 in x_range_by_panel else ([], [])
-    sle_ticks_2 = _nice_sle_ticks(x_range_by_panel[2], gt2mmSLE) if 2 in x_range_by_panel else ([], [])
-
-    # The "Observed ..." arrow annotation is pinned to the IMBIE slope in
-    # data coordinates (annotation.x) -- left untouched here (same "nothing
-    # moves" rule as the traces above), only its text changes.
-    mass_annotation_updates, sle_annotation_updates = {}, {}
-    for _idx, _slope in observed_annotation_x.items():
-        mass_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed mass change</b>"
-        sle_annotation_updates[f"annotations[{_idx}].text"] = "<b>Observed sea level contribution</b>"
-
-    layout_kwargs = dict(
-        updatemenus=[
-            dict(
-                type="dropdown", direction="down",
-                x=1.0, y=1.13, xanchor="right", yanchor="bottom",
-                buttons=buttons,
-            ),
-            dict(
-                type="dropdown", direction="down",
-                x=0.48, y=1.13, xanchor="left", yanchor="bottom",
-                active=1,
-                buttons=[
-                    dict(label="Off", method="restyle", args=[{"opacity": 0}, median_trace_idx]),
-                    dict(label="On", method="restyle", args=[{"opacity": 1}, median_trace_idx]),
-                ],
-            ),
-            dict(
-                type="dropdown", direction="down",
-                x=0.06, y=1.13, xanchor="left", yanchor="bottom",
-                active=0,
-                buttons=[
-                    dict(label="Mass change", method="update", args=[
-                        {"text": mass_text_all, "hovertemplate": mass_hovertemplate_all},
-                        {"xaxis.title.text": "Rate of ice sheet mass change (Gt/yr)",
-                         "xaxis2.title.text": "Rate of ice sheet mass change (Gt/yr)",
-                         "xaxis.tickmode": "auto", "xaxis2.tickmode": "auto",
-                         "xaxis.tickvals": None, "xaxis2.tickvals": None,
-                         "xaxis.ticktext": None, "xaxis2.ticktext": None,
-                         **mass_annotation_updates},
-                    ]),
-                    dict(label="Sea level rise", method="update", args=[
-                        {"text": sle_text_all, "hovertemplate": sle_hovertemplate_all},
-                        {"xaxis.title.text": "Contribution to sea level rise (mm/yr)",
-                         "xaxis2.title.text": "Contribution to sea level rise (mm/yr)",
-                         "xaxis.tickmode": "array", "xaxis.tickvals": sle_ticks_1[0], "xaxis.ticktext": sle_ticks_1[1],
-                         "xaxis2.tickmode": "array", "xaxis2.tickvals": sle_ticks_2[0], "xaxis2.ticktext": sle_ticks_2[1],
-                         **sle_annotation_updates},
-                    ]),
-                ],
-            ),
-        ],
-        margin=dict(t=300 if show_subtitle else 130),
-        height=750, template="plotly_white",
-        legend=dict(bgcolor="rgba(255,255,255,0.85)", bordercolor="#ccc", borderwidth=1),
-        # A FIXED (never-changing) uirevision -- not one derived from
-        # year_start/year_end/extra_sources -- is what tells Plotly.js this
-        # is "the same plot" across the Dash callback's repeated
-        # Plotly.react() redraws (dcc.Graph pushing a whole new `figure`
-        # every time the "Years:" slider or "Simulation studies:" checklist
-        # changes), so it preserves the user's current zoom/pan (axis
-        # ranges) and each updatemenu's currently-selected button (Units:/
-        # Group by:/Distribution medians:) instead of snapping back to this
-        # function's own hardcoded defaults (active=0/1 above, autorange
-        # axes) on every rebuild. Deliberately a single hardcoded string,
-        # not e.g. f"{year_start}-{year_end}" -- keying it to the very
-        # things that change on every rebuild would defeat the point.
-        uirevision="rate_comparison",
-    )
-    if show_title:
-        layout_kwargs["title"] = dict(text=title, x=0.02, xanchor="left", y=0.99, yanchor="top")
-    fig.update_layout(**layout_kwargs)
-    # add_annotation appends to the existing (subplot-title) annotations list,
-    # rather than replacing it the way update_layout(annotations=[...]) would.
-    if show_subtitle:
-        fig.add_annotation(
-            text=(
-                "PDFs show the distribution of simulated mass changes over the selected time span.<br>"
-                "PDFs are calculated collectively for all simulations, or (optionally) grouped by a<br>"
-                "variety of different simulation characteristics.<br>"
-                "Beneath the PDFs, each dot represents a single simulation, plotted at its simulated<br>"
-                "rate of mass change.<br>"
-                "Hover over each dot to learn more about its characteristics, or click on legend<br>"
-                "elements to hide or show plot components."
-            ),
-            x=0.0, y=1.55, xref="paper", yref="paper",
-            xanchor="left", yanchor="top", showarrow=False,
-            align="left", font=dict(size=11, color="#555555"),
-        )
-    fig.add_annotation(
-        text="Group by:", x=0.73, y=1.13, xref="paper", yref="paper",
-        xanchor="right", yanchor="bottom", showarrow=False, font=dict(size=13),
-    )
-    fig.add_annotation(
-        text="Distribution medians:", x=0.28, y=1.13, xref="paper", yref="paper",
-        xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
-    )
-    fig.add_annotation(
-        text="Units:", x=0.0, y=1.13, xref="paper", yref="paper",
-        xanchor="left", yanchor="bottom", showarrow=False, font=dict(size=13),
-    )
-    return fig
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Precomputed rate cache -- the "Years:" slider is the only control that can't
-# be a pure client-side Plotly updatemenu (the KDEs/points/IMBIE slope all
-# depend on year_start/year_end), so every slider move reruns
-# plot_interactive_rate_comparison() on the server. Its costliest inner step
-# is _sim_rows()'s per-simulation rate lookup (scipy.stats.linregress through
-# pandas .groupby()/.loc slicing) -- profiling showed that's roughly a third
-# of a single build's ~0.39s. Precomputing _sim_rows()'s output for all 351
-# valid (year_start, year_end) combos up front via the *same* pandas/scipy
-# path took ~61s (too slow to redo on every process start); _fast_slope
-# below reproduces the identical rate using a closed-form OLS slope over raw
-# numpy arrays instead, cutting that to ~1-2s, verified to match _sim_rows()
-# exactly. The callback then becomes a dict lookup, not a recompute.
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _fast_slope(x, y):
-    """Closed-form OLS slope, numerically equivalent to
-    scipy.stats.linregress(x, y).slope but without linregress's per-call
-    nan-policy wrapper or the pandas-Series overhead of feeding it g["Year"]/
-    g["..."] slices -- see the module-level comment above. Only used for
-    bulk-precomputing _sim_rows()-equivalent rates; _sim_rows() itself (used
-    for any single, non-precomputed call) still goes through
-    imbie_mass_loss_slope()/scipy, matching the notebook's implementation."""
-    n = len(x)
-    if n < 2:
-        return None
-    xd = x - x.mean()
-    ssxx = np.dot(xd, xd)
-    if ssxx == 0:
-        return None
-    yd = y - y.mean()
-    return np.dot(xd, yd) / ssxx
-
-
-def _build_combo_arrays(simulated):
-    """The expensive, one-time (not per-window) prep step: for every
-    (ice_sheet, group, model, exp) combo, its NaN-dropped Year/mass-change
-    arrays and its year-independent metadata (ice model, sliding law, GCM,
-    scenario, base hover string) -- the groupby/get_ism_meta/get_exp_meta/
-    _build_hover work, paid once regardless of how many year-windows are
-    ever actually requested. Cost scales with the number of (group, model,
-    exp) combos in `simulated`, NOT with the number of valid year windows."""
-    combo_arrays = {}
-    combo_meta = {}
-    for ice_sheet in ["AIS", "GIS"]:
-        df = simulated[simulated["IS"] == ice_sheet]
-        for (group, model, exp), g in df.groupby(["Group", "Model", "Exp"]):
-            mask = g["Cumulative ice sheet mass change (Gt)"].notna()
-            key = (ice_sheet, group, model, exp)
-            combo_arrays[key] = (
-                g.loc[mask, "Year"].to_numpy(),
-                g.loc[mask, "Cumulative ice sheet mass change (Gt)"].to_numpy(),
-            )
-            ism_m = get_ism_meta(group, model)
-            exp_m = get_exp_meta(ice_sheet, exp)
-            combo_meta[key] = {
-                "initialization": ism_m.get("initialization", "See paper"),
-                "ice_model": ism_m.get("ice_model", "See paper"),
-                "sliding_law": ism_m.get("sliding_law", "See paper"),
-                "scenario": exp_m.get("scenario", "Unknown"),
-                "climate_model": exp_m.get("climate_model", "Unknown"),
-                "base_hover": _build_hover(group, model, exp, ice_sheet),
-            }
-    return combo_arrays, combo_meta
-
-
-def _rows_for_window(combo_arrays, combo_meta, lo, hi):
-    """The cheap per-window step (a boolean mask + _fast_slope call over
-    already-prepared arrays) -- what used to run for all 351 valid windows
-    eagerly at startup. Called lazily instead, see LazyRowsCache below."""
-    per_ice_sheet = {"AIS": [], "GIS": []}
-    for (ice_sheet, group, model, exp), (years, vals) in combo_arrays.items():
-        m = (years >= lo) & (years <= hi)
-        if m.sum() < 2:
-            continue
-        slope = _fast_slope(years[m], vals[m])
-        if slope is None or not np.isfinite(slope):
-            continue
-        meta = combo_meta[(ice_sheet, group, model, exp)]
-        per_ice_sheet[ice_sheet].append({
-            "rate": slope, "group": group, "model": model, "exp": exp,
-            "initialization": meta["initialization"], "ice_model": meta["ice_model"],
-            "sliding_law": meta["sliding_law"], "scenario": meta["scenario"],
-            "climate_model": meta["climate_model"],
-            "hover": meta["base_hover"] + f"<br>Rate: {slope:.0f} Gt/yr",
-            "hover_sle": meta["base_hover"] + f"<br>Rate: {slope * gt2mmSLE:.2f} mm/yr",
-        })
-    return per_ice_sheet
-
-
-class LazyRowsCache(dict):
-    """{(year_start, year_end): {"AIS": [...], "GIS": [...]}}, computed and
-    memoized lazily on first access (via dict's own __missing__ hook, so
-    ordinary `cache[(lo, hi)]` indexing everywhere else needs no changes)
-    instead of eagerly building all 351 valid windows at import time.
-
-    This replaces an earlier version (_precompute_rows_cache) that built
-    every window upfront for ISMIP6, which was then naively extended to
-    each of the 3 extra_sources dataframes too -- for Aschwanden2019's
-    ~500-member ensemble alone that meant ~350,000 pre-built row-dicts held
-    in memory before a single request ever arrived, nearly doubling this
-    app's import-time RSS (measured locally: ~513 MB -> ~960 MB) and
-    causing Render's free-tier instance to OOM during startup, before
-    gunicorn could even bind a port. A real deployed session only ever
-    touches a handful of the 351 possible windows (wherever the Years:
-    slider actually gets dragged to), so eagerly building all of them was
-    pure waste. The one-time _build_combo_arrays() setup this still does at
-    startup is cheap (proportional to the number of (group, model, exp)
-    combos, not the number of windows) -- only the expensive "build every
-    window" step is now deferred and memoized per-window instead."""
-
-    def __init__(self, simulated):
-        super().__init__()
-        self._combo_arrays, self._combo_meta = _build_combo_arrays(simulated)
-
-    def __missing__(self, key):
-        lo, hi = key
-        value = _rows_for_window(self._combo_arrays, self._combo_meta, lo, hi)
-        self[key] = value
-        return value
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Build the figure once at startup (data doesn't change at runtime -- no need
-# to recompute per-request), then serve it as a static Dash app.
-# ─────────────────────────────────────────────────────────────────────────────
-
-imbie_ais = _load_imbie2026("antarctica")
-imbie_gis = _load_imbie2026("greenland")
-imbie_ais["IS"] = "AIS"
-imbie_gis["IS"] = "GIS"
-imbie = pd.concat([imbie_ais, imbie_gis])
-
-ismip6_ais = load_ismip6_ais()
-ismip6_ais["IS"] = "AIS"
-ismip6_gis = load_ismip6_gis()
-ismip6_gis["IS"] = "GIS"
-ismip6 = pd.concat([ismip6_ais, ismip6_gis])
-
-YEAR_MIN, YEAR_MAX, MIN_YEAR_SPAN = 2000, 2023, 5  # 2023 == IMBIE3's (Otosaka et al. 2026) last full year of data
-YEAR_DEFAULT = [2015, 2023]  # Jan 1 2015 through Dec 31 2023 (see imbie_mass_loss_slope's year_end semantics)
-
-TITLE_TEXT = "Compare observed and simulated rates of ice sheet change"
-
-# Both are independent of year_start/year_end (colors are assigned from the
-# full population; rates are precomputed for every valid window) so this
-# happens once at startup, not per slider move -- see the precomputed rate
-# cache comment above for why _fast_slope replaces _sim_rows()'s own
-# pandas/scipy path here specifically. DIM_COLOR_MAPS is built from the
-# COMPLETE EXTRA_SOURCES list (not whatever the "Simulation studies:"
-# checklist currently has checked), so a category's color never shifts
-# depending on which papers happen to be checked right now.
-DIM_COLOR_MAPS = _dim_color_maps(ismip6, extra_sources=EXTRA_SOURCES)
-ROWS_CACHE = LazyRowsCache(ismip6)
-# Same lazily-memoized per-window-rate cache ISMIP6 gets above, one per
-# extra_sources entry -- _sim_rows() on a paper's own dataframe (e.g.
-# Aschwanden2019's ~500 LHS ensemble members) was previously recomputed via
-# the slow scipy.stats.linregress path on every single request regardless
-# of whether the year window had changed, which was real, avoidable
-# per-request CPU/memory pressure. LazyRowsCache is already generic over
-# any (Group, Model, Exp, IS)-shaped dataframe, so this is a direct reuse,
-# not a new code path. plot_interactive_rate_comparison() below checks
-# each source dict for this key and falls back to the original _sim_rows()
-# call when it's absent -- keeping the notebook (which passes plain
-# extra_sources dicts with no such cache) unaffected.
-for _src in EXTRA_SOURCES:
-    _src["rows_cache"] = LazyRowsCache(_src["df"])
-
-# Matches DATA_SOURCE_DEFAULT_CHECKED (only the two ISMIP6 panels) so the
-# page's very first render is consistent with what the "Simulation studies:"
-# checklist shows checked -- otherwise a user would see all 5 sources on
-# load despite only 2 checkboxes being ticked, until their first interaction.
-_default_checked = set(DATA_SOURCE_DEFAULT_CHECKED)
-FIG = plot_interactive_rate_comparison(
-    simulated=ismip6, observed=imbie, year_start=YEAR_DEFAULT[0], year_end=YEAR_DEFAULT[1],
-    show_title=False, show_subtitle=False,
-    extra_sources=[src for src in EXTRA_SOURCES if src["label"] in _default_checked],
-    precomputed_dim_color_maps=DIM_COLOR_MAPS,
-    precomputed_rows={
-        "AIS": ROWS_CACHE[tuple(YEAR_DEFAULT)]["AIS"] if ISMIP6_AIS_LABEL in _default_checked else [],
-        "GIS": ROWS_CACHE[tuple(YEAR_DEFAULT)]["GIS"] if ISMIP6_GIS_LABEL in _default_checked else [],
-    },
-)
-
-app = dash.Dash(__name__)
-app.title = "ISMIP6 Rate of Ice Sheet Mass Change"
-app.layout = html.Div(
-    [
-        # The figure's own title/subtitle are turned off above (show_title=
-        # False, show_subtitle=False) and rendered here instead as plain
-        # Dash HTML -- the title above the "Years:" slider, and the
-        # explanatory text in a column alongside the graph rather than
-        # crammed into the figure's top margin.
-        html.Div(
-            [
-                html.H2(
-                    TITLE_TEXT,
-                    style={
-                        "color": "#2a3f5f", "fontFamily": "Arial, sans-serif",
-                        "fontWeight": "normal", "fontSize": "26px",
-                        "margin": "0",
-                    },
-                ),
-                # Small "app is updating" indicator -- shown whenever the
-                # server is recomputing the graph (Years: slider drag or a
-                # Simulation studies: checkbox change). Uses the classic
-                # dcc.Loading(children=...) pattern (wrapping a hidden div
-                # that _update_figure also targets as an Output), not the
-                # newer target_components prop -- target_components never
-                # visibly showed anything in practice, so this switches to
-                # the long-established, heavily-used mechanism instead. The
-                # wrapped div itself is empty/invisible either way; only the
-                # spinner (positioned here, next to the title, not over the
-                # graph) is meant to be seen, so nothing dims or blocks
-                # interaction while it spins.
-                dcc.Loading(
-                    children=html.Div(id="loading-trigger", style={"display": "none"}),
-                    custom_spinner=html.Div(className="custom-slow-spinner"),
-                    display="auto",
-                    # Keeps the spinner visible at least this long once shown.
-                    # Both Years: and Simulation studies: target the SAME
-                    # _update_figure callback -- interacting with one while
-                    # the other's request is still in flight (or landing back
-                    # in an already-cached window quickly) can end one
-                    # loading event and start another in close succession;
-                    # without a large enough bridge here, that shows up as
-                    # the spinner flickering off between them instead of
-                    # staying continuously visible for the whole time the
-                    # user is actively interacting with either control.
-                    delay_hide=1000,
-                ),
-            ],
-            style={
-                "display": "flex", "alignItems": "center", "gap": "14px",
-                "margin": "24px 0 0 20px",
-            },
-        ),
-        # Three text boxes around the Years:/Simulation studies: controls: a
-        # "this can take ~10 sec" note on the far left, vertically centered
-        # against BOTH rows combined (not just one), and a "Select the time
-        # window..." label + the "Simulation studies:" label left-aligned
-        # with each other directly above the controls each one describes --
-        # achieved by giving both labels the same fixed width and stacking
-        # the two rows in their own flex column, so the outer row's
-        # alignItems:center centers the note against that whole column's
-        # height, and both inner rows share one consistent left edge rather
-        # than each independently self-centering (which is what the
-        # previous version -- two separate top-level, individually
-        # justifyContent:center'd rows -- could not express: two rows
-        # centered as a group don't share a left edge unless their content
-        # widths happen to match by coincidence).
-        html.Div(
-            [
-                html.Div(
-                    "Adjustments to the averaging window or the simulation "
-                    "studies can take ~10 seconds to load.",
-                    style={
-                        "color": "#555555", "fontFamily": "Arial, sans-serif",
-                        "fontSize": "13px", "lineHeight": "1.4", "maxWidth": "220px",
-                        "marginRight": "32px",
-                    },
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Div(
-                                    "Select the time window over which to "
-                                    "calculate the average rate of ice sheet "
-                                    "change.",
-                                    style={
-                                        "width": "220px", "minWidth": "220px",
-                                        "color": "#555555", "fontFamily": "Arial, sans-serif",
-                                        "fontSize": "13px", "lineHeight": "1.4",
-                                        "marginRight": "16px",
-                                    },
-                                ),
-                                html.Label(
-                                    "Years:",
-                                    style={"fontWeight": "bold", "marginRight": "16px", "whiteSpace": "nowrap"},
-                                ),
-                                html.Div(
-                                    dcc.RangeSlider(
-                                        id="year-range-slider",
-                                        min=YEAR_MIN, max=YEAR_MAX, step=1,
-                                        value=YEAR_DEFAULT,
-                                        allowCross=False,
-                                        # Just the two end years -- at 420px wide, every-5-years marks
-                                        # (7 labels) overlapped/got clipped.
-                                        marks={YEAR_MIN: str(YEAR_MIN), YEAR_MAX: str(YEAR_MAX)},
-                                        # Only while dragging/hovering a handle, not persistently --
-                                        # the boundary-year marks are enough the rest of the time.
-                                        tooltip={"placement": "bottom"},
-                                    ),
-                                    # ~40% of the slider's previous width (it used to fill a flex:1
-                                    # slot spanning most of a 70%-wide row, roughly 1000-1100px at
-                                    # typical desktop widths). Fixed px, not %, since this div's
-                                    # immediate parent has no explicit width of its own for a
-                                    # percentage to resolve against.
-                                    style={"width": "420px", "minWidth": "220px"},
-                                ),
-                            ],
-                            style={"display": "flex", "alignItems": "center"},
-                        ),
-                        html.Div(
-                            [
-                                html.Label(
-                                    "Simulation studies:",
-                                    style={
-                                        "width": "220px", "minWidth": "220px",
-                                        "fontWeight": "bold", "marginRight": "16px",
-                                    },
-                                ),
-                                dcc.Checklist(
-                                    id="data-sources-checklist",
-                                    # Every extra_sources paper plus both core ISMIP6 panels,
-                                    # so unchecking Seroussi/Goelzer removes that whole panel's
-                                    # ISMIP6 overlay the same way unchecking a paper removes
-                                    # its own -- see _update_figure, which turns each checked
-                                    # label into either an EXTRA_SOURCES filter or an empty
-                                    # precomputed_rows["AIS"/"GIS"] list.
-                                    options=[{"label": f" {label}", "value": label} for label in DATA_SOURCE_LABELS],
-                                    value=list(DATA_SOURCE_DEFAULT_CHECKED),
-                                    inline=True,
-                                    style={"display": "flex", "flexWrap": "wrap", "gap": "4px 20px"},
-                                    inputStyle={"marginRight": "4px"},
-                                ),
-                            ],
-                            style={
-                                "display": "flex", "alignItems": "center",
-                                "marginTop": "12px",
-                                "fontFamily": "Arial, sans-serif", "fontSize": "14px", "color": "#2a3f5f",
-                            },
-                        ),
-                    ],
-                    style={"display": "flex", "flexDirection": "column"},
-                ),
-            ],
-            style={
-                # Left-anchored at the same 20px margin as the title above
-                # and the "This app allows..." sidebar text below -- this
-                # row previously centered itself as a whole
-                # (justifyContent:center + width:100% + auto left/right
-                # margins), which left its actual left edge wherever its
-                # (variable-width) content happened to land rather than
-                # matching those other two blocks.
-                "display": "flex", "alignItems": "center",
-                "margin": "20px 0 0 20px",
-            },
-        ),
-        # "Units:" is a native in-figure Plotly dropdown now (see the
-        # "Mass change"/"Sea level rise" buttons inside
-        # plot_interactive_rate_comparison), not a Dash-level control -- an
-        # earlier RadioItems + clientside_callback version lived here, but
-        # never worked in practice (see that function's docstring), so this
-        # was reverted to the same in-figure mechanism the notebook uses.
-        html.Div(
-            [
-                html.Div(
-                    [
-                        html.P(
-                            "This app allows comparison between simulations of recent ice "
-                            "sheet change, including from ISMIP6, and observations of ice "
-                            "sheet change (Otosaka et al., 2026). The goal of this app is to "
-                            "facilitate exploration of how different modeling decisions "
-                            "affect simulated mass change."
-                        ),
-                        html.P(
-                            "PDFs show the distribution of simulated mass changes over the "
-                            "selected time span. PDFs are calculated collectively for all "
-                            "simulations, or (optionally) grouped by a variety of different "
-                            "simulation characteristics."
-                        ),
-                        html.P(
-                            "Beneath the PDFs, each dot represents a single simulation, "
-                            "plotted at its simulated rate of mass change."
-                        ),
-                        html.P(
-                            "Hover over each dot to learn more about its characteristics, "
-                            "click on legend elements to hide or show plot components, or "
-                            "use the tools at top right of the plots to zoom or pan through "
-                            "the plots."
-                        ),
-                    ],
-                    style={
-                        "width": "15%", "minWidth": "220px", "padding": "24px 16px 0 20px",
-                        "boxSizing": "border-box",
-                        "color": "#555555", "fontFamily": "Arial, sans-serif",
-                        "fontSize": "14px", "lineHeight": "1.5",
-                    },
-                ),
-                dcc.Graph(
-                    id="rate-comparison-graph",
-                    figure=FIG,
-                    # minWidth guards the in-figure "Distribution medians:"/"Group by:"
-                    # dropdown row -- those controls have roughly fixed pixel footprints
-                    # regardless of the figure's paper-coordinate width, so below ~1000px
-                    # they start to visually collide. Letting the page scroll horizontally
-                    # on narrow windows beats a broken control row.
-                    style={"flex": "1", "minWidth": "1050px", "height": "85vh"},
-                    config={"responsive": True, "displaylogo": False},
-                ),
-            ],
-            style={"display": "flex", "alignItems": "flex-start"},
-        ),
-        # Remembers the user's current zoom/pan and in-figure dropdown
-        # selections (Units:/Group by:/Distribution medians:) across the
-        # "Years:"/"Simulation studies:" callback below rebuilding the whole
-        # figure from scratch. Tried a plain `layout.uirevision` first (no
-        # extra callback/store needed at all if it worked) -- doesn't help
-        # here: this figure always explicitly sets a fresh axis `range` and
-        # each updatemenu's `active` index on every rebuild (both are
-        # data-dependent, e.g. axis range depends on the new year window's
-        # KDE spread), and an explicit value in a freshly-supplied figure
-        # wins over whatever uirevision would otherwise have preserved.
-        # Populated by the clientside callback below; consumed by
-        # _apply_view_state via _update_figure's State.
-        dcc.Store(id="rate-comparison-view-state", data={}),
-        # Dummy target for clientside callbacks that have nothing meaningful
-        # to output (they act entirely via side effects/dash_clientside.
-        # set_props) -- Dash requires every callback to have a real Output.
-        html.Div(id="_clientside_noop", style={"display": "none"}),
-    ],
-    style={"margin": 0, "padding": 0},
-)
-
-# Tracks zoom/pan and updatemenu (Units:/Group by:/Distribution medians:)
-# selections entirely client-side, into rate-comparison-view-state.
-#
-# Why this can't be a normal Dash callback: box-zoom/pan/double-click-reset
-# fire a `plotly_relayout` event, which dcc.Graph DOES expose as a Python-
-# observable `relayoutData` prop -- but clicking an updatemenu button does
-# NOT reliably surface through Dash's `relayoutData`/`restyleData` props at
-# all (confirmed directly: a "restyle"-method button, e.g. "Distribution
-# medians:", fires a raw `plotly_restyle` DOM event but no `plotly_relayout`;
-# an "update"-method button, e.g. "Units:", fires NEITHER -- only a raw
-# `plotly_buttonclicked` event, which Dash's dcc.Graph doesn't expose as a
-# prop at all). `plotly_buttonclicked` is the one event that reliably fires
-# for every updatemenu click regardless of its `method`, so this attaches a
-# listener for it directly via `dash_clientside.set_props` (Dash's escape
-# hatch for pushing a prop update from an arbitrary DOM/JS event, since
-# there's no Dash-native Input to bind to here) -- alongside a
-# `plotly_relayout` listener doing the same for axis zoom/pan, so both kinds
-# of view state funnel through the one mechanism/store.
-#
-# Fires once at mount (Input("rate-comparison-graph", "id") never changes
-# again) to attach the listeners, and again on every subsequent store
-# update (Input("rate-comparison-graph", "data")) purely to keep the
-# closure's view of "the current state to merge into" fresh -- see the
-# `gd.__viewState` comment inline. Output("_clientside_noop", "title") is
-# an unused dummy target -- all of this function's real effects are
-# dash_clientside.set_props side effects, not its return value.
-app.clientside_callback(
-    """
-    function(_graphId, storeData) {
-        // State lives on `window`, NOT as an expando property on the graph
-        // div -- React replaces that div with a new node shortly after its
-        // very first mount (confirmed directly: a `gd` reference captured
-        // at this callback's first firing no longer `===` a fresh
-        // document.getElementById lookup moments later), which would
-        // silently orphan anything stashed on the original node.
-        window.__rcView = window.__rcView || {bound: false, state: {}};
-        window.__rcView.state = storeData || {};
-        if (window.__rcView.bound) { return window.dash_clientside.no_update; }
-
-        // -1/362.5 = gt2mmSLE in app.py (Gt -> mm sea-level-equivalent,
-        // sign-flipped since losing ice raises sea level) -- duplicated
-        // here because the "Sea level rise" units mode's tick labels need
-        // to be recomputed for whatever range the user just zoomed to
-        // (Plotly's own "auto" tickmode already redraws fine on zoom, but
-        // that only applies to the DATA's native Gt/yr values; these ticks
-        // are custom-labeled in a different, rescaled unit, so nothing
-        // recomputes them automatically -- confirmed directly: zooming
-        // into a narrow range in "Sea level rise" mode left ZERO ticks
-        // visible, vs. 9 in "Mass change" mode over the identical range).
-        // Keep in sync with app.py's gt2cmSLE/gt2mmSLE if that ever changes.
-        var GT_TO_MM_SLE = -1 / 362.5;
-
-        // JS port of _nice_sle_ticks (see plot_interactive_rate_comparison) --
-        // picks ~targetTicks "nice" (1/2/5 x 10^n) round SLE values spanning
-        // gtRange, returning where those values fall on the (unmoved) Gt/yr
-        // axis plus their display text.
-        function niceSleTicks(gtRange, targetTicks) {
-            var a = gtRange[0] * GT_TO_MM_SLE, b = gtRange[1] * GT_TO_MM_SLE;
-            var lo = Math.min(a, b), hi = Math.max(a, b);
-            var span = hi - lo;
-            if (!(span > 0)) { return {tickvals: [], ticktext: []}; }
-            var rawStep = span / targetTicks;
-            var magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-            var step = 10 * magnitude;
-            [1, 2, 5, 10].some(function(m) {
-                if (rawStep <= m * magnitude) { step = m * magnitude; return true; }
-                return false;
-            });
-            var start = Math.ceil(lo / step) * step;
-            var values = [];
-            for (var v = start; v <= hi + step * 1e-6; v += step) {
-                values.push(Math.round(v / step) * step);
-            }
-            return {
-                tickvals: values.map(function(v) { return v / GT_TO_MM_SLE; }),
-                ticktext: values.map(function(v) { return String(Math.round(v * 1e8) / 1e8); }),
-            };
-        }
-
-        // Recomputes and applies "Sea level rise" mode's custom tick labels
-        // for `axes` against THEIR CURRENT range (not the figure's original
-        // default range those ticks were last computed for) -- shared by
-        // both call sites that can leave stale, wrong-range ticks in place:
-        // zooming/panning/resetting while already in SLE mode (relayout
-        // handler below), and switching TO SLE mode while already zoomed
-        // (buttonclicked handler below -- that button's own baked-in args
-        // only know the figure's original default range, computed at
-        // server build time, not whatever the user has since zoomed to).
-        function retickSleAxes(plotDiv, axes) {
-            var tickUpdate = {};
-            axes.forEach(function(axis) {
-                var ticks = niceSleTicks(plotDiv._fullLayout[axis].range, 6);
-                tickUpdate[axis + '.tickmode'] = 'array';
-                tickUpdate[axis + '.tickvals'] = ticks.tickvals;
-                tickUpdate[axis + '.ticktext'] = ticks.ticktext;
-            });
-            // TWO SEPARATE, SEQUENTIAL Plotly.relayout calls -- confirmed
-            // directly that a single COMBINED call (ticks + updatemenus
-            // together) is unsafe in both directions:
-            //  - Include updatemenus[2].active (Units:) in that same call:
-            //    Plotly doesn't just mark it selected, it RE-RUNS that
-            //    button's own baked-in `args` -- the "Sea level rise"
-            //    button's OWN tickvals/ticktext for the figure's original
-            //    full-range default -- silently overwriting the ticks this
-            //    function just computed for the current zoom (caught
-            //    directly: reverted to the un-zoomed default's -5/0/5/10
-            //    immediately after).
-            //  - Omit it: a button click only updates Plotly's internal
-            //    `_fullLayout`, never writing back into the "source"
-            //    `plotDiv.layout.updatemenus[i].active` the button
-            //    definitions actually live on -- so this relayout call (for
-            //    the unrelated tick properties) triggers a full
-            //    supplyDefaults recompute that re-derives `_fullLayout` from
-            //    that stale "source" layout, silently reverting Units: (and
-            //    Group by:/Distribution medians:, if also omitted) back to
-            //    their hardcoded server defaults.
-            // Splitting it into a ticks-only call, awaited, THEN a bare
-            // active-indices-only call (confirmed directly this ordering
-            // does NOT re-trigger any button's args -- unlike a combined
-            // call, an active-only relayout leaves tickvals/tickmode alone)
-            // gets both right: correct ticks AND correct active state --
-            // for a SINGLE retickSleAxes call in isolation. But this
-            // function can be invoked twice in close succession (e.g. the
-            // Units: click itself triggers one call, then the user zooms a
-            // moment later before that first call's pair has settled,
-            // triggering a second, overlapping call) -- confirmed directly
-            // that two such pairs CAN interleave (the second pair's
-            // tick-only call landing, then the FIRST pair's now-late
-            // active-only call still firing afterward, whose supplyDefaults
-            // recompute reverts the second pair's just-applied ticks back to
-            // the first pair's stale values). Queuing every pair onto one
-            // shared promise chain forces each pair to fully finish (both
-            // calls) before the next one starts, regardless of how close
-            // together the triggering events are.
-            //
-            // The Promise a Plotly.relayout call returns also resolves
-            // BEFORE Plotly's own internal redraw from that call has fully
-            // settled -- confirmed directly that firing the active-only
-            // call immediately in that promise's .then() (a ~10ms gap)
-            // leaves `active` reverted to 0 despite the call completing
-            // with no error, while inserting an animation-frame + macrotask
-            // gap first (letting that redraw actually finish) makes the
-            // exact same active-only call stick every time.
-            function nextTick() {
-                return new Promise(function(resolve) {
-                    requestAnimationFrame(function() { setTimeout(resolve, 0); });
-                });
-            }
-            // A FOURTH, separate hazard from Dash's own dcc.Graph wrapper
-            // (not Plotly.js itself): it binds its own 'plotly_relayout'
-            // listener (before ours, at componentDidMount) that reacts to
-            // EVERY relayout event -- including ones OUR OWN calls below
-            // trigger, not just the user's zoom -- by cloning the live
-            // `plotDiv.layout[topLevelKey]` (e.g. the whole `xaxis` object)
-            // into its OWN internally-tracked `figure` prop, then
-            // (re-)calling `Plotly.react(plotDiv, thatFigure)` once React
-            // gets around to it. That react() call is queued behind Dash's
-            // own async setProps/render pipeline and confirmed directly to
-            // sometimes land TENS of ms later -- late enough to fire WHILE
-            // our own tickUpdate relayout call below is still internally
-            // in flight (its returned promise hadn't even resolved yet),
-            // clobbering `plotDiv.layout.xaxis` back to whatever STALE
-            // pre-correction ticks Dash had captured when the user's zoom
-            // first fired its own relayout event, moments before ours.
-            // Since that stale react() call can interleave in the middle
-            // of our OWN relayout's internal processing, even OUR call's
-            // own completion is not trustworthy -- confirmed directly the
-            // ticks can be back to stale again by the time our call's own
-            // event fires. There is no reliable hook to wait on (Dash's
-            // internal queue isn't exposed), so this re-applies the SAME
-            // tick update and re-checks after a short real (setTimeout)
-            // delay -- not just an animation-frame tick -- retrying a
-            // bounded number of times until the live ticks actually match
-            // what was just requested, which converges once Dash's own
-            // stale-triggered react() call(s) have finished landing.
-            function settleDelay() {
-                return new Promise(function(resolve) { setTimeout(resolve, 120); });
-            }
-            function ticksSettled() {
-                return axes.every(function(axis) {
-                    var want = tickUpdate[axis + '.tickvals'];
-                    var got = (plotDiv._fullLayout[axis] || {}).tickvals;
-                    return Array.isArray(got) && got.length === want.length &&
-                        got.every(function(v, i) { return v === want[i]; });
-                });
-            }
-            function applyTicksUntilSettled(attemptsLeft) {
-                return window.Plotly.relayout(plotDiv, tickUpdate)
-                    .then(settleDelay)
-                    .then(function() {
-                        if (ticksSettled() || attemptsLeft <= 1) { return; }
-                        return applyTicksUntilSettled(attemptsLeft - 1);
-                    });
-            }
-            // Whether a menu's active index needs re-asserting is decided
-            // HERE -- AFTER the ticks-only call above has run and settled,
-            // not before it. Confirmed directly this ordering matters, not
-            // just the check's existence: right after a genuine button
-            // click, `_fullLayout.updatemenus[i].active` is ALREADY at its
-            // new value (Plotly's native click handling sets it
-            // immediately), so a check done BEFORE the ticks call sees no
-            // difference and skips the active call entirely -- but the
-            // ticks-only relayout's supplyDefaults recompute (see above)
-            // then silently reverts `_fullLayout` back down to the stale
-            // "source" `plotDiv.layout` value (never written by a native
-            // click, only by an explicit active-only relayout), leaving
-            // Units: stuck on the OLD selection with no correction ever
-            // fired. Checking after the ticks call (and its settle delay)
-            // sees that reverted value instead, correctly detects the now-
-            // real difference, and fires the correction.
-            // This same after-the-fact check also still protects the OTHER
-            // direction: on a later re-zoom while already in SLE mode (no
-            // button click involved), the ticks call's supplyDefaults
-            // recompute re-derives `_fullLayout.active` from `source`,
-            // which by then already holds the correct value (written by
-            // the PRIOR active-only call below) -- so this check correctly
-            // finds no difference and skips re-asserting active, avoiding
-            // the "same-value active re-set reverts ticks to a stale
-            // snapshot" side effect that motivated skipping no-op sets in
-            // the first place.
-            window.__rcView.relayoutQueue = (window.__rcView.relayoutQueue || Promise.resolve())
-                .then(function() { return applyTicksUntilSettled(3); })
-                .then(nextTick)
-                .then(function() {
-                    var activeUpdate = {};
-                    Object.keys(window.__rcView.state).forEach(function(key) {
-                        var m = key.match(/^updatemenus\\[(\\d+)\\]\\.active$/);
-                        if (!m) { return; }
-                        var menu = plotDiv._fullLayout.updatemenus[Number(m[1])];
-                        if (menu && menu.active !== window.__rcView.state[key]) {
-                            activeUpdate[key] = window.__rcView.state[key];
-                        }
-                    });
-                    if (Object.keys(activeUpdate).length > 0) {
-                        return window.Plotly.relayout(plotDiv, activeUpdate);
-                    }
-                });
-        }
-
-        function bind(plotDiv) {
-            window.__rcView.bound = true;
-
-            plotDiv.on('plotly_relayout', function(e) {
-                var state = Object.assign({}, window.__rcView.state);
-                var changed = false;
-                var xAxesZoomed = [];
-                function noteXAxis(axis) {
-                    if (axis.indexOf('xaxis') === 0 && xAxesZoomed.indexOf(axis) === -1) {
-                        xAxesZoomed.push(axis);
-                    }
-                }
-                Object.keys(e).forEach(function(key) {
-                    var m = key.match(/^(xaxis\\d*|yaxis\\d*)\\.autorange$/);
-                    if (m && e[key]) {
-                        // Double-click reset, form 1 (older Plotly.js/some
-                        // reset paths) -- forget the stored range so future
-                        // rebuilds go back to computing their own default
-                        // view, instead of freezing on whatever that
-                        // default happened to be at reset time.
-                        delete state[m[1] + '.range[0]'];
-                        delete state[m[1] + '.range[1]'];
-                        changed = true;
-                        noteXAxis(m[1]);
-                        return;
-                    }
-                    var rm = key.match(/^(xaxis\\d*|yaxis\\d*)\\.range\\[\\d\\]$/);
-                    if (rm) {
-                        // Box zoom/pan -- one event per endpoint.
-                        state[key] = e[key];
-                        changed = true;
-                        noteXAxis(rm[1]);
-                        return;
-                    }
-                    var pm = key.match(/^(xaxis\\d*|yaxis\\d*)\\.range$/);
-                    if (pm && Array.isArray(e[key]) && e[key].length === 2) {
-                        // Double-click reset, form 2 (confirmed the one
-                        // actually fired by this app's Plotly.js version) --
-                        // both endpoints as one whole-array value instead of
-                        // two separate bracketed keys.
-                        state[pm[1] + '.range[0]'] = e[key][0];
-                        state[pm[1] + '.range[1]'] = e[key][1];
-                        changed = true;
-                        noteXAxis(pm[1]);
-                    }
-                });
-                if (changed) {
-                    window.__rcView.state = state;
-                    window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
-                }
-
-                // Re-tick the "Sea level rise" units mode's custom labels
-                // for whichever x-axis just zoomed/panned/reset, so at
-                // least a handful of tick marks stay visible regardless of
-                // zoom level (matching "Mass change" mode's native
-                // auto-ticking) -- see GT_TO_MM_SLE's comment above.
-                var unitsMenu = (plotDiv._fullLayout.updatemenus || [])[2];
-                if (xAxesZoomed.length === 0 || !unitsMenu || unitsMenu.active !== 1) { return; }
-                retickSleAxes(plotDiv, xAxesZoomed);
-            });
-
-            plotDiv.on('plotly_buttonclicked', function(e) {
-                // e.menu is Plotly's own internal (merged/"_full") updatemenu
-                // object -- NOT the same object identity as anything in
-                // plotDiv.layout.updatemenus, so matching it via indexOf()
-                // against that array always fails (confirmed directly).
-                // e.menu._index is Plotly's own internal position for this
-                // exact menu and is what we actually need.
-                if (typeof e.menu._index !== 'number') { return; }
-                var state = Object.assign({}, window.__rcView.state);
-                state['updatemenus[' + e.menu._index + '].active'] = e.active;
-                window.__rcView.state = state;
-                window.dash_clientside.set_props('rate-comparison-view-state', {data: state});
-
-                // Menu index 2 is "Units:"; button index 1 is "Sea level
-                // rise". That button's own baked-in tickvals/ticktext (just
-                // applied natively by this same click, before this handler
-                // runs) were computed for the figure's ORIGINAL default
-                // range at server-build time -- if an x-axis is currently
-                // zoomed, those ticks are mostly/entirely off-screen (the
-                // same root cause as the zoom-triggered fix in the
-                // `plotly_relayout` handler below, hit from the other
-                // direction: this time the RANGE didn't change, the UNITS
-                // did). Recompute for whatever's currently zoomed instead.
-                if (e.menu._index === 2 && e.active === 1) {
-                    var xAxes = Object.keys(plotDiv._fullLayout).filter(function(k) {
-                        return /^xaxis\\d*$/.test(k);
-                    });
-                    retickSleAxes(plotDiv, xAxes);
-                }
-            });
-        }
-
-        function findBindablePlotDiv() {
-            var gd = document.getElementById('rate-comparison-graph');
-            var pd = gd ? gd.querySelector('.js-plotly-plot') : null;
-            return (pd && pd.on) ? pd : null;
-        }
-
-        var plotDiv = findBindablePlotDiv();
-        if (plotDiv) {
-            bind(plotDiv);
-        } else {
-            // First mount can beat Plotly's own async initial render (and
-            // that first graph div itself gets replaced shortly after) --
-            // poll with a FRESH lookup each tick rather than giving up or
-            // reusing a possibly-already-stale reference.
-            var tries = 0;
-            var timer = setInterval(function() {
-                tries++;
-                var pd = findBindablePlotDiv();
-                if (pd) {
-                    clearInterval(timer);
-                    bind(pd);
-                } else if (tries > 40) {
-                    clearInterval(timer);
-                }
-            }, 100);
-        }
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output("_clientside_noop", "title"),
-    Input("rate-comparison-graph", "id"),
-    Input("rate-comparison-view-state", "data"),
-)
-
-
-def _apply_view_state(fig, view_state):
-    """Re-applies the zoom/pan and updatemenu selections the clientside
-    callback above tracked onto a freshly-built figure, so a year-window/
-    checklist-driven rebuild resumes from the user's current view instead
-    of plot_interactive_rate_comparison's own hardcoded defaults (autorange
-    axes, active=0/1 dropdowns) -- see that callback's module comment for
-    why this can't just rely on `uirevision`.
-
-    Axis ranges are a direct property set. Updatemenu selections need more
-    than just setting `active` -- that only changes which button LOOKS
-    selected, since Plotly only actually applies a button's `args` when the
-    user clicks it. _replay_button_args re-executes the stored button's own
-    args against this SAME freshly-built `fig` (which already has correct,
-    current-rebuild trace counts/text/visibility baked into each button's
-    own args -- e.g. Group by's `visible` list length matches however many
-    traces THIS rebuild has, whatever `extra_sources` are currently
-    checked), so there's no risk of stale indices from a differently-shaped
-    earlier figure. A final pass re-ticks Sea-level-rise mode's x-axes for
-    whatever zoomed range just got re-applied -- see the inline comment
-    below for why the button replay alone isn't enough for that.
-    """
-    if not view_state:
-        return
-    axes = {
-        m.group(1) for key in view_state
-        if (m := re.match(r"^(xaxis\d*|yaxis\d*)\.range\[\d\]$", key))
-    }
-    for axis in axes:
-        lo_key, hi_key = f"{axis}.range[0]", f"{axis}.range[1]"
-        if lo_key in view_state and hi_key in view_state:
-            fig.layout[axis].range = [view_state[lo_key], view_state[hi_key]]
-            fig.layout[axis].autorange = False
-    for key, active_idx in view_state.items():
-        m = re.match(r"^updatemenus\[(\d+)\]\.active$", key)
-        if not m:
-            continue
-        menu = fig.layout.updatemenus[int(m.group(1))]
-        if active_idx is None or active_idx >= len(menu.buttons):
-            continue  # stale index from an incompatible earlier menu definition
-        menu.active = active_idx
-        button = menu.buttons[active_idx]
-        _replay_button_args(fig, button.method, button.args)
-
-    # If Units: Sea level rise ended up selected, the button replay above
-    # just set every x-axis's tickvals/ticktext to "nice" ticks for the
-    # figure's FULL default range (baked into that button's own args at
-    # build time) -- if a zoomed range is ALSO being re-applied from
-    # view_state, redo that tick computation for the ZOOMED range instead,
-    # or the ticks would revert to (mostly off-screen) full-range values
-    # the instant a year-window/checklist rebuild happens while zoomed in
-    # in Sea-level-rise mode, until the user next touches zoom (the
-    # clientside callback above fixes this same problem for live zoom/pan,
-    # but a fresh server-rebuilt figure needs its own copy of the fix).
-    units_menu = fig.layout.updatemenus[2] if len(fig.layout.updatemenus) > 2 else None
-    if units_menu is not None and units_menu.active == 1:
-        for axis in axes:
-            if not axis.startswith("xaxis"):
-                continue
-            tickvals, ticktext = _nice_sle_ticks(fig.layout[axis].range, gt2mmSLE)
-            fig.layout[axis].tickmode = "array"
-            fig.layout[axis].tickvals = tickvals
-            fig.layout[axis].ticktext = ticktext
-
-
-def _replay_button_args(fig, method, args):
-    """Executes one updatemenu button's own `args` directly against `fig`,
-    the same effect Plotly applies internally when a user clicks that
-    button -- see _apply_view_state above for why this replay is needed
-    (setting `updatemenus[i].active` alone doesn't trigger it)."""
-    data_update = args[0] if len(args) > 0 and args[0] else {}
-    if method == "restyle":
-        trace_idx = args[1] if len(args) > 1 else list(range(len(fig.data)))
-        for attr, values in data_update.items():
-            per_trace = isinstance(values, (list, tuple)) and len(values) == len(trace_idx)
-            for pos, ti in enumerate(trace_idx):
-                setattr(fig.data[ti], attr, values[pos] if per_trace else values)
-    elif method == "update":
-        # This app's own "Units:" buttons are the only "update"-method
-        # buttons -- their data_update lists (mass_text_all/sle_text_all
-        # etc.) are already one entry per trace, covering every trace with
-        # no separate index list (see plot_interactive_rate_comparison).
-        for attr, values in data_update.items():
-            for ti, tr in enumerate(fig.data):
-                setattr(tr, attr, values[ti])
-        layout_update = args[1] if len(args) > 1 and args[1] else {}
-        for dotted_key, value in layout_update.items():
-            _set_dotted_layout_key(fig.layout, dotted_key, value)
-
-
-def _set_dotted_layout_key(layout, dotted_key, value):
-    """Applies one Plotly-style dotted/bracketed layout key (as used in
-    updatemenu button args, e.g. "xaxis.title.text" or
-    "annotations[2].text") to a go.Layout object via attribute access."""
-    parts = re.split(r"\.(?![^\[]*\])", dotted_key)  # split on '.' not inside [...]
-    obj = layout
-    for part in parts[:-1]:
-        m = re.match(r"^(\w+)\[(\d+)\]$", part)
-        obj = getattr(obj, m.group(1))[int(m.group(2))] if m else getattr(obj, part)
-    last = parts[-1]
-    m = re.match(r"^(\w+)\[(\d+)\]$", last)
-    if m:
-        getattr(obj, m.group(1))[int(m.group(2))] = value
-    else:
-        setattr(obj, last, value)
-
-
-@app.callback(
-    Output("rate-comparison-graph", "figure"),
-    Output("year-range-slider", "value"),
-    Output("loading-trigger", "children"),
-    Input("year-range-slider", "value"),
-    Input("data-sources-checklist", "value"),
-    State("rate-comparison-view-state", "data"),
-)
-def _update_figure(year_range, checked_sources, view_state):
-    """Rebuilds the figure for the selected (year_start, year_end) and the
-    currently-checked "Simulation studies:" checkboxes, enforcing a minimum
-    MIN_YEAR_SPAN-year window.
-
-    Unlike the "Units:"/"Group by:"/"Distribution medians:" dropdowns (pure
-    client-side Plotly updatemenus toggling pre-built traces), the KDEs,
-    jitter, medians, and IMBIE slope all depend on year_start/year_end, so
-    this still reruns plot_interactive_rate_comparison on the server on
-    every change -- mirroring the notebook's ipywidgets.IntRangeSlider
-    callback -- but the per-simulation rates it needs are a ROWS_CACHE
-    lookup (precomputed for every valid window at startup) rather than a
-    fresh scipy/pandas computation, so only the Plotly trace-building itself
-    still happens per request.
-
-    An unchecked checkbox drops that source before the figure is even built
-    (the checklist is the ONLY on/off control for a source -- there is no
-    longer an in-figure dropdown duplicating this), so an unchecked paper's
-    traces and legend entry disappear entirely rather than just being
-    hidden. Each of EXTRA_SOURCES' own labels filters that list;
-    ISMIP6_AIS_LABEL/ISMIP6_GIS_LABEL each gate one whole
-    precomputed_rows["AIS"/"GIS"] entry -- since that's a plain list lookup
-    (already computed in ROWS_CACHE at startup), swapping it for [] is free
-    and skips that panel's entire ISMIP6 contribution inside
-    plot_interactive_rate_comparison (its merged population is simply
-    whatever extra_sources rows remain, same as an ISMIP6-only panel with
-    no extra_sources checked at all).
-
-    If the span is too narrow, the window is widened (growing from its
-    center, then clamped to [YEAR_MIN, YEAR_MAX]) and the corrected value is
-    written back to the slider via the second Output, which re-triggers this
-    same callback once more with a valid span -- so an invalid, too-narrow
-    window is never rendered.
-
-    The third Output (loading-trigger.children) carries no information of
-    its own -- it exists purely so the dcc.Loading wrapping that div (see
-    app.layout) shows its spinner for exactly the duration of this callback,
-    the standard dcc.Loading(children=...) pattern.
-
-    `view_state` (rate-comparison-view-state's Store data, tracked by the
-    clientside callback above) is re-applied via _apply_view_state after the
-    fresh figure is built, so the user's current zoom/pan and Units:/Group
-    by:/Distribution medians: selections survive this rebuild instead of
-    resetting to this function's own defaults.
-    """
+def clamp_window(year_range):
+    """Widen a too-narrow window around its center, kept inside the slider range."""
     lo, hi = year_range
-    if hi - lo < MIN_YEAR_SPAN:
-        center = (lo + hi) / 2
-        lo, hi = center - MIN_YEAR_SPAN / 2, center + MIN_YEAR_SPAN / 2
-        lo = max(YEAR_MIN, lo)
-        hi = min(YEAR_MAX, hi)
-        if hi - lo < MIN_YEAR_SPAN:
-            lo = max(YEAR_MIN, hi - MIN_YEAR_SPAN)
-            hi = min(YEAR_MAX, lo + MIN_YEAR_SPAN)
-        lo, hi = round(lo), round(hi)
-
-    checked = set(checked_sources or [])
-    active_extra_sources = [src for src in EXTRA_SOURCES if src["label"] in checked]
-    rows_for_window = ROWS_CACHE[(lo, hi)]
-    active_rows = {
-        "AIS": rows_for_window["AIS"] if ISMIP6_AIS_LABEL in checked else [],
-        "GIS": rows_for_window["GIS"] if ISMIP6_GIS_LABEL in checked else [],
-    }
-
-    fig = plot_interactive_rate_comparison(
-        simulated=ismip6, observed=imbie, year_start=lo, year_end=hi,
-        show_title=False, show_subtitle=False, extra_sources=active_extra_sources,
-        precomputed_dim_color_maps=DIM_COLOR_MAPS, precomputed_rows=active_rows,
-    )
-    _apply_view_state(fig, view_state)
-    # The third return value is meaningless on its own -- its only purpose is
-    # being this callback's Output("loading-trigger", "children"), which is
-    # what makes the dcc.Loading wrapping that div show its spinner for the
-    # duration of this callback (see app.layout).
-    return fig, [lo, hi], ""
+    if hi - lo >= MIN_YEAR_SPAN:
+        return int(lo), int(hi)
+    center = (lo + hi) / 2
+    lo = max(YEAR_MIN, min(round(center - MIN_YEAR_SPAN / 2), YEAR_MAX - MIN_YEAR_SPAN))
+    return int(lo), int(lo + MIN_YEAR_SPAN)
 
 
-server = app.server  # WSGI entry point, e.g. `gunicorn app:server`
+def _dim(value):
+    return None if value in (None, "all") else value
+
+
+# ── layout ────────────────────────────────────────────────────────────────
+
+def control(label, child, hint=None):
+    return html.Div(className="control", children=[
+        html.Div(label, className="control-label"),
+        child,
+        html.Div(hint, className="control-hint") if hint else None,
+    ])
+
+
+def section(sid, title, lede, children):
+    return html.Section(id=sid, className="card", children=[
+        html.H2(title), html.P(lede, className="lede"), *children,
+    ])
+
+
+def graph(gid, height):
+    return dcc.Loading(type="dot", color="#0b63b6", children=dcc.Graph(
+        id=gid, config={"displaylogo": False, "responsive": True}, style={"height": f"{height}px"}))
+
+
+sidebar = html.Aside(className="sidebar", children=[
+    html.Div(className="brand", children=[
+        html.Div("Ice Sheet", className="brand-top"),
+        html.Div("Simulation Explorer", className="brand-bottom"),
+    ]),
+    control("Averaging window", html.Div([
+        dcc.RangeSlider(id="years", min=YEAR_MIN, max=YEAR_MAX, step=1, value=YEAR_DEFAULT, allowCross=False,
+                        marks={y: str(y) for y in (2000, 2005, 2010, 2015, 2020)},
+                        tooltip={"placement": "bottom"}),
+        html.Div(id="years-readout", className="readout"),
+    ]), "Rates and bias are averaged over this window; time series are zeroed at its start."),
+    control("Simulation studies", dcc.Checklist(
+        id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
+        options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
+                  "value": s} for s in SOURCE_LABELS])),
+    control("Group by", dcc.Dropdown(
+        id="groupby", clearable=False, searchable=False, value="all",
+        options=[{"label": label, "value": key or "all"} for key, label in GROUP_DIMENSIONS])),
+    control("Units", dcc.RadioItems(
+        id="units", className="segmented", value="gt", inline=True,
+        options=[{"label": "Mass change", "value": "gt"}, {"label": "Sea level", "value": "sle"}])),
+    control("Display", dcc.Checklist(
+        id="medians", className="toggle", value=["on"], options=[{"label": "Show medians", "value": "on"}])),
+    html.Div(className="sidebar-foot", children=[
+        html.P(["Observations: IMBIE3, ", html.A("Otosaka et al. (2026)", href="https://doi.org/10.1038/s41597-026-08088-0",
+                                                 target="_blank"), "."]),
+        html.P("Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and other published ensembles. "
+               "Large ensembles are weighted so each study counts about as much as one ISMIP6 institution."),
+    ]),
+])
+
+main = html.Main(className="content", children=[
+    html.Header(className="page-header", children=[
+        html.H1("How well do ice sheet simulations match observed mass loss?"),
+        html.P("Compare simulated rates of ice sheet mass change with satellite observations, see how "
+               "simulations evolve through time and by 2100, and explore which modeling choices drive "
+               "the differences. Hover for details; drag to zoom; double-click to reset.",
+               className="lede"),
+    ]),
+    section("rates", "Rates of mass change",
+            "Distribution of each simulation's average rate over the window, against the observed IMBIE rate. "
+            "Each dot is one simulation; curves are weighted density estimates; triangles mark medians.",
+            [graph("rates-graph", 760)]),
+    section("timeseries", "Mass change through time",
+            "Median (line) and 5–95% range (band) of simulated cumulative change, zeroed at the start of the "
+            "averaging window (shaded), against IMBIE observations.",
+            [graph("ts-graph", 460),
+             html.H3("Mass change by 2100"),
+             html.P("Change from 2015 to 2100 for each group (box: 25–75%; whiskers: 5–95%; line: median).",
+                    className="lede"),
+             graph("y2100-graph", 440),
+             html.Div(id="y2100-note", className="note")]),
+    section("bias", "What drives bias?",
+            "Bias is each simulation's rate minus the observed rate over the averaging window. The table shows "
+            "how much of the spread in bias each modeling characteristic explains (weighted ANOVA).",
+            [html.Div(className="bias-toolbar", children=[
+                dcc.RadioItems(id="bias-scope", className="segmented", value="AIS", inline=True,
+                               options=[{"label": "Antarctica", "value": "AIS"},
+                                        {"label": "Greenland", "value": "GIS"},
+                                        {"label": "Both (per unit area)", "value": "both"}]),
+             ]),
+             html.Div(id="bias-summary", className="summary"),
+             dcc.Loading(type="dot", color="#0b63b6", children=html.Div(id="anova-table")),
+             html.Div(className="two-col", children=[
+                 html.Div([html.H3(id="bias-box-title"), graph("bias-graph", 430)]),
+                 html.Div([html.H3(id="enrich-title"),
+                           html.P("Share of each category among the best-matching simulations vs. among all "
+                                  "selected simulations. Green bars longer than gray = over-represented "
+                                  "among low-bias runs.", className="lede"),
+                           graph("enrich-graph", 380)]),
+             ])]),
+])
+
+app = dash.Dash(__name__, title="Ice Sheet Simulation Explorer", external_stylesheets=[
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"])
+app.layout = html.Div(className="page", children=[sidebar, main])
+server = app.server
+
+
+# ── callbacks ─────────────────────────────────────────────────────────────
+
+@app.callback(Output("years", "value"), Output("years-readout", "children"), Input("years", "value"))
+def _years(value):
+    lo, hi = clamp_window(value)
+    fixed = [lo, hi] if [lo, hi] != list(value) else no_update
+    return fixed, f"Jan {lo} – Dec {hi}"
+
+
+@app.callback(Output("rates-graph", "figure"),
+              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
+              Input("units", "value"), Input("medians", "value"))
+def _rates(years, sources, groupby, units, medians):
+    lo, hi = clamp_window(years)
+    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby), units, bool(medians))
+
+
+@app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
+              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"))
+def _timeseries(years, sources, groupby, units):
+    lo, hi = clamp_window(years)
+    valid = A.checked_mask(sources or [])
+    gaps = []
+    for pub in sorted(set(RUNS.loc[valid, "publication"])):
+        m = valid & (RUNS["publication"] == pub).to_numpy()
+        n_missing = int((~np.isfinite(A.CHANGE_2100[m])).sum())
+        if n_missing:
+            gaps.append(f"{n_missing} of {int(m.sum())} {pub} runs")
+    note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
+    return (F.timeseries_figure(valid, lo, hi, _dim(groupby), units),
+            F.change_2100_figure(valid, _dim(groupby), units), note)
+
+
+def _fmt_p(p):
+    if not np.isfinite(p):
+        return "—"
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+
+def _anova_table(one_way, combined):
+    terms = {t["characteristic"]: t for t in combined["terms"]}
+    head = html.Tr([html.Th("Characteristic"), html.Th("Variance explained alone"), html.Th("p"),
+                    html.Th("Unique effect with all others (F)"), html.Th("p")])
+    rows = []
+    for r in one_way:
+        t = terms.get(r["characteristic"])
+        if t is None:
+            joint = [html.Td("not in joint model", className="muted", colSpan=2)]
+        elif t["df"] == 0:
+            joint = [html.Td("confounded with others", className="muted", colSpan=2)]
+        else:
+            joint = [html.Td(f"{t['F']:.1f}"), html.Td(_fmt_p(t["p"]), className="sig" if t["p"] < 0.05 else "")]
+        rows.append(html.Tr([
+            html.Td(f"{DIM_LABEL[r['characteristic']]} ({r['n_categories']})"),
+            html.Td(html.Div(className="bar-cell", children=[
+                html.Div(className="bar", style={"width": f"{100 * r['r2']:.1f}%"}),
+                html.Span(f"{100 * r['r2']:.0f}%")])),
+            html.Td(_fmt_p(r["p"]), className="sig" if r["p"] < 0.05 else ""),
+            *joint]))
+    return html.Table(className="anova", children=[html.Thead(head), html.Tbody(rows)])
+
+
+@app.callback(Output("bias-summary", "children"), Output("anova-table", "children"),
+              Output("bias-graph", "figure"), Output("bias-box-title", "children"),
+              Output("enrich-graph", "figure"), Output("enrich-title", "children"),
+              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
+              Input("units", "value"), Input("bias-scope", "value"))
+def _bias(years, sources, groupby, units, scope):
+    lo, hi = clamp_window(years)
+    valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
+    both = scope == "both"
+    mask = valid & (np.isin(_ICE, ["AIS", "GIS"]) if both else _ICE == scope)
+    chars = list(ANOVA_CHARACTERISTICS)
+    if both:
+        # Only categories present for BOTH ice sheets can be compared; anything
+        # else would just re-encode which ice sheet a run belongs to.
+        shared = {c: set(RUNS.loc[mask & (_ICE == "AIS"), c]) & set(RUNS.loc[mask & (_ICE == "GIS"), c]) for c in chars}
+        chars = [c for c in chars if len(shared[c]) >= 2]
+        for c in chars:
+            mask &= RUNS[c].isin(shared[c]).to_numpy()
+        label = "mm/yr water equivalent"
+        b = A.bias(mask, lo, hi, area_normalized=True)
+    else:
+        f, label, _ = F.units_info(units)
+        b = A.bias(mask, lo, hi) * f
+    w = A.run_weights(mask)
+    empty = F.go.Figure(layout=dict(template=F.TEMPLATE))
+    if mask.sum() < 3:
+        msg = html.P("Not enough simulations selected for this comparison.", className="muted")
+        return msg, None, empty, "", empty, ""
+
+    one_way_chars = chars + (["publication"] if len(set(RUNS.loc[mask, "publication"])) >= 2 else [])
+    factors = {c: RUNS[c].to_numpy()[mask] for c in one_way_chars}
+    one_way, _ = A.anova(b[mask], w[mask], factors)
+    _, combined = A.anova(b[mask], w[mask], {c: factors[c] for c in chars})
+    if not one_way:
+        return html.P("No characteristic varies across the selected simulations.", className="muted"), None, \
+            empty, "", empty, ""
+
+    top = one_way[0]
+    summary = [html.Span("Strongest single factor: "), html.B(DIM_LABEL[top["characteristic"]]),
+               f" explains {100 * top['r2']:.0f}% of the spread in bias (p {_fmt_p(top['p'])})."]
+    if np.isfinite(combined["r2"]):
+        summary.append(f" Together the modeling characteristics explain {100 * combined['r2']:.0f}%.")
+    summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}.")
+
+    dim = _dim(groupby)
+    if dim is None or dim not in one_way_chars:
+        dim = top["characteristic"]
+    box = F.bias_figure(b, w, mask, dim, label)
+    rows, cut = A.low_bias_enrichment(b[mask], w[mask], RUNS[dim].to_numpy()[mask], LOW_BIAS_FRAC)
+    enrich = F.enrichment_figure(rows, dim, LOW_BIAS_FRAC)
+    return (summary, _anova_table(one_way, combined), box, f"Bias by {DIM_LABEL[dim].lower()}", enrich,
+            f"What do the best-matching runs share? (|bias| ≤ {cut:.3g} {label})")
+
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=8050)

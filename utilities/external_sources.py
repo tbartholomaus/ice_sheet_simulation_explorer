@@ -344,7 +344,7 @@ def _coulon2024_download_ssp585():
     )
 
 
-def load_coulon2024_ais():
+def load_coulon2024_ais(keep_through_year=None):
     """
     Loads Coulon et al. (2024)'s Antarctic/Kori-ULB 100-member ensemble as
     a dataframe shaped like ismip6_ais: Year, Cumulative ice sheet mass
@@ -392,7 +392,8 @@ def load_coulon2024_ais():
     with h5py.File(ssp585_path, "r") as f:
         ssp_time = np.array(f["time"]).squeeze()  # years 2015-3014
         ssp_slc = np.array(f["SLC_ensemble"])  # (n_years, 100) meters SLE, re-zeroed at 2015
-    keep = ssp_time <= SSP585_KEEP_THROUGH_YEAR
+    keep_through_year = SSP585_KEEP_THROUGH_YEAR if keep_through_year is None else keep_through_year
+    keep = ssp_time <= keep_through_year
     ssp_time, ssp_slc = ssp_time[keep], ssp_slc[keep]
 
     assert ssp_time[0] == hist_time[-1] + 1, (
@@ -884,14 +885,17 @@ def load_goelzer2025_gis():
 # this -- regenerate via the one-liners below if EDWARDS2021_KEEP_THROUGH_YEAR
 # or the n_samples choice ever changes):
 #   from utilities.external_sources import load_edwards2021_ais, load_edwards2021_gis
-#   load_edwards2021_ais(n_samples=50).to_csv(
+#   load_edwards2021_ais(keep_through_year=2100).to_csv(
 #       "dash_app/data/external_sources_edwards2021_ais.csv.gz", index=False, compression="gzip")
-#   load_edwards2021_gis(n_samples=50).to_csv(
+#   load_edwards2021_gis(keep_through_year=2100).to_csv(
 #       "dash_app/data/external_sources_edwards2021_gis.csv.gz", index=False, compression="gzip")
-# n_samples=50 (not the full 500) is load-bearing, not cosmetic -- see
-# _load_edwards2021()'s docstring for the real (PlotlyJSONEncoder-measured)
-# payload-size numbers that drove this choice, after the full-sample version
-# caused a production OOM crash.
+# On the `ui-redesign` branch the app bundles ALL 500 samples/scenario through
+# 2100: its figures send only one grouping per response and cap drawn dots per
+# study (dash_app/figures.py MAX_DRAWN_PER_STUDY), so the full sample no longer
+# blows up the response the way it did on main (see _load_edwards2021()'s
+# docstring), and n_samples=50 visibly distorted per-scenario 2100 medians
+# (up to 45% off the paper's own table vs. <=16% with all samples). The
+# `main` branch's app still uses n_samples=50, keep_through_year=2025.
 # ═════════════════════════════════════════════════════════════════════════
 
 EDWARDS2021_TIMESERIES_BASE = (
