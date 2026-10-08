@@ -879,7 +879,10 @@ def load_goelzer2025_gis():
 # "MAIN" (not the archive's alternate "S11_RISK", a risk-averse-Antarctica
 # sensitivity variant) is the paper's headline/default result -- the same
 # choice every other source in this module makes (use the paper's primary
-# result, not a named sensitivity test).
+# result, not a named sensitivity test). The risk-averse Antarctic variant
+# (results/proj_S11_RISK_TIMESERIES/, same file layout) is also available via
+# load_edwards2021_ais(variant="S11_RISK"), added at the user's request
+# (2026-10-08) so the app can show it beside MAIN.
 #
 # dash_app's bundled CSV derivation note (there is no checked-in script for
 # this -- regenerate via the one-liners below if EDWARDS2021_KEEP_THROUGH_YEAR
@@ -889,6 +892,8 @@ def load_goelzer2025_gis():
 #       "dash_app/data/external_sources_edwards2021_ais.csv.gz", index=False, compression="gzip")
 #   load_edwards2021_gis(keep_through_year=2100).to_csv(
 #       "dash_app/data/external_sources_edwards2021_gis.csv.gz", index=False, compression="gzip")
+#   load_edwards2021_ais(keep_through_year=2100, variant="S11_RISK").to_csv(
+#       "dash_app/data/external_sources_edwards2021_ais_risk.csv.gz", index=False, compression="gzip")
 # On the `ui-redesign` branch the app bundles ALL 500 samples/scenario through
 # 2100: its figures send only one grouping per response and cap drawn dots per
 # study (dash_app/figures.py MAX_DRAWN_PER_STUDY), so the full sample no longer
@@ -898,10 +903,13 @@ def load_goelzer2025_gis():
 # `main` branch's app still uses n_samples=50, keep_through_year=2025.
 # ═════════════════════════════════════════════════════════════════════════
 
-EDWARDS2021_TIMESERIES_BASE = (
-    "https://raw.githubusercontent.com/tamsinedwards/emulandice/master/"
-    "results/proj_MAIN_TIMESERIES/"
-)
+EDWARDS2021_RESULTS_BASE = "https://raw.githubusercontent.com/tamsinedwards/emulandice/master/results/"
+# variant -> protocol label. MAIN is the paper's headline result; S11_RISK is
+# its risk-averse Antarctic sensitivity test (Extended Data / Methods).
+EDWARDS2021_VARIANTS = {
+    "MAIN": "Main projections (Gaussian process emulator)",
+    "S11_RISK": "Risk-averse Antarctic projections (Gaussian process emulator)",
+}
 # scenario_key (matches the raw filename's suffix) -> display label (paper's
 # own SSP naming, Fig. 3/Table 1).
 EDWARDS2021_SCENARIO_FILES = {
@@ -915,18 +923,19 @@ EDWARDS2021_SCENARIO_FILES = {
 # max year is ever extended.
 EDWARDS2021_KEEP_THROUGH_YEAR = 2025
 EDWARDS2021_CLIMATE_MODEL_LABEL = "FAIR-forced GSAT (no discrete GCM)"
-EDWARDS2021_PROTOCOL_LABEL = "Main projections (Gaussian process emulator)"
 
 
-def _edwards2021_download_scenario(scenario_key):
-    """Downloads results/proj_MAIN_TIMESERIES/projections_FAIR_<scenario_key>.csv
+def _edwards2021_download_scenario(scenario_key, variant="MAIN"):
+    """Downloads results/proj_<variant>_TIMESERIES/projections_FAIR_<scenario_key>.csv
     (~45 MB) -- one row per (ice_source, region, year, sample), 500 samples/
     year, 2016-2100."""
-    url = f"{EDWARDS2021_TIMESERIES_BASE}projections_FAIR_{scenario_key}.csv"
-    return _download(url, f"edwards2021_projections_FAIR_{scenario_key}.csv", min_expected_bytes=10_000_000)
+    url = f"{EDWARDS2021_RESULTS_BASE}proj_{variant}_TIMESERIES/projections_FAIR_{scenario_key}.csv"
+    # MAIN keeps its original cache name so existing caches stay valid.
+    prefix = "edwards2021" if variant == "MAIN" else f"edwards2021_{variant}"
+    return _download(url, f"{prefix}_projections_FAIR_{scenario_key}.csv", min_expected_bytes=10_000_000)
 
 
-def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
+def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None, variant="MAIN"):
     """Loads Edwards et al. (2021)'s full Monte Carlo sample set for the
     given ice_source ("AIS" or "GrIS") across all 6 scenarios, as a
     dataframe shaped like ismip6_ais/ismip6_gis: Year, Cumulative ice sheet
@@ -939,14 +948,17 @@ def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
     EAIS + PEN region rows, the same 3 regions the paper's own Extended
     Data Table 3 sums to report its Antarctic total.
 
-    SLE is CUMULATIVE, in cm, rebased to 0 at 2016 -- converted to Gt via
+    SLE is CUMULATIVE, in cm, relative to 2015 (the ISMIP6 projection
+    start; the first row, 2016, is already one year of change -- the
+    archive's own summary_FAIR_*.csv gives a nonzero 2016 spread, e.g. GrIS
+    median 0.032 cm) -- converted to Gt via
     the same expression load_coulon2024_ais() uses (there: m SLE; here: cm
     SLE, so an extra /100 first), sign-flipped since rising SLE = ice loss
     = negative Gt. The absolute baseline doesn't matter -- like every other
     source in this module, only rate differences over a selected year
     window are ever computed from this (see load_aschwanden2022_gis()'s
-    docstring) -- but it does mean this source has no data before 2016, one
-    year later than IMBIE/ISMIP6's own 2015 baseline.
+    docstring) -- but it does mean this source has no row for its own 2015
+    zero point (dash_app/data.py fills it in as 0).
 
     `n_samples`: if given, keep only this many of the 500 samples per
     scenario (evenly spaced across sample ids 1-500, via np.linspace, so
@@ -994,7 +1006,7 @@ def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
     rows = []
     exp_meta_rows = []
     for scenario_key, scenario_label in EDWARDS2021_SCENARIO_FILES.items():
-        path = _edwards2021_download_scenario(scenario_key)
+        path = _edwards2021_download_scenario(scenario_key, variant)
         raw = pd.read_csv(path)
         raw = raw[raw["year"] <= keep_through_year]
         if n_samples is not None:
@@ -1021,7 +1033,7 @@ def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
         exp_meta_rows.append(pd.DataFrame({
             "Exp": exp.unique(),
             "climate_model": EDWARDS2021_CLIMATE_MODEL_LABEL,
-            "scenario": scenario_label, "protocol": EDWARDS2021_PROTOCOL_LABEL,
+            "scenario": scenario_label, "protocol": EDWARDS2021_VARIANTS[variant],
         }))
 
     df = pd.concat(rows, ignore_index=True)
@@ -1029,13 +1041,15 @@ def _load_edwards2021(ice_source, n_samples=None, keep_through_year=None):
     return df.merge(exp_meta_df, on="Exp", how="left")
 
 
-def load_edwards2021_ais(n_samples=None, keep_through_year=None):
+def load_edwards2021_ais(n_samples=None, keep_through_year=None, variant="MAIN"):
     """Loads Edwards et al. (2021)'s Antarctic full-sample projections (500
     Monte Carlo samples/scenario by default, or `n_samples` evenly-spaced
     of them -- see _load_edwards2021()'s docstring for why dash_app's own
     derivation script passes a smaller n_samples) x 6 SSP scenarios, through
-    `keep_through_year` (default 2025; pass 2100 for the full projection)."""
-    return _load_edwards2021("AIS", n_samples=n_samples, keep_through_year=keep_through_year)
+    `keep_through_year` (default 2025; pass 2100 for the full projection).
+    `variant`: "MAIN" (the paper's headline result) or "S11_RISK" (its
+    risk-averse Antarctic sensitivity test)."""
+    return _load_edwards2021("AIS", n_samples=n_samples, keep_through_year=keep_through_year, variant=variant)
 
 
 def load_edwards2021_gis(n_samples=None, keep_through_year=None):

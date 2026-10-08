@@ -136,6 +136,18 @@ a { color: var(--accent); }
   background: var(--accent); color: white; font-size: 11px; font-weight: 600; vertical-align: 1px;
 }
 
+.collapse-toggle { margin-top: 10px; }
+.warning {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  color: #b42318; background: #fef3f2; border: 1px solid #fda29b; font-weight: 500;
+}
+
+.page-footer {
+  margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line);
+  font-size: 13px; color: var(--muted);
+}
+.page-footer p { margin: 0 0 6px; }
+
 /* Dash dropdown polish */
 .Select-control { border-radius: 8px !important; border-color: var(--line) !important; }
 

@@ -266,11 +266,17 @@ aschwanden2022_gis = _read_csv("external_sources_aschwanden2022_gis.csv.gz")
 goelzer2025_gis = _read_csv("external_sources_goelzer2025_gis.csv.gz")
 edwards2021_ais = _read_csv("external_sources_edwards2021_ais.csv.gz")
 edwards2021_gis = _read_csv("external_sources_edwards2021_gis.csv.gz")
+# Risk-averse Antarctic variant (Edwards et al. 2021's S11_RISK sensitivity
+# test). Its sample ids repeat MAIN's, so prefix them: exp metadata is keyed
+# by (ice sheet, Exp), and the two variants must not overwrite each other.
+edwards2021_ais_risk = _read_csv("external_sources_edwards2021_ais_risk.csv.gz")
+edwards2021_ais_risk["Exp"] = "RISK_" + edwards2021_ais_risk["Exp"].astype(str)
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
 gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
+ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais_risk, []))
 gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
 EXTRA_SOURCES = [
@@ -285,13 +291,15 @@ EXTRA_SOURCES = [
     # both -- they render on separate AIS/GIS subplot panels, so there's no
     # legend collision (matching how every other source picks one color
     # regardless of panel).
-    {"label": "Edwards 2021 (AIS)", "df": edwards2021_ais, "color": "#e7298a"},
+    {"label": "Edwards 2021 (AIS Main)", "df": edwards2021_ais, "color": "#e7298a"},
+    {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#a6114f"},
     {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
 ]
 
 for _src, _is in [
     ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
-    ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS)", "AIS"), ("Edwards 2021 (GIS)", "GIS"),
+    ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS Main)", "AIS"),
+    ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"),
 ]:
     next(s for s in EXTRA_SOURCES if s["label"] == _src)["df"]["IS"] = _is
 
@@ -315,12 +323,29 @@ GROUP_DIMENSIONS = [
 ANOVA_CHARACTERISTICS = ["ice_model", "sliding_law", "initialization", "scenario", "climate_model"]
 DIM_LABEL = {k: v for k, v in GROUP_DIMENSIONS if k}
 
+# "Collapse RCPs and SSPs": each RCP pooled with the SSP of the same nominal
+# 2100 forcing (W/m^2). Not equivalent scenarios -- the app shows a warning
+# whenever this is on. Scenarios without a counterpart keep their names.
+SCENARIO_COMPOSITE = {
+    "SSP1-1.9": "composite 1.9",
+    "RCP2.6": "composite 2.6", "SSP1-2.6": "composite 2.6",
+    "RCP4.5": "composite 4.5", "SSP2-4.5": "composite 4.5",
+    "SSP3-7.0": "composite 7.0",
+    "RCP8.5": "composite 8.5", "SSP5-8.5": "composite 8.5",
+}
+COMPOSITE_DIM = "scenario_composite"
+DIM_LABEL[COMPOSITE_DIM] = "Climate scenario (RCP/SSP composite)"
+
 _FIXED_COLORS = {
     "initialization": {"Data assimilation": "#1a7f5e", "Spin-up": "#003466", "See paper": "#6a6a6a"},
     "scenario": {"RCP2.6": "#003466", "RCP4.5": "#b8860b", "RCP8.5": "#990002", "SSP1-2.6": "#1a7f5e",
                  "SSP2-4.5": "#8a6d3a", "SSP5-8.5": "#8b1a00", "SSP1-1.9": "#4daf4a", "SSP3-7.0": "#d95f02",
                  "NDC (current pledges)": "#7570b3", "Control": "#555555", "Unknown": "#888888"},
     "publication": SOURCE_COLOR,
+}
+_FIXED_COLORS[COMPOSITE_DIM] = {
+    **{k: v for k, v in _FIXED_COLORS["scenario"].items() if k not in SCENARIO_COMPOSITE},
+    **{c: _FIXED_COLORS["scenario"][ssp] for ssp, c in SCENARIO_COMPOSITE.items() if ssp.startswith("SSP")},
 }
 
 
@@ -390,6 +415,23 @@ def _build_runs():
 
 
 RUNS, RUN_YEARS, RUN_VALS, YEAR_GRID, CUM = _build_runs()
+RUNS[COMPOSITE_DIM] = RUNS["scenario"].map(lambda s: SCENARIO_COMPOSITE.get(s, s))
+
+
+def _edwards_baseline_2015():
+    """Edwards et al. (2021)'s emulandice series are cumulative change since
+    2015 (the ISMIP6 projection start) with the first output in 2016 -- the
+    archive's own results/proj_MAIN_TIMESERIES/summary_FAIR_*.csv gives a
+    nonzero 2016 spread (GrIS median 0.032 cm, 5-95 % -0.021 to 0.088 cm),
+    so 2016 is one year of change, not the zero point. Put each sample's
+    implied 2015 value (0) on the integer-year matrix so time series and the
+    2015->2100 change start from 2015 like IMBIE and ISMIP6. Rates still come
+    from RUN_VALS, i.e. the published years only."""
+    rows = RUNS["publication"].astype(str).str.startswith("Edwards 2021").to_numpy()
+    CUM[rows, proj_start - YEAR_GRID[0]] = 0.0
+
+
+_edwards_baseline_2015()
 
 # The run table/arrays above hold everything downstream needs -- drop the
 # source DataFrames so they don't sit in memory for the life of the worker
@@ -397,7 +439,7 @@ RUNS, RUN_YEARS, RUN_VALS, YEAR_GRID, CUM = _build_runs()
 for _s in EXTRA_SOURCES:
     _s["df"] = None
 del ismip6_ais, ismip6_gis, rahlves2025_gis, coulon2024_ais, aschwanden2022_gis, goelzer2025_gis
-del edwards2021_ais, edwards2021_gis
+del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis
 import gc  # noqa: E402
 gc.collect()
 IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()
@@ -406,9 +448,7 @@ IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()
 def _color_maps():
     palette = px.colors.qualitative.Dark24
     maps = {}
-    for key, _ in GROUP_DIMENSIONS:
-        if key is None:
-            continue
+    for key in [k for k, _ in GROUP_DIMENSIONS if k] + [COMPOSITE_DIM]:
         fixed = _FIXED_COLORS.get(key, {})
         cmap, i = {}, 0
         for cat in sorted(RUNS[key].unique()):

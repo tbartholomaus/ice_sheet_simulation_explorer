@@ -123,9 +123,9 @@ TS_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 def timeseries(valid, ice_sheet, dim, lo, hi):
     """Per category: years and weighted 5/25/50/75/95 % of cumulative change
     rebased to 0 at `lo`, over [lo - 6, hi + 6]. A run with no value at
-    `lo` but one at `lo + 1` (Edwards 2021 starts in 2016) is rebased there
-    instead -- the same one-year fallback change_2015_2100 uses; runs with
-    neither are left out."""
+    `lo` but one at `lo + 1` is rebased there instead -- the same one-year
+    fallback change_2015_2100 uses; runs with neither are left out. (Edwards
+    2021's implied 2015 zero is filled in by data.py, so it needs neither.)"""
     years = np.arange(lo - TS_PAD_YEARS, hi + TS_PAD_YEARS + 1)
     cols = years - YEAR_GRID[0]
     base = CUM[:, lo - YEAR_GRID[0]].copy()
@@ -172,8 +172,8 @@ END_YEAR = 2100
 
 def change_2015_2100():
     """Per-run change from 2015 to 2100 (Gt), NaN where unavailable.
-    Edwards 2021 starts in 2016 (its series is zeroed there), so a run
-    without a 2015 value falls back to 2016 as its baseline."""
+    A run without a 2015 value falls back to 2016 as its baseline (Edwards
+    2021's 2015 zero is filled in by data.py, so it uses 2015 directly)."""
     end = CUM[:, END_YEAR - YEAR_GRID[0]]
     base = CUM[:, proj_start - YEAR_GRID[0]].copy()
     fallback = CUM[:, proj_start + 1 - YEAR_GRID[0]]

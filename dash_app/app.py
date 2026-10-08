@@ -29,7 +29,7 @@ from dash import Input, Output, ctx, dcc, html, no_update  # noqa: E402
 import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, DEFAULT_OBS, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
@@ -62,8 +62,12 @@ def clamp_window(year_range, obs=DEFAULT_OBS):
 GROUP_OPTIONS = [{"label": label, "value": key or "all"} for key, label in GROUP_DIMENSIONS]
 
 
-def _dim(value):
-    return None if value in (None, "all") else value
+def _dim(value, collapse=False):
+    """Run-table column for a Group by value; with "Collapse RCPs and SSPs"
+    on, the scenario grouping uses the pooled composite column instead."""
+    if value in (None, "all"):
+        return None
+    return COMPOSITE_DIM if collapse and value == "scenario" else value
 
 
 # ── layout ────────────────────────────────────────────────────────────────
@@ -102,8 +106,14 @@ sidebar = html.Aside(className="sidebar", children=[
         id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
         options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
                   "value": s} for s in SOURCE_LABELS])),
-    control("Group by", dcc.Dropdown(
-        id="groupby", clearable=False, searchable=False, value="all", options=GROUP_OPTIONS)),
+    control("Group by", html.Div([
+        dcc.Dropdown(id="groupby", clearable=False, searchable=False, value="all", options=GROUP_OPTIONS),
+        dcc.Checklist(id="collapse", className="toggle collapse-toggle", value=[],
+                      options=[{"label": "Collapse RCPs and SSPs", "value": "on"}]),
+        html.Div("RCP and SSP climate scenarios are not equivalent and can differ by as much as 0.5 °C.",
+                 id="collapse-warning", className="warning", style={"display": "none"}),
+    ]), "Collapsing pools each RCP with the SSP of the same 2100 forcing (e.g. RCP8.5 + SSP5-8.5 = "
+        "“composite 8.5”) wherever climate scenarios are grouped or compared."),
     control("Units", dcc.RadioItems(
         id="units", className="segmented", value="gt", inline=True,
         options=[{"label": "Mass change", "value": "gt"}, {"label": "Sea level", "value": "sle"}])),
@@ -124,7 +134,7 @@ sidebar = html.Aside(className="sidebar", children=[
 
 main = html.Main(className="content", children=[
     html.Header(className="page-header", children=[
-        html.H1("How well do ice sheet simulations match observed mass loss?"),
+        html.H1("How do simulations of ice sheet mass loss compare with observations?"),
         html.P("Compare simulated rates of ice sheet mass change with satellite observations, see how "
                "simulations evolve through time and by 2100, and explore which modeling choices drive "
                "the differences. Hover for details; drag to zoom; double-click to reset.",
@@ -175,6 +185,13 @@ main = html.Main(className="content", children=[
                                   "among low-bias runs.", className="lede"),
                            graph("enrich-graph", 380)]),
              ])]),
+    html.Footer(className="page-footer", children=[
+        html.P("This web app was developed by Tim Bartholomaus at the University of Idaho, using claude ai."),
+        html.P(["You can explore the source code for the app and an accompanying jupyter notebook at ",
+                html.A("https://github.com/tbartholomaus/ice_sheet_simulation_explorer",
+                       href="https://github.com/tbartholomaus/ice_sheet_simulation_explorer", target="_blank"),
+                "."]),
+    ]),
 ])
 
 app = dash.Dash(__name__, title="Ice Sheet Simulation Explorer", external_stylesheets=[
@@ -195,16 +212,16 @@ def _years(value, obs):
 
 @app.callback(Output("rates-graph", "figure"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
-              Input("units", "value"), Input("medians", "value"), Input("obs", "value"))
-def _rates(years, sources, groupby, units, medians, obs):
+              Input("units", "value"), Input("medians", "value"), Input("obs", "value"), Input("collapse", "value"))
+def _rates(years, sources, groupby, units, medians, obs, collapse):
     lo, hi = clamp_window(years, obs)
-    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby), units, bool(medians), obs)
+    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby, bool(collapse)), units, bool(medians), obs)
 
 
 @app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
-              Input("obs", "value"))
-def _timeseries(years, sources, groupby, units, obs):
+              Input("obs", "value"), Input("collapse", "value"))
+def _timeseries(years, sources, groupby, units, obs, collapse):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or [])
     gaps = []
@@ -214,8 +231,8 @@ def _timeseries(years, sources, groupby, units, obs):
         if n_missing:
             gaps.append(f"{n_missing} of {int(m.sum())} {pub} runs")
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
-    return (F.timeseries_figure(valid, lo, hi, _dim(groupby), units, obs),
-            F.change_2100_figure(valid, _dim(groupby), units), note)
+    dim = _dim(groupby, bool(collapse))
+    return (F.timeseries_figure(valid, lo, hi, dim, units, obs), F.change_2100_figure(valid, dim, units), note)
 
 
 def _fmt_p(p):
@@ -254,7 +271,7 @@ def _anova_table(one_way, combined, shown=None):
 
 
 def _lower(label):
-    return label if label.isupper() else label.lower()  # keep "GCM"
+    return " ".join(w if w.isupper() else w.lower() for w in label.split())  # keep "GCM", "RCP/SSP"
 
 
 def _height(fig, default=300):
@@ -268,13 +285,14 @@ def _height(fig, default=300):
               # container has to grow with them or the rows get squashed.
               Output("bias-graph", "style"), Output("enrich-graph", "style"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
-              Input("units", "value"), Input("bias-scope", "value"), Input("obs", "value"))
-def _bias(years, sources, groupby, units, scope, obs):
+              Input("units", "value"), Input("bias-scope", "value"), Input("obs", "value"),
+              Input("collapse", "value"))
+def _bias(years, sources, groupby, units, scope, obs, collapse):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
     both = scope == "both"
     mask = valid & (np.isin(_ICE, ["AIS", "GIS"]) if both else _ICE == scope)
-    chars = list(ANOVA_CHARACTERISTICS)
+    chars = [COMPOSITE_DIM if collapse and c == "scenario" else c for c in ANOVA_CHARACTERISTICS]
     if both:
         # Only categories present for BOTH ice sheets can be compared; anything
         # else would just re-encode which ice sheet a run belongs to.
@@ -308,7 +326,7 @@ def _bias(years, sources, groupby, units, scope, obs):
         summary.append(f" Together the modeling characteristics explain {100 * combined['r2']:.0f}%.")
     summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}, against {OBS_PRODUCTS[obs]['label']}.")
 
-    dim, note = _dim(groupby), ""
+    dim, note = _dim(groupby, bool(collapse)), ""
     if dim is None or dim not in one_way_chars:
         if dim is None:
             note = "“All simulations” has no categories to compare, so the strongest factor is shown."
@@ -333,10 +351,16 @@ def _sync_groupby(sidebar, local, _clicks):
     if isinstance(src, dict):
         if not ctx.triggered[0]["value"]:  # table re-rendered, not clicked
             return no_update, no_update
-        return src["dim"], src["dim"]
+        dim = "scenario" if src["dim"] == COMPOSITE_DIM else src["dim"]
+        return dim, dim
     if src == "bias-groupby":
         return local, no_update
     return no_update, sidebar
+
+
+@app.callback(Output("collapse-warning", "style"), Input("collapse", "value"))
+def _collapse_warning(collapse):
+    return {"display": "block" if collapse else "none"}
 
 
 if __name__ == "__main__":
