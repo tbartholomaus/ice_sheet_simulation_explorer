@@ -222,3 +222,7 @@ __marimo__/
 *.png
 *.pdf
 v7_CMIP5_pub/
+
+# macOS
+.DS_Store
+__MACOSX/
