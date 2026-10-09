@@ -50,7 +50,11 @@ ensemble.
 
 Click **"+ Add your own ensemble"** in the sidebar to upload a CSV of your own simulations and see them
 beside the published ones. The first column is the year, and each other column is one simulation holding
-cumulative mass (or mass change) in Gt, with mass loss negative:
+cumulative **ice mass above flotation** (or its change) in Gt, with mass loss negative. Leave out changes in
+floating ice shelves: they don't change sea level, and IMBIE's observations of grounded ice don't see them.
+For ISMIP6-style output, use ice volume above flotation (`ivaf`) × your model's ice density, or `limaf`, not
+total ice volume or mass (`ivol`, `lim`, or summed `lithk`), which include ice shelves. Every study in the tool
+is compared this way:
 
 ```
 year,exp01,exp02,exp03

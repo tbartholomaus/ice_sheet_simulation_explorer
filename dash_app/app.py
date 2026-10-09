@@ -245,9 +245,17 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
     html.Div(className="modal", role="dialog", children=[
         html.H2("Add your own ensemble"),
         html.P(["Upload a CSV file whose ", html.B("first column is the year"), " and whose other columns are "
-                "your simulations, one per column, each holding ", html.B("cumulative mass (or mass change) in Gt"),
-                " (mass loss negative). The header row names the columns: ", html.Code("year"),
+                "your simulations, one per column, each holding ", html.B("cumulative ice mass above flotation (or "
+                "its change) in Gt"), " (mass loss negative). The header row names the columns: ", html.Code("year"),
                 ", then an experiment name or number for each simulation."], className="lede"),
+        html.Div(className="upload-callout", children=[
+            html.B("Use mass above flotation, not total ice mass. "),
+            "Changes in floating ice shelves don't change sea level and aren't seen by IMBIE's observations of "
+            "grounded ice, so they must be left out. For ISMIP6-style output, use ice volume above flotation "
+            "(", html.Code("ivaf"), ") × your model's ice density, or ", html.Code("limaf"), " directly; not ",
+            html.Code("ivol"), ", ", html.Code("lim"), " or summed ", html.Code("lithk"),
+            ", which include ice shelves. Every study in this tool is compared this way.",
+        ]),
         html.Pre(UPLOAD_EXAMPLE, className="example"),
         html.P(f"Annual or finer time steps are fine. Up to {U.MAX_RUNS:,} simulations and "
                f"{U.MAX_BYTES // 1_000_000} MB per file, and up to {U.MAX_ENSEMBLES} ensembles at once, each "

@@ -180,6 +180,11 @@ a { color: var(--accent); }
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   font-size: 12px; margin: 4px 0 8px; overflow-x: auto;
 }
+.upload-callout {
+  margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.45;
+  background: #fff8e6; border: 1px solid #f1d38a; color: var(--ink);
+}
+.upload-callout code { font-size: 12px; }
 .dropzone {
   margin-top: 14px; padding: 22px 12px; text-align: center; cursor: pointer; color: var(--muted);
   border: 2px dashed #c9d0da; border-radius: 10px; background: var(--bg);
