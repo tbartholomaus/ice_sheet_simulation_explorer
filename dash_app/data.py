@@ -202,7 +202,7 @@ ism_meta = {
     # ice-sheet model, so it has no sliding law/spin-up to report; labeled
     # honestly rather than borrowed from an unrelated model (see
     # utilities/external_sources.py for provenance/scope decisions).
-    ("Edwards2021", "emulandice"): {"ice_model": "emulandice (GP emulator of ISMIP6/GlacierMIP)",
+    ("Edwards2021", "emulandice"): {"ice_model": "emulandice",
                                      "sliding_law": "Not applicable (statistical emulator)",
                                      "initialization": "Not applicable (statistical emulator)"},
 }

@@ -148,6 +148,50 @@ a { color: var(--accent); }
 }
 .page-footer p { margin: 0 0 6px; }
 
+/* upload your own ensemble */
+.upload-button {
+  margin-top: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent);
+  font: inherit; font-size: 13px; font-weight: 600;
+}
+.upload-button:hover { background: #dbe8f7; }
+.user-chip { align-items: flex-start; margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.user-chip .swatch { margin: 4px 7px 0 21px; }
+.user-chip #user-chip-text { flex: 1; min-width: 0; }
+.user-remove { margin-left: 8px; font-size: 12px; font-weight: 500; flex: none; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center;
+  background: rgba(16, 24, 40, 0.45); padding: 16px;
+}
+.modal {
+  background: var(--card); border-radius: 14px; padding: 24px 26px 20px; width: min(560px, 100%);
+  max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: 0 20px 50px rgba(16, 24, 40, 0.25);
+}
+.modal h2 { font-size: 19px; margin: 0 0 8px; }
+.modal .example {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  font-size: 12px; margin: 4px 0 8px; overflow-x: auto;
+}
+.dropzone {
+  margin-top: 14px; padding: 22px 12px; text-align: center; cursor: pointer; color: var(--muted);
+  border: 2px dashed #c9d0da; border-radius: 10px; background: var(--bg);
+}
+.dropzone:hover { border-color: var(--accent); }
+.dropzone .link { color: var(--accent); font-weight: 600; text-decoration: underline; }
+.upload-status { margin-top: 10px; font-size: 13px; }
+.upload-status.ok { color: var(--good); font-weight: 600; }
+.upload-status.error { color: #b42318; font-weight: 600; }
+.step-label { margin: 16px 0 6px; }
+.text-input { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.button-primary, .button-secondary {
+  padding: 8px 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid transparent;
+}
+.button-primary { background: var(--accent); color: white; }
+.button-primary:disabled { background: #b8c4d3; cursor: not-allowed; }
+.button-secondary { background: var(--card); border-color: var(--line); color: var(--ink); }
+
 /* Dash dropdown polish */
 .Select-control { border-radius: 8px !important; border-color: var(--line) !important; }
 

@@ -24,12 +24,13 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 
 import numpy as np  # noqa: E402
 import dash  # noqa: E402
-from dash import Input, Output, ctx, dcc, html, no_update  # noqa: E402
+from dash import Input, Output, State, ctx, dcc, html, no_update  # noqa: E402
 
 import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
+import user_data as U  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
@@ -102,18 +103,27 @@ sidebar = html.Aside(className="sidebar", children=[
                         tooltip={"placement": "bottom"}),
         html.Div(id="years-readout", className="readout"),
     ]), "Rates and bias are averaged over this window; time series are zeroed at its start."),
-    control("Simulation studies", dcc.Checklist(
-        id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
-        options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
-                  "value": s} for s in SOURCE_LABELS])),
+    control("Simulation studies", html.Div([
+        dcc.Checklist(
+            id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
+            options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
+                      "value": s} for s in SOURCE_LABELS]),
+        html.Div(id="user-chip", className="user-chip", style={"display": "none"}, children=[
+            html.Span(className="swatch", style={"background": U.USER_COLOR}),
+            html.Span(id="user-chip-text"),
+            html.Button("Remove", id="user-remove", className="link-button user-remove", n_clicks=0),
+        ]),
+        html.Button("+ Add your own ensemble", id="upload-open", className="upload-button", n_clicks=0),
+    ])),
     control("Group by", html.Div([
         dcc.Dropdown(id="groupby", clearable=False, searchable=False, value="all", options=GROUP_OPTIONS),
         dcc.Checklist(id="collapse", className="toggle collapse-toggle", value=[],
                       options=[{"label": "Collapse RCPs and SSPs", "value": "on"}]),
-        html.Div("RCP and SSP climate scenarios are not equivalent and can differ by as much as 0.5 °C.",
+        html.Div("RCP and SSP climate scenarios are not equivalent and can differ in their GMST change at 2100 "
+                 "by as much as 0.5 °C.",
                  id="collapse-warning", className="warning", style={"display": "none"}),
-    ]), "Collapsing pools each RCP with the SSP of the same 2100 forcing (e.g. RCP8.5 + SSP5-8.5 = "
-        "“composite 8.5”) wherever climate scenarios are grouped or compared."),
+    ]), "Collapsing combines simulations run under similar RCP and SSP scenarios (e.g. RCP8.5 and SSP5-8.5 "
+        "become “composite 8.5”), setting aside differences in their climate trajectories."),
     control("Units", dcc.RadioItems(
         id="units", className="segmented", value="gt", inline=True,
         options=[{"label": "Mass change", "value": "gt"}, {"label": "Sea level", "value": "sle"}])),
@@ -196,7 +206,45 @@ main = html.Main(className="content", children=[
 
 app = dash.Dash(__name__, title="Ice Sheet Simulation Explorer", external_stylesheets=[
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"])
-app.layout = html.Div(className="page", children=[sidebar, main])
+UPLOAD_EXAMPLE = """year,exp01,exp02,exp03
+2015,0.0,0.0,0.0
+2016,-231.4,-198.7,-260.2
+2017,-455.0,-402.3,-512.8
+..."""
+
+upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"display": "none"}, children=[
+    html.Div(className="modal", role="dialog", children=[
+        html.H2("Add your own ensemble"),
+        html.P(["Upload a CSV file whose ", html.B("first column is the year"), " and whose other columns are "
+                "your simulations, one per column, each holding ", html.B("cumulative mass (or mass change) in Gt"),
+                " (mass loss negative). The header row names the columns: ", html.Code("year"),
+                ", then an experiment name or number for each simulation."], className="lede"),
+        html.Pre(UPLOAD_EXAMPLE, className="example"),
+        html.P(f"Annual or finer time steps are fine. Up to {U.MAX_RUNS:,} simulations and "
+               f"{U.MAX_BYTES // 1_000_000} MB. Your file stays in this browser tab; it isn't stored on the "
+               "server or shared with anyone.", className="note"),
+        dcc.Upload(id="upload-file", className="dropzone", accept=".csv,.txt,text/csv",
+                   children=html.Div(["Drag a CSV here, or ", html.Span("choose a file", className="link")])),
+        html.Div(id="upload-status", className="upload-status"),
+        html.Div(id="upload-step2", style={"display": "none"}, children=[
+            html.Div("Which ice sheet do these simulations represent?", className="control-label step-label"),
+            dcc.RadioItems(id="upload-ice", className="segmented", inline=True, value=None,
+                           options=[{"label": "Antarctica", "value": "AIS"}, {"label": "Greenland", "value": "GIS"}]),
+            html.Div("Name to show in legends", className="control-label step-label"),
+            dcc.Input(id="upload-name", type="text", value=U.DEFAULT_LABEL, maxLength=40, className="text-input"),
+        ]),
+        html.Div(className="modal-actions", children=[
+            html.Button("Cancel", id="upload-cancel", className="button-secondary", n_clicks=0),
+            html.Button("Add to plots", id="upload-add", className="button-primary", n_clicks=0, disabled=True),
+        ]),
+    ]),
+])
+
+app.layout = html.Div(className="page", children=[
+    sidebar, main, upload_modal,
+    dcc.Store(id="upload-pending"),                         # parsed, not yet confirmed
+    dcc.Store(id="user-data", storage_type="session"),      # confirmed upload (this tab only)
+])
 server = app.server
 
 
@@ -205,6 +253,10 @@ server = app.server
 @app.callback(Output("years", "value"), Output("years-readout", "children"), Output("years", "max"),
               Input("years", "value"), Input("obs", "value"))
 def _years(value, obs):
+    if ctx.triggered_id == "obs":
+        # Switching product: run the window up to the new product's last year
+        # (2023 for IMBIE3), rather than leaving it where IMBIE2 capped it.
+        value = [value[0], year_max(obs)]
     lo, hi = clamp_window(value, obs)
     fixed = [lo, hi] if [lo, hi] != list(value) else no_update
     return fixed, f"Jan {lo} – Dec {hi}", year_max(obs)
@@ -212,16 +264,19 @@ def _years(value, obs):
 
 @app.callback(Output("rates-graph", "figure"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
-              Input("units", "value"), Input("medians", "value"), Input("obs", "value"), Input("collapse", "value"))
-def _rates(years, sources, groupby, units, medians, obs, collapse):
+              Input("units", "value"), Input("medians", "value"), Input("obs", "value"), Input("collapse", "value"),
+              Input("user-data", "data"))
+def _rates(years, sources, groupby, units, medians, obs, collapse, user):
     lo, hi = clamp_window(years, obs)
-    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby, bool(collapse)), units, bool(medians), obs)
+    return F.rates_figure(A.checked_mask(sources or []), lo, hi, _dim(groupby, bool(collapse)), units, bool(medians),
+                          obs, U.from_store(user))
 
 
 @app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
+              Output("y2100-graph", "style"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
-              Input("obs", "value"), Input("collapse", "value"))
-def _timeseries(years, sources, groupby, units, obs, collapse):
+              Input("obs", "value"), Input("collapse", "value"), Input("user-data", "data"))
+def _timeseries(years, sources, groupby, units, obs, collapse, user):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or [])
     gaps = []
@@ -230,9 +285,15 @@ def _timeseries(years, sources, groupby, units, obs, collapse):
         n_missing = int((~np.isfinite(A.CHANGE_2100[m])).sum())
         if n_missing:
             gaps.append(f"{n_missing} of {int(m.sum())} {pub} runs")
+    u = U.from_store(user)
+    if u is not None:
+        n_missing = int((~np.isfinite(U.change_2015_2100(u))).sum())
+        if n_missing:
+            gaps.append(f"{n_missing} of {len(u.vals)} {u.label} runs (need values in 2015 or 2016 and 2100)")
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
     dim = _dim(groupby, bool(collapse))
-    return (F.timeseries_figure(valid, lo, hi, dim, units, obs), F.change_2100_figure(valid, dim, units), note)
+    y2100 = F.change_2100_figure(valid, dim, units, u)
+    return F.timeseries_figure(valid, lo, hi, dim, units, obs, u), y2100, note, _height(y2100)
 
 
 def _fmt_p(p):
@@ -286,8 +347,8 @@ def _height(fig, default=300):
               Output("bias-graph", "style"), Output("enrich-graph", "style"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"),
               Input("units", "value"), Input("bias-scope", "value"), Input("obs", "value"),
-              Input("collapse", "value"))
-def _bias(years, sources, groupby, units, scope, obs, collapse):
+              Input("collapse", "value"), Input("user-data", "data"))
+def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
     both = scope == "both"
@@ -334,7 +395,16 @@ def _bias(years, sources, groupby, units, scope, obs, collapse):
             note = (f"{DIM_LABEL[dim]} doesn't vary across this selection (or isn't shared by both ice "
                     "sheets), so the strongest factor is shown.")
         dim = top["characteristic"]
-    box = F.bias_figure(b, w, mask, dim, label, obs)
+    u, ub = U.from_store(user), None
+    if u is not None and (both or u.ice_sheet == scope):
+        # Same definition as A.bias: rate minus the observed rate, per unit
+        # area when pooling both ice sheets. Shown beside, never inside, the
+        # ANOVA and best-match statistics -- an upload has no metadata.
+        ub = U.rates(u, lo, hi) - A.imbie_rate(u.ice_sheet, lo, hi, obs)[0]
+        ub = ub * 1e12 / ICE_SHEET_AREA_M2[u.ice_sheet] if both else ub * F.units_info(units)[0]
+        note = (note + " " if note else "") + (f"{u.label} is shown for comparison only; it isn't part of the "
+                                               "ANOVA or the best-match shares.")
+    box = F.bias_figure(b, w, mask, dim, label, obs, ub, u)
     rows, cut = A.low_bias_enrichment(b[mask], w[mask], RUNS[dim].to_numpy()[mask], LOW_BIAS_FRAC)
     enrich = F.enrichment_figure(rows, dim, LOW_BIAS_FRAC)
     return (summary, _anova_table(one_way, combined, dim), box, f"Bias by {_lower(DIM_LABEL[dim])}", note, enrich,
@@ -356,6 +426,55 @@ def _sync_groupby(sidebar, local, _clicks):
     if src == "bias-groupby":
         return local, no_update
     return no_update, sidebar
+
+
+# ── upload your own ensemble ──────────────────────────────────────────────
+
+@app.callback(Output("upload-modal", "style"),
+              Input("upload-open", "n_clicks"), Input("upload-cancel", "n_clicks"), Input("upload-add", "n_clicks"),
+              prevent_initial_call=True)
+def _upload_modal(*_):
+    return {"display": "flex" if ctx.triggered_id == "upload-open" else "none"}
+
+
+@app.callback(Output("upload-pending", "data"), Output("upload-status", "children"),
+              Output("upload-step2", "style"), Output("upload-status", "className"),
+              Input("upload-file", "contents"), State("upload-file", "filename"), prevent_initial_call=True)
+def _upload_parse(contents, filename):
+    if not contents:
+        return None, None, {"display": "none"}, "upload-status"
+    try:
+        payload, summary = U.parse_upload(contents, filename)
+    except ValueError as e:
+        return None, f"{filename}: {e}", {"display": "none"}, "upload-status error"
+    return payload, f"{filename}: {summary}", {"display": "block"}, "upload-status ok"
+
+
+@app.callback(Output("upload-add", "disabled"), Input("upload-pending", "data"), Input("upload-ice", "value"))
+def _upload_ready(pending, ice):
+    return not (pending and ice)
+
+
+@app.callback(Output("user-data", "data"), Output("upload-file", "contents"), Output("upload-ice", "value"),
+              Input("upload-add", "n_clicks"), Input("user-remove", "n_clicks"),
+              State("upload-pending", "data"), State("upload-ice", "value"), State("upload-name", "value"),
+              prevent_initial_call=True)
+def _upload_commit(_add, _remove, pending, ice, name):
+    if ctx.triggered_id == "user-remove":
+        return None, no_update, no_update
+    if not (pending and ice):
+        return no_update, no_update, no_update
+    # Reset the dialog so the next upload starts fresh.
+    return {**pending, "ice_sheet": ice, "label": (name or "").strip() or U.DEFAULT_LABEL}, None, None
+
+
+@app.callback(Output("user-chip", "style"), Output("user-chip-text", "children"), Input("user-data", "data"))
+def _user_chip(user):
+    if not user:
+        return {"display": "none"}, ""
+    n = len(user["names"])
+    where = {"AIS": "Antarctica", "GIS": "Greenland"}[user["ice_sheet"]]
+    return {"display": "flex"}, f"{user['label']} ({where}, {n} simulation{'s' if n != 1 else ''})"
 
 
 @app.callback(Output("collapse-warning", "style"), Input("collapse", "value"))

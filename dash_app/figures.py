@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 import analysis as A
+import user_data as U
 from data import COLOR_MAPS, DEFAULT_OBS, DIM_LABEL, OBS_PRODUCTS, GT_TO_MM_SLE, ICE_SHEET_NAMES, ICE_SHEETS, RUNS
 
 FONT = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif'
@@ -91,7 +92,7 @@ def obs_name(obs):
     return f"{OBS_PRODUCTS[obs]['label']} observed (±2σ)"
 
 
-def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS):
+def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, user=None):
     f, rate_label, _ = units_info(units)
     rates = A.run_rates(lo, hi)
     ok = valid & np.isfinite(rates)
@@ -104,10 +105,16 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS):
     for row, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
         imbie, imbie_se = A.imbie_rate(ice, lo, hi, obs)
-        if not cats:
+        ur, unames = None, None
+        if user is not None and user.ice_sheet == ice:
+            r = U.rates(user, lo, hi)
+            fin = np.isfinite(r)
+            if fin.any():
+                ur, unames = r[fin], np.asarray(user.names)[fin]
+        if not cats and ur is None:
             _empty(fig, row, 1)
             continue
-        xs_all = rates[ok & (_ICE == ice)] * f
+        xs_all = np.r_[rates[ok & (_ICE == ice)], ur if ur is not None else []] * f
         lo_x, hi_x = min(xs_all.min(), imbie * f), max(xs_all.max(), imbie * f)
         pad = max(0.12 * (hi_x - lo_x), 1e-3)
         grid = np.linspace(lo_x - pad, hi_x + pad, 160)
@@ -135,11 +142,19 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS):
                     x=[med], y=[MEDIAN_Y], mode="markers", legendgroup=str(cat), showlegend=False,
                     marker=dict(symbol="triangle-down", size=12, color=color, line=dict(width=1, color=INK)),
                     hovertemplate=f"{cat} median: %{{x:.3g}} {rate_label}<extra></extra>"), row=row, col=1)
+        if ur is not None:
+            _user_rates(fig, row, user.label, ur * f, unames, grid, rate_label, show_medians)
         band = sorted([(imbie - 2 * imbie_se) * f, (imbie + 2 * imbie_se) * f])
         fig.add_vrect(x0=band[0], x1=band[1], fillcolor=rgba(IMBIE_COLOR, 0.18), line_width=0, row=row, col=1)
         fig.add_trace(go.Scatter(
             x=[imbie * f] * 2, y=[-0.25, 1.05], mode="lines", line=dict(color=IMBIE_COLOR, width=2.5),
-            name=obs_name(obs), legendgroup="imbie", showlegend=row == 1,
+            name=obs_name(obs), legendgroup="imbie", showlegend=row == 1, legendrank=1, hoverinfo="skip"),
+            row=row, col=1)
+        # The line's own hover points are its ends; this invisible marker puts
+        # the IMBIE hover level with the median triangles instead.
+        fig.add_trace(go.Scatter(
+            x=[imbie * f], y=[MEDIAN_Y], mode="markers", marker=dict(size=14, color="rgba(0,0,0,0)"),
+            legendgroup="imbie", showlegend=False,
             hovertemplate=f"{OBS_PRODUCTS[obs]['label']} observed: {imbie * f:.3g} ± {2 * imbie_se * abs(f):.2g} {rate_label}<extra></extra>"),
             row=row, col=1)
         fig.add_vline(x=0, line=dict(color="#9aa3af", dash="dot", width=1), row=row, col=1)
@@ -151,17 +166,45 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS):
     return fig
 
 
+def _user_rates(fig, row, label, x, names, grid, rate_label, show_medians):
+    """The visitor's upload in one rates panel: its own density curve, dots
+    and median, in USER_COLOR, equally weighted (it is never pooled)."""
+    c = U.USER_COLOR
+    dens = A.kde_curve(x, np.ones_like(x), grid)
+    fig.add_trace(go.Scatter(x=grid, y=np.full_like(grid, KDE_Y0), mode="lines", line=dict(width=0),
+                             hoverinfo="skip", showlegend=False, legendgroup="user"), row=row, col=1)
+    fig.add_trace(go.Scatter(
+        x=grid, y=KDE_Y0 + dens * KDE_H, mode="lines", fill="tonexty", line=dict(color=c, width=2),
+        fillcolor=rgba(c, 0.18), name=label, legendgroup="user", showlegend=True, legendrank=2,
+        hoverinfo="skip"), row=row, col=1)
+    jitter = np.random.default_rng(7).uniform(-1, 1, len(x))
+    fig.add_trace(go.Scatter(
+        x=x, y=jitter * STRIP_H, mode="markers", legendgroup="user", showlegend=False,
+        marker=dict(color=c, size=6 if len(x) <= 30 else 4, opacity=0.8 if len(x) <= 30 else 0.45,
+                    line=dict(width=0.5, color="white")),
+        text=[f"{label}: {n}<br><b>Rate: {v:.3g} {rate_label}</b>" for n, v in zip(names, x)],
+        hovertemplate="%{text}<extra></extra>"), row=row, col=1)
+    if show_medians:
+        fig.add_trace(go.Scatter(
+            x=[np.median(x)], y=[MEDIAN_Y], mode="markers", legendgroup="user", showlegend=False,
+            marker=dict(symbol="triangle-down", size=12, color=c, line=dict(width=1, color=INK)),
+            hovertemplate=f"{label} median: %{{x:.3g}} {rate_label}<extra></extra>"), row=row, col=1)
+
+
 # ── 2. Time series ────────────────────────────────────────────────────────
 
 TS_MAX_OUTER_BANDS = 8
 
-def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS):
+def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, user=None):
     f, _, cum_label = units_info(units)
     fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.08,
                         subplot_titles=[ICE_SHEET_NAMES[s] for s in ICE_SHEETS])
     legend_seen = set()
     for col, ice in enumerate(ICE_SHEETS, start=1):
         series = A.timeseries(valid, ice, dim, lo, hi)
+        if user is not None and user.ice_sheet == ice:
+            us = U.timeseries(user, lo, hi)
+            series = series + ([us] if us else [])
         fig.add_vrect(x0=lo, x1=hi + 1, fillcolor="rgba(250, 204, 21, 0.13)", line_width=0, row=1, col=col)
         ax = "" if col == 1 else str(col)
         fig.add_annotation(text=f"rate window {lo}–{hi}", x=(lo + hi + 1) / 2, y=0.99, xref=f"x{ax}", yref=f"y{ax} domain",
@@ -179,7 +222,7 @@ def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS):
         prepared = []
         for s in series:
             q, ok = s["q"] * f, np.isfinite(s["q"][2])
-            prepared.append((s, _color(dim, s["category"]), s["years"][ok], q[:, ok]))
+            prepared.append((s, s.get("color") or _color(dim, s["category"]), s["years"][ok], q[:, ok]))
         for lo_i, hi_i, alpha in bands:
             for s, color, yrs, q in prepared:
                 fig.add_trace(go.Scatter(
@@ -231,15 +274,43 @@ def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS):
 
 # ── 3. Mass change at 2100 ────────────────────────────────────────────────
 
-def change_2100_figure(valid, dim, units):
+# Narrowest a 2100 panel gets: the figure is responsive and its width isn't
+# known server-side; at ~1000 px windows (sidebar still beside the content)
+# each of the two panels is ~280 px wide. Choosing angles for that width
+# keeps labels apart on every wider screen too.
+NARROWEST_PANEL_PX = 280
+
+
+def _tick_style(labels, panel_px=NARROWEST_PANEL_PX):
+    """Angle/size for category tick labels so neighbors never overlap: flat
+    only if every label fits its slot, else 45 degrees while slanted labels
+    stay at least a line apart, else vertical with the font shrunk to the
+    slot. Slanted parallel labels are separated by slot * sin(angle),
+    regardless of their length."""
+    n = max(len(labels), 1)
+    slot = panel_px / n
+    longest = max((len(str(l)) for l in labels), default=0) * 7.5  # generous px/char at 12 px Inter
+    if longest < 0.8 * slot:
+        return 0, 12
+    if slot * 0.707 >= 18:
+        return -45, 12
+    return -90, int(max(8, min(12, slot - 2)))
+
+
+def change_2100_figure(valid, dim, units, user=None):
     f, _, cum_label = units_info(units)
     ok = valid & np.isfinite(A.CHANGE_2100)
     w = A.run_weights(ok)
     fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.08,
                         subplot_titles=[ICE_SHEET_NAMES[s] for s in ICE_SHEETS])
+    label_drop = 0  # px the slanted labels hang below the axis; the figure grows by it
     for col, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
-        if not cats:
+        uc = None
+        if user is not None and user.ice_sheet == ice:
+            uc = U.change_2015_2100(user)
+            uc = uc[np.isfinite(uc)] if np.isfinite(uc).any() else None
+        if not cats and uc is None:
             _empty(fig, 1, col)
             continue
         for cat, m in cats:
@@ -250,16 +321,27 @@ def change_2100_figure(valid, dim, units):
                 x=[str(cat)], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
                 fillcolor=rgba(color, 0.35), line=dict(color=color, width=1.6), showlegend=False,
                 name=f"{cat} (n={int(m.sum())})", hoverinfo="y+name"), row=1, col=col)
+        labels = [c for c, _ in cats]
+        if uc is not None:
+            q = np.quantile(uc * f, [0.05, 0.25, 0.5, 0.75, 0.95])
+            fig.add_trace(go.Box(
+                x=[user.label], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
+                fillcolor=rgba(U.USER_COLOR, 0.35), line=dict(color=U.USER_COLOR, width=2), showlegend=False,
+                name=f"{user.label} (n={len(uc)})", hoverinfo="y+name"), row=1, col=col)
+            labels.append(user.label)
         fig.add_hline(y=0, line=dict(color="#9aa3af", dash="dot", width=1), row=1, col=col)
-        fig.update_xaxes(tickangle=-35 if len(cats) > 3 else 0, automargin=True, row=1, col=col)
+        angle, size = _tick_style(labels)
+        longest = max(len(str(c)) for c in labels) * 7 * size / 12
+        label_drop = max(label_drop, longest * abs(np.sin(np.radians(angle))))
+        fig.update_xaxes(tickangle=angle, tickfont_size=size, automargin=True, row=1, col=col)
     fig.update_yaxes(title_text=f"Change 2015–2100 ({cum_label})", row=1, col=1)
-    fig.update_layout(template=TEMPLATE, height=440, boxgap=0.35, uirevision=f"y2100-{units}")
+    fig.update_layout(template=TEMPLATE, height=int(400 + label_drop), boxgap=0.35, uirevision=f"y2100-{units}")
     return fig
 
 
 # ── 4. Bias ───────────────────────────────────────────────────────────────
 
-def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS):
+def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, user_bias=None, user=None):
     """Weighted box (5/25/50/75/95) + points of bias per category of `dim`,
     sorted by median bias (most negative at top); dashed zero = perfect
     match to IMBIE."""
@@ -287,10 +369,26 @@ def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS):
             marker=dict(color=color, size=sizes[idx], opacity=alphas[idx], line_width=0),
             text=[f"{_PUB[j]}: {RUNS.group[j]} / {RUNS.model[j]} / {RUNS.exp[j]}" for j in idx],
             hovertemplate=f"%{{text}}<br>Bias: %{{x:.3g}} {bias_label}<extra></extra>"))
+    ticks = [str(c) for _, c, _ in cats]
+    if user_bias is not None and np.isfinite(user_bias).any():
+        # The upload as one extra row at the bottom, for comparison only.
+        i, fin = len(cats), np.isfinite(user_bias)
+        ub, names = user_bias[fin], np.asarray(user.names)[fin]
+        q = np.quantile(ub, [0.05, 0.25, 0.5, 0.75, 0.95])
+        fig.add_trace(go.Box(y=[i], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
+                             orientation="h", width=0.6, fillcolor=rgba(U.USER_COLOR, 0.25),
+                             line=dict(color=U.USER_COLOR, width=2), showlegend=False, hoverinfo="x+name",
+                             name=f"{user.label} (n={len(ub)})"))
+        fig.add_trace(go.Scatter(
+            x=ub, y=i + np.random.default_rng(7).uniform(-1, 1, len(ub)) * 0.26, mode="markers", showlegend=False,
+            marker=dict(color=U.USER_COLOR, size=5, opacity=0.7, line_width=0),
+            text=[f"{user.label}: {n}" for n in names],
+            hovertemplate=f"%{{text}}<br>Bias: %{{x:.3g}} {bias_label}<extra></extra>"))
+        ticks.append(f"<b>{user.label}</b>")
     fig.add_vline(x=0, line=dict(color=INK, dash="dash", width=1))
-    fig.update_layout(template=TEMPLATE, height=max(300, 110 + (34 if len(cats) <= 12 else 28) * len(cats)),
+    fig.update_layout(template=TEMPLATE, height=max(300, 110 + (34 if len(ticks) <= 12 else 28) * len(ticks)),
                       xaxis_title=f"Bias vs. {OBS_PRODUCTS[obs]['label']} ({bias_label})",
-                      yaxis=dict(tickvals=list(range(len(cats))), ticktext=[str(c) for _, c, _ in cats],
+                      yaxis=dict(tickvals=list(range(len(ticks))), ticktext=ticks,
                                  autorange="reversed", automargin=True, showgrid=False, zeroline=False),
                       margin=dict(l=20))
     return fig
