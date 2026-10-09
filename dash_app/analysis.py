@@ -192,6 +192,26 @@ def change_2015_2100():
 CHANGE_2100 = change_2015_2100()
 
 
+# ── simulations that match observations ───────────────────────────────────
+
+def obs_match(valid, lo, hi, obs, tol_frac):
+    """Runs whose rate over [lo, hi] lies within +/- tol_frac x |observed
+    rate| of the IMBIE rate for their ice sheet (a fraction, not an absolute
+    tolerance, so one setting suits Antarctica and Greenland, whose rates
+    differ about twofold). Returns (bool mask over RUNS, {ice sheet:
+    (observed rate, lower bound, upper bound)} in Gt/yr)."""
+    rates = run_rates(lo, hi)
+    keep = np.zeros(len(RUNS), dtype=bool)
+    bounds = {}
+    for ice_sheet in ("AIS", "GIS"):
+        r_obs = imbie_rate(ice_sheet, lo, hi, obs)[0]
+        tol = tol_frac * abs(r_obs)
+        bounds[ice_sheet] = (r_obs, r_obs - tol, r_obs + tol)
+        m = valid & (_ICE == ice_sheet) & np.isfinite(rates)
+        keep[m] = np.abs(rates[m] - r_obs) <= tol
+    return keep, bounds
+
+
 # ── bias & ANOVA ──────────────────────────────────────────────────────────
 
 def bias(valid, lo, hi, obs=DEFAULT_OBS, area_normalized=False):

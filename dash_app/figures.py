@@ -321,12 +321,33 @@ def _tick_style(labels, panel_px=NARROWEST_PANEL_PX):
     return -90, int(max(8, min(12, slot - 2)))
 
 
-def change_2100_figure(valid, dim, units, users=()):
+def change_2100_figure(valid, dim, units, users=(), matched=None, users_matched=None):
+    """Weighted box (5/25/50/75/95) of 2015->2100 change per group.
+    `matched` (bool mask over RUNS, or None for no filter): each group then
+    gets a faint outlined box of all its runs beside a solid box of just the
+    runs that match observations, so the effect of the filter is visible.
+    `users_matched`: {upload label: bool mask over its simulations}."""
     f, _, cum_label = units_info(units)
     ok = valid & np.isfinite(A.CHANGE_2100)
+    filt = matched is not None
     w = A.run_weights(ok)
+    w_m = A.run_weights(ok & matched) if filt else None
     fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.08,
                         subplot_titles=[ICE_SHEET_NAMES[s] for s in ICE_SHEETS])
+
+    def add_box(col, label, q, color, n, kind, width=1.6):
+        style = {  # kind: "only" (no filter), "all" (outlined, filter on), "match" (solid, filter on)
+            "only": dict(fillcolor=rgba(color, 0.35), line=dict(color=color, width=width)),
+            "all": dict(fillcolor=rgba(color, 0.05), line=dict(color=rgba(color, 0.55), width=1)),
+            "match": dict(fillcolor=rgba(color, 0.55), line=dict(color=color, width=width)),
+        }[kind]
+        suffix = {"only": "", "all": ", all", "match": ", matching observations"}[kind]
+        fig.add_trace(go.Box(
+            x=[str(label)], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
+            showlegend=False, name=f"{label}{suffix} (n={n})", hoverinfo="y+name",
+            offsetgroup=None if kind == "only" else kind, **style), row=1, col=col)
+
+    qs = [0.05, 0.25, 0.5, 0.75, 0.95]
     label_drop = 0  # px the slanted labels hang below the axis; the figure grows by it
     for col, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
@@ -334,26 +355,25 @@ def change_2100_figure(valid, dim, units, users=()):
         for u in users:
             if u.ice_sheet == ice:
                 c = U.change_2015_2100(u)
-                if np.isfinite(c).any():
-                    uploads.append((u, c[np.isfinite(c)]))
+                fin = np.isfinite(c)
+                if fin.any():
+                    um = users_matched.get(u.label) if filt and users_matched else None
+                    uploads.append((u, c[fin], um[fin] if um is not None else None))
         if not cats and not uploads:
             _empty(fig, 1, col)
             continue
         for cat, m in cats:
-            x = A.CHANGE_2100[m] * f
-            q = A.weighted_quantiles(x, w[m], [0.05, 0.25, 0.5, 0.75, 0.95])
             color = _color(dim, cat)
-            fig.add_trace(go.Box(
-                x=[str(cat)], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
-                fillcolor=rgba(color, 0.35), line=dict(color=color, width=1.6), showlegend=False,
-                name=f"{cat} (n={int(m.sum())})", hoverinfo="y+name"), row=1, col=col)
+            q = A.weighted_quantiles(A.CHANGE_2100[m] * f, w[m], qs)
+            add_box(col, cat, q, color, int(m.sum()), "all" if filt else "only")
+            if filt and (m & matched).any():
+                mm = m & matched
+                add_box(col, cat, A.weighted_quantiles(A.CHANGE_2100[mm] * f, w_m[mm], qs), color, int(mm.sum()), "match")
         labels = [c for c, _ in cats]
-        for u, uc in uploads:
-            q = np.quantile(uc * f, [0.05, 0.25, 0.5, 0.75, 0.95])
-            fig.add_trace(go.Box(
-                x=[u.label], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
-                fillcolor=rgba(u.color, 0.35), line=dict(color=u.color, width=2), showlegend=False,
-                name=f"{u.label} (n={len(uc)})", hoverinfo="y+name"), row=1, col=col)
+        for u, uc, um in uploads:
+            add_box(col, u.label, np.quantile(uc * f, qs), u.color, len(uc), "all" if filt else "only", width=2)
+            if filt and um is not None and um.any():
+                add_box(col, u.label, np.quantile(uc[um] * f, qs), u.color, int(um.sum()), "match", width=2)
             labels.append(u.label)
         fig.add_hline(y=0, line=dict(color="#9aa3af", dash="dot", width=1), row=1, col=col)
         angle, size = _tick_style(labels)
@@ -361,7 +381,8 @@ def change_2100_figure(valid, dim, units, users=()):
         label_drop = max(label_drop, longest * abs(np.sin(np.radians(angle))))
         fig.update_xaxes(tickangle=angle, tickfont_size=size, automargin=True, row=1, col=col)
     fig.update_yaxes(title_text=f"Change 2015–2100 ({cum_label})", row=1, col=1)
-    fig.update_layout(template=TEMPLATE, height=int(400 + label_drop), boxgap=0.35, uirevision=f"y2100-{units}")
+    fig.update_layout(template=TEMPLATE, height=int(400 + label_drop), boxgap=0.35 if not filt else 0.25,
+                      boxgroupgap=0.12, boxmode="group" if filt else "overlay", uirevision=f"y2100-{units}")
     return fig
 
 

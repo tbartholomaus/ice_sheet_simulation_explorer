@@ -162,6 +162,22 @@ main = html.Main(className="content", children=[
              html.H3("Mass change by 2100"),
              html.P("Change from 2015 to 2100 for each group (box: 25–75%; whiskers: 5–95%; line: median).",
                     className="lede"),
+             # Compare projections from all simulations with only those whose
+             # recent rate matches observations.
+             html.Div(className="filter-bar", children=[
+                 dcc.Checklist(id="match-filter", className="toggle", value=[],
+                               options=[{"label": "Compare with only the simulations that match observations",
+                                         "value": "on"}]),
+                 html.Div(className="filter-tol", children=[
+                     html.Span("Match: average rate over the averaging window within ±", className="filter-tol-label"),
+                     html.Div(dcc.Slider(id="match-tol", min=5, max=100, step=5, value=25,
+                                         marks={p: f"{p}%" for p in (5, 25, 50, 75, 100)},
+                                         tooltip={"placement": "bottom", "template": "{value}%"}),
+                              className="filter-tol-slider"),
+                     html.Span("of the observed rate", className="filter-tol-label"),
+                 ]),
+                 html.Div(id="match-readout", className="filter-readout"),
+             ]),
              graph("y2100-graph", 440),
              html.Div(id="y2100-note", className="note")]),
     section("bias", "What drives bias?",
@@ -272,12 +288,25 @@ def _rates(years, sources, groupby, units, medians, obs, collapse, user):
                           obs, U.from_store(user))
 
 
-@app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
-              Output("y2100-graph", "style"),
+@app.callback(Output("ts-graph", "figure"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
               Input("obs", "value"), Input("collapse", "value"), Input("user-data", "data"),
               State("ts-view", "data"))
 def _timeseries(years, sources, groupby, units, obs, collapse, user, view):
+    lo, hi = clamp_window(years, obs)
+    valid = A.checked_mask(sources or [])
+    # A rebuild for any control other than the window keeps the user's view;
+    # an explicit range in a new figure would otherwise override uirevision.
+    view_x = view["x"] if view and view.get("x") and (view.get("lo"), view.get("hi")) == (lo, hi) else None
+    return F.timeseries_figure(valid, lo, hi, _dim(groupby, bool(collapse)), units, obs, U.from_store(user), view_x)
+
+
+@app.callback(Output("y2100-graph", "figure"), Output("y2100-graph", "style"), Output("y2100-note", "children"),
+              Output("match-readout", "children"),
+              Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
+              Input("obs", "value"), Input("collapse", "value"), Input("user-data", "data"),
+              Input("match-filter", "value"), Input("match-tol", "value"))
+def _change2100(years, sources, groupby, units, obs, collapse, user, match_on, tol_pct):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or [])
     gaps = []
@@ -293,11 +322,43 @@ def _timeseries(years, sources, groupby, units, obs, collapse, user, view):
             gaps.append(f"{n_missing} of {len(u.vals)} {u.label} runs (need values in 2015 or 2016 and 2100)")
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
     dim = _dim(groupby, bool(collapse))
-    y2100 = F.change_2100_figure(valid, dim, units, users)
-    # A rebuild for any control other than the window keeps the user's view;
-    # an explicit range in a new figure would otherwise override uirevision.
-    view_x = view["x"] if view and view.get("x") and (view.get("lo"), view.get("hi")) == (lo, hi) else None
-    return F.timeseries_figure(valid, lo, hi, dim, units, obs, users, view_x), y2100, note, _height(y2100)
+    matched, users_matched, readout = None, None, None
+    if match_on:
+        tol = (tol_pct or 25) / 100
+        matched, bounds = A.obs_match(valid, lo, hi, obs, tol)
+        users_matched = {}
+        for u in users:
+            r_obs, b_lo, b_hi = bounds[u.ice_sheet]
+            r = U.rates(u, lo, hi)
+            users_matched[u.label] = np.isfinite(r) & (r >= b_lo) & (r <= b_hi)
+        readout = _match_readout(valid, matched, bounds, users, users_matched, units, obs, lo, hi, tol_pct)
+    y2100 = F.change_2100_figure(valid, dim, units, users, matched, users_matched)
+    return y2100, _height(y2100), note, readout
+
+
+def _match_readout(valid, matched, bounds, users, users_matched, units, obs, lo, hi, tol_pct):
+    """One line per ice sheet: the observed rate, the kept range, and how many
+    simulations (with a 2015->2100 value) pass."""
+    f, rate_label, _ = F.units_info(units)
+    has2100 = np.isfinite(A.CHANGE_2100)
+    lines = []
+    for ice, name in (("AIS", "Antarctica"), ("GIS", "Greenland")):
+        sel = valid & (_ICE == ice) & has2100
+        n_all = int(sel.sum()) + sum(int(np.isfinite(U.change_2015_2100(u)).sum()) for u in users if u.ice_sheet == ice)
+        if not n_all:
+            continue
+        n_kept = int((sel & matched).sum()) + sum(
+            int((users_matched[u.label] & np.isfinite(U.change_2015_2100(u))).sum()) for u in users if u.ice_sheet == ice)
+        r_obs, b_lo, b_hi = (v * f for v in bounds[ice])
+        b_lo, b_hi = sorted((b_lo, b_hi))
+        fmt = "{:.0f}" if units == "gt" else "{:.2f}"  # whole Gt/yr, or mm/yr to 0.01
+        lines.append(html.Div([html.B(f"{name}: "), f"observed {fmt.format(r_obs)} {rate_label}; kept "
+                               f"{fmt.format(b_lo)} to {fmt.format(b_hi)}: ", html.B(f"{n_kept} of {n_all}"),
+                               " simulations."]))
+    lines.append(html.Div(f"Rates over {lo}–{hi} against {OBS_PRODUCTS[obs]['label']}, within ±{tol_pct}%. "
+                          "Faint outlined boxes: all selected simulations; solid boxes: those that match.",
+                          className="muted"))
+    return lines
 
 
 def _fmt_p(p):
