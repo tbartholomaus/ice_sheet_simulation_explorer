@@ -27,7 +27,7 @@ MAX_RUNS = 1000
 YEAR_RANGE = (1800, 2500)
 MAX_ENSEMBLES = 5
 # One color per upload slot, chosen to stand apart from the study colors.
-USER_COLORS = ["#00a0a8", "#d49a00", "#6a9a00", "#4c6ef5", "#a0522d"]
+USER_COLORS = ["#e41a1c", "#4daf4a", "#999933", "#9c755f", "#01665e"]  # >= 18 CIEDE2000 from every study color and each other
 USER_COLOR = USER_COLORS[0]
 DEFAULT_LABEL = "Your ensemble"
 

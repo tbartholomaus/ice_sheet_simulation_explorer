@@ -139,7 +139,8 @@ sidebar = html.Aside(className="sidebar", children=[
     control("Observations", dcc.RadioItems(
         id="obs", className="segmented", value=DEFAULT_OBS, inline=True,
         options=[{"label": p["label"], "value": k} for k, p in OBS_PRODUCTS.items()]),
-        "IMBIE3 (2026) runs through 2023; IMBIE2 (2023) through 2020, so it caps the window at 2020."),
+        "Selecting IMBIE2 reduces the averaging window to end at 2020 due to data availability. Manually move "
+        "the averaging window back to end at 2023 after re-selecting IMBIE3."),
     control("Display", dcc.Checklist(
         id="medians", className="toggle", value=["on"], options=[{"label": "Show medians", "value": "on"}])),
     html.Div(className="sidebar-foot", children=[
@@ -282,10 +283,10 @@ server = app.server
 @app.callback(Output("years", "value"), Output("years-readout", "children"), Output("years", "max"),
               Input("years", "value"), Input("obs", "value"))
 def _years(value, obs):
-    if ctx.triggered_id == "obs":
-        # Switching product: run the window up to the new product's last year
-        # (2023 for IMBIE3), rather than leaving it where IMBIE2 capped it.
-        value = [value[0], year_max(obs)]
+    # IMBIE2 caps the window at 2020 (its last full year). Switching back to
+    # IMBIE3 only re-opens the slider to 2023; the window itself stays where
+    # it is until the user moves it (user decision, 2026-10-09), so a product
+    # switch never silently changes the averaging window.
     lo, hi = clamp_window(value, obs)
     fixed = [lo, hi] if [lo, hi] != list(value) else no_update
     return fixed, f"Jan {lo} – Dec {hi}", year_max(obs)

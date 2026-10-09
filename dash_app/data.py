@@ -333,6 +333,10 @@ ais_exp_meta.update(_exp_meta_from_df(ar6_ais, []))
 gis_exp_meta.update(_exp_meta_from_df(ar6_gis, []))
 gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
+# Colors (2026-10-09) were chosen to be clearly distinct for normal colour
+# vision (CIEDE2000 >= 20 between any two studies, including within each ice
+# sheet's panel); Edwards Main/GIS and AR6 AIS/GIS keep one color per study,
+# and Edwards Risk Averse is a darker relative of Edwards Main.
 # Display order everywhere (sidebar, Study legends/boxes, README): ISMIP6
 # first (SOURCE_LABELS below), then the other ice-sheet-model studies by
 # publication date, then the Edwards et al. (2021) emulator studies and the
@@ -340,22 +344,22 @@ gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 # (user decisions, 2026-10-08 and 2026-10-09).
 EXTRA_SOURCES = [
     {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
-    {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
-    {"label": "DeConto 2021", "df": deconto2021_ais, "color": "#d6604d"},
-    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
-    {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},  # TC 19, 1205 (Mar 2025)
-    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},  # TC 19, 6887 (later 2025)
+    {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#5e3c99"},
+    {"label": "DeConto 2021", "df": deconto2021_ais, "color": "#e6ab02"},
+    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#117733"},
+    {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#ff7f0e"},  # TC 19, 1205 (Mar 2025)
+    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#0072b2"},  # TC 19, 6887 (later 2025)
     # Edwards et al. (2021) covers BOTH ice sheets, so its labels carry an
     # ice-sheet suffix to stay unambiguous. Same color for AIS Main and GIS --
     # they render on separate AIS/GIS panels, so there's no legend collision.
     {"label": "Edwards 2021 (AIS Main)", "df": edwards2021_ais, "color": "#e7298a"},
-    {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#a6114f"},
+    {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#8e0152"},
     {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
     # IPCC AR6 WG1 (2021) assessed projections, also not ice sheet model runs:
     # last, after Edwards. Each "run" is one percentile path (1st-99th) of the
     # medium- or low-confidence distribution; see load_ar6_icesheet().
-    {"label": "IPCC AR6 (AIS)", "df": ar6_ais, "color": "#e41a1c"},
-    {"label": "IPCC AR6 (GIS)", "df": ar6_gis, "color": "#e41a1c"},
+    {"label": "IPCC AR6 (AIS)", "df": ar6_ais, "color": "#17becf"},
+    {"label": "IPCC AR6 (GIS)", "df": ar6_gis, "color": "#17becf"},
 ]
 
 for _src, _is in [
