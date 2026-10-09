@@ -105,6 +105,13 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 | IMBIE3 observations | Otosaka et al. (2026), *Scientific Data*, https://doi.org/10.1038/s41597-026-08088-0 |
 | IMBIE2 observations | Otosaka et al. (2023), *Earth System Science Data* 15, 1597, https://doi.org/10.5194/essd-15-1597-2023 |
 
+**All simulated mass changes are ice mass above flotation**, the part of an ice sheet that changes sea level
+and that IMBIE's grounded-ice observations track. For ISMIP6 (both ice sheets) and Goelzer et al. (2025), mass
+is ice volume above flotation (`ivaf`) × each model's own ice density (`rhoi`, 900–918 kg/m³). Rahlves et al.
+(2025) provides mass above flotation directly. The studies published as sea-level contributions (Coulon,
+Edwards, DeConto) are converted to mass at 362.5 Gt per mm, the same factor used by ISMIP6 and IMBIE. Aschwanden
+et al. (2019) provides cumulative mass that its authors convert to sea level at the same factor.
+
 `utilities/external_sources.py` documents how each external dataset was obtained and processed, and
 the choices made along the way. If you use results from this tool, please cite the original studies
 above.

@@ -124,7 +124,10 @@ def load_ismip6_ais(remove_ctrl=True):
         df = pd.read_csv(ismip6_filename)
     else:
         print(f"{ismip6_filename} not found locally. Downloading the ISMIP6 archive.")
-        if not os.path.isfile(f"{v_dir}.zip"):
+        # Download only if the archive hasn't already been unpacked here (this
+        # used to test for the .zip, which is never saved, so every cache
+        # rebuild re-downloaded and re-extracted the whole archive).
+        if not os.path.isdir(v_dir) and not os.path.isfile(f"{v_dir}.zip"):
             with urlopen(url) as zipresp:
                 with ZipFile(BytesIO(zipresp.read())) as zfile:
                     zfile.extractall(outpath)
@@ -148,7 +151,10 @@ def load_ismip6_gis(remove_ctrl=True):
         df = pd.read_csv(ismip6_filename)
     else:
         print(f"{ismip6_filename} not found locally. Downloading the ISMIP6 archive.")
-        if not os.path.isfile(f"{v_dir}.zip"):
+        # Download only if the archive hasn't already been unpacked here (this
+        # used to test for the .zip, which is never saved, so every cache
+        # rebuild re-downloaded and re-extracted the whole archive).
+        if not os.path.isdir(v_dir) and not os.path.isfile(f"{v_dir}.zip"):
             with urlopen(url) as zipresp:
                 with ZipFile(BytesIO(zipresp.read())) as zfile:
                     zfile.extractall(outpath)
@@ -156,6 +162,12 @@ def load_ismip6_gis(remove_ctrl=True):
         ismip6_gis_to_csv(v_dir, ismip6_filename, remove_ctrl)
         df = pd.read_csv(ismip6_filename)
     return df
+
+
+def _gis_mass_af(nc):
+    """ISMIP6-Greenland ice mass above flotation (Gt): ivaf (m3) x the
+    file's own rhoi (kg/m3) / 1e12."""
+    return np.asarray(nc.variables["ivaf"][:], dtype=float) * float(nc.variables["rhoi"][...]) / 1e12
 
 
 def ismip6_gis_to_csv(basedir, ismip6_filename, remove_ctrl):
@@ -178,8 +190,14 @@ def ismip6_gis_to_csv(basedir, ismip6_filename, remove_ctrl):
         # Experiment
         nc = NC(path)
         exp_sle = nc.variables["sle"][:]
-        # For comparison with GRACE, we use grounded ice mass, converted to Gt
-        exp_mass = nc.variables["limgr"][:] / 1e12
+        # Mass from ice volume ABOVE FLOTATION x the model's own ice density
+        # (rhoi, 900-918 kg/m3 across models), in Gt. Only ice above flotation
+        # changes sea level and is what IMBIE's grounded-ice observations
+        # track over these timescales; grounded mass (limgr), used here
+        # before 2026-10-09, also counts ice below flotation and ran 0.3-22%
+        # larger by 2100. ivaf * rhoi equals the files' own limaf (checked to
+        # 1e-4), and sle = -limaf / 362.5 Gt per mm.
+        exp_mass = _gis_mass_af(nc)
         exp_smb = nc.variables["smb"][:] / 1e12 * secpera
 
         f = path.name.split(f"scalars_mm_cr_GIS_")[-1].split(".nc")[0].split("_")
@@ -203,7 +221,7 @@ def ismip6_gis_to_csv(basedir, ismip6_filename, remove_ctrl):
         # Projection
         nc_ctrl = NC(ctrl_file)
         ctrl_sle = nc_ctrl.variables["sle"][:] - nc_ctrl.variables["sle"][0]
-        ctrl_mass = (nc_ctrl.variables["limgr"][:] - nc_ctrl.variables["limgr"][0]) / 1e12
+        ctrl_mass = _gis_mass_af(nc_ctrl) - _gis_mass_af(nc_ctrl)[0]
         ctrl_smb = nc_ctrl.variables["smb"][:] / 1e12 * secpera
 
         # Per email with Heiko on Nov. 13, 2020, stick with just the exp projections alone, without adding back the ctrl projections
@@ -221,7 +239,7 @@ def ismip6_gis_to_csv(basedir, ismip6_filename, remove_ctrl):
         # Historical
         nc_hist = NC(hist_file)
         hist_sle = nc_hist.variables["sle"][:-1] - nc_hist.variables["sle"][-1]
-        hist_mass = (nc_hist.variables["limgr"][:-1] - nc_hist.variables["limgr"][-1]) / 1e12
+        hist_mass = _gis_mass_af(nc_hist)[:-1] - _gis_mass_af(nc_hist)[-1]
         hist_smb = nc_hist.variables["smb"][:-1] / 1e12 * secpera
         if remove_ctrl:
             proj_sle = exp_sle
@@ -306,125 +324,78 @@ def ismip6_gis_to_csv(basedir, ismip6_filename, remove_ctrl):
     df.to_csv(ismip6_filename, compression="gzip")
 
 
+def _ais_read(path, var):
+    """(time, values, rhoi or None) from one ISMIP6-Antarctica computed-scalar file."""
+    nc = NC(path)
+    rhoi = float(nc.variables["rhoi"][...]) if "rhoi" in nc.variables else None
+    return (np.asarray(nc.variables["time"][:], dtype=float), np.asarray(nc.variables[var][:], dtype=float), rhoi)
+
+
 def ismip6_ais_to_csv(basedir, ismip6_filename, remove_ctrl):
-    # Now read model output from each of the ISMIP6 files. The information we
-    # need is in the file names, not the metadate so this is no fun.
-    # Approach is to read each dataset into a dataframe, then concatenate all
-    #   dataframes into one Arch dataframe that contains all model runs.
-    # Resulting dataframe consists of both historical and projected changes
+    """One row per (run, year) of ISMIP6-Antarctica (Seroussi et al. 2020)
+    historical + projection output, written to `ismip6_filename`.
 
-    a_dfs = []
-    for m_var, m_desc in zip(
-        ["ivol", "smb"], ["Cumulative ice sheet mass change (Gt)", "Rate of surface mass balance anomaly (Gt/yr)"]
-    ):
-        dfs = []
+    Mass is ice volume ABOVE FLOTATION (ivaf) x that model's own ice density
+    (rhoi, 900-918 kg/m3 across models; read from each file, or from the same
+    model's other files for the few that omit it), in Gt. Before 2026-10-09
+    this used total ice volume (ivol) x a fixed 910 kg/m3, which counts
+    floating ice shelves -- invisible to sea level and to IMBIE -- and made
+    2015-2023 rates ~15x too large (median of exp05 across models: -473 vs
+    -32 Gt/yr).
 
-        if remove_ctrl:
-            m_pattern = f"computed_{m_var}_minus_ctrl_proj_AIS_*.nc"
+    ivaf is a state at the start of each year (2006.0 ... 2015.0 in hist,
+    2016.0 ... 2101.0 in the projections); smb is a flux at mid-year (2015.5,
+    ...), so it is interpolated onto the ivaf years rather than stacked as
+    separate half-year rows (which also left the mass-rate gradient spanning
+    unrelated rows). Rates are d(mass)/dt within each run.
+
+    remove_ctrl: use the *_minus_ctrl_proj projections (ISMIP6's convention)
+    with hist rebased to 0 at its end; otherwise the raw projections, with the
+    whole series rebased to 0 at proj_start."""
+    suffix = "_minus_ctrl_proj" if remove_ctrl else ""
+    model_rhoi = {}  # fallback density per (group, model)
+    for p in Path(basedir).rglob("computed_ivaf*_AIS_*.nc"):
+        r = _ais_read(p, "ivaf")[2]
+        if r is not None:
+            model_rhoi.setdefault((p.parts[-4], p.parts[-3]), r)
+
+    dfs = []
+    for p in sorted(Path(basedir).rglob(f"computed_ivaf{suffix}_AIS_*.nc")):
+        if "hist" in p.parent.name or "ctrl" in p.parent.name:
+            continue
+        group, model, exp = p.parts[-4], p.parts[-3], p.parent.name
+        rcp = 26 if exp in ["exp03", "exp07", "expA4", "expA8"] else 85
+        t_exp, v_exp, rhoi = _ais_read(p, "ivaf")
+        rhoi = rhoi or model_rhoi.get((group, model))
+        smb_p = p.with_name(p.name.replace("computed_ivaf", "computed_smb"))
+        t_smb, v_smb, _ = _ais_read(smb_p, "smb") if smb_p.exists() else (np.array([]), np.array([]), None)
+
+        hist_dir = Path(basedir) / group / model / f"hist_{ais_exp_dict[exp]}"
+        hist_p = hist_dir / f"computed_ivaf_AIS_{group}_{model}_hist_{ais_exp_dict[exp]}.nc"
+        if hist_p.exists():
+            t_hist, v_hist, _ = _ais_read(hist_p, "ivaf")
+            if remove_ctrl:
+                v_hist = v_hist - v_hist[-1]
+            hist_smb_p = hist_dir / hist_p.name.replace("computed_ivaf", "computed_smb")
+            if hist_smb_p.exists():
+                th, vh, _ = _ais_read(hist_smb_p, "smb")
+                t_smb, v_smb = np.r_[th, t_smb], np.r_[vh, v_smb]
         else:
-            m_pattern = f"computed_{m_var}_AIS_*.nc"
+            t_hist, v_hist = np.array([]), np.array([])
 
-        for group in os.listdir(basedir):
-            if not group.startswith("."):
-                for model in os.listdir(os.path.join(basedir, group)):
-                    if not model.startswith("."):
-                        ps = Path(os.path.join(basedir, group, model)).rglob(m_pattern)
-                        if not remove_ctrl:
-                            ps = [p for p in ps if not "ctrl" in str(p)]
-                        for p in ps:
-                            if not "hist" in str(p):
-                                # Experiment
-                                nc = NC(p)
-                                m_exp = nc.variables[m_var][:]
-                                # if not remove_ctrl:
-                                #     m_exp -= m_exp[0]
-                                exp_time = nc.variables["time"][:]
-                                exp = p.name.split(f"computed_")[-1].split(".nc")[0].split("_")[-1]
-                                if exp in ["exp03", "exp07", "expA4", "expA8"]:
-                                    rcp = 26
-                                else:
-                                    rcp = 85
-
-                                n_exp = len(m_exp)
-                                exp_df = pd.DataFrame(
-                                    data=np.hstack(
-                                        (
-                                            exp_time.reshape(-1, 1),
-                                            m_exp.reshape(-1, 1),
-                                            np.repeat(group, n_exp).reshape(-1, 1),
-                                            np.repeat(model, n_exp).reshape(-1, 1),
-                                            np.repeat(exp, n_exp).reshape(-1, 1),
-                                            np.repeat(rcp, n_exp).reshape(-1, 1),
-                                        )
-                                    ),
-                                    columns=[
-                                        "Year",
-                                        m_desc,
-                                        "Group",
-                                        "Model",
-                                        "Exp",
-                                        "RCP",
-                                    ],
-                                ).astype({"Year": float, m_desc: float})
-
-                                hist_f = os.path.join(
-                                    basedir,
-                                    group,
-                                    model,
-                                    f"hist_{ais_exp_dict[exp]}",
-                                    f"computed_{m_var}_AIS_{group}_{model}_hist_{ais_exp_dict[exp]}.nc",
-                                )
-                                if os.path.isfile(hist_f):
-                                    nc_hist = NC(hist_f)
-                                    m_hist = nc_hist.variables[m_var][:]
-                                    if remove_ctrl:
-                                        m_hist -= m_hist[-1]
-
-                                    # Historical simulations start at different years since initialization was left
-                                    # up to the modelers
-                                    hist_time = nc_hist.variables["time"][:]
-                                else:
-                                    hist_time = np.array([])
-                                    m_hist = np.array([])
-                                n_hist = len(m_hist)
-                                hist_df = pd.DataFrame(
-                                    data=np.hstack(
-                                        (
-                                            hist_time.reshape(-1, 1),
-                                            m_hist.reshape(-1, 1),
-                                            np.repeat(group, n_hist).reshape(-1, 1),
-                                            np.repeat(model, n_hist).reshape(-1, 1),
-                                            np.repeat(exp, n_hist).reshape(-1, 1),
-                                            np.repeat(rcp, n_hist).reshape(-1, 1),
-                                        )
-                                    ),
-                                    columns=[
-                                        "Year",
-                                        m_desc,
-                                        "Group",
-                                        "Model",
-                                        "Exp",
-                                        "RCP",
-                                    ],
-                                ).astype({"Year": float, m_desc: float})
-
-                                p_df = pd.concat([hist_df, exp_df])
-
-                                if not remove_ctrl:
-                                    if m_var == "ivol":
-                                        p_df[m_desc] -= p_df[p_df["Year"] == proj_start][m_desc].values
-                                dfs.append(p_df)
-        a_dfs.append(pd.concat(dfs))
-    df = pd.concat(a_dfs)
-    df["Cumulative ice sheet mass change (Gt)"] *= 910
-    df["Cumulative ice sheet mass change (Gt)"] /= 1e12
-
-    df["Rate of surface mass balance anomaly (Gt/yr)"] /= 1e12
-    df["Rate of surface mass balance anomaly (Gt/yr)"] *= secpera
-
-    df["Rate of ice sheet mass change (Gt/yr)"] = np.gradient(
-        df["Cumulative ice sheet mass change (Gt)"].values
-    ) / np.gradient(df["Year"].values)
+        years = np.r_[t_hist, t_exp]
+        mass = np.r_[v_hist, v_exp] * rhoi / 1e12  # m3 above flotation -> Gt
+        if not remove_ctrl:
+            at0 = np.flatnonzero(years == proj_start)
+            mass = mass - (mass[at0[0]] if at0.size else mass[0])
+        smb = np.interp(years, t_smb, v_smb) / 1e12 * secpera if t_smb.size else np.full(len(years), np.nan)
+        rate = np.gradient(mass, years) if len(years) > 1 else np.full(len(years), np.nan)
+        dfs.append(pd.DataFrame({
+            "Year": years, "Cumulative ice sheet mass change (Gt)": mass, "Group": group, "Model": model,
+            "Exp": exp, "RCP": str(rcp), "Rate of surface mass balance anomaly (Gt/yr)": smb,
+            "Rate of ice sheet mass change (Gt/yr)": rate, "Ice density (kg/m3)": rhoi,
+        }))
+    df = pd.concat(dfs, ignore_index=True)
     df.to_csv(ismip6_filename, compression="gzip")
 
 

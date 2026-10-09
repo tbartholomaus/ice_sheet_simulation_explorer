@@ -596,7 +596,7 @@ def load_aschwanden2022_gis():
 # also fetched directly during development) states the processing is
 # "largely identical to the ISMIP6 GrIS projections" -- confirmed directly:
 # files are named scalars_mm_GIS_<group>_<model>_<exp>.nc with the same
-# variables (limgr, sle, ...) load_ismip6_gis() already reads for the main
+# variables (ivaf, rhoi, sle, ...) load_ismip6_gis() already reads for the main
 # ISMIP6 ensemble, and each model directory includes matching historical/
 # and ctrl-proj/ runs, the same pieces ismip6_gis_to_csv() combines.
 #
@@ -735,15 +735,16 @@ def _goelzer2025_download_labs():
     return extract_dir
 
 
-def _goelzer2025_read_limgr_gt(nc_path, first_year):
-    """Reads one scalars_mm_GIS_*.nc file's `limgr` (grounded ice mass, kg
-    -- the same variable load_ismip6_gis() uses "for comparison with
-    GRACE"), converted to Gt, with Year assigned as
-    `first_year + arange(len(...))` -- see GOELZER2025_HIST_LAST_YEAR/
-    GOELZER2025_PROJ_FIRST_YEAR's docstring above for why this ignores the
-    file's own (unreliable) time metadata entirely."""
+def _goelzer2025_read_mass_af_gt(nc_path, first_year):
+    """Reads one scalars_mm_GIS_*.nc file's ice mass ABOVE FLOTATION, as
+    `ivaf` (m3) x the file's own `rhoi` (kg/m3), in Gt -- the same quantity
+    load_ismip6_gis() uses. (Grounded mass, `limgr`, was used before
+    2026-10-09; it also counts ice below flotation, which doesn't change sea
+    level.) Year is assigned as `first_year + arange(len(...))` -- see
+    GOELZER2025_HIST_LAST_YEAR/GOELZER2025_PROJ_FIRST_YEAR's docstring above
+    for why this ignores the file's own (unreliable) time metadata."""
     ds = xr.open_dataset(nc_path)
-    mass_gt = ds["limgr"].values / 1e12
+    mass_gt = ds["ivaf"].values * float(ds["rhoi"].values) / 1e12
     ds.close()
     years = first_year + np.arange(len(mass_gt))
     return years, mass_gt
@@ -799,7 +800,7 @@ def load_goelzer2025_gis():
             hist_nc = os.path.join(variant_dir, "historical", f"scalars_mm_GIS_{lab}_{variant}_historical.nc")
             if os.path.exists(hist_nc):
                 hist_len = len(xr.open_dataset(hist_nc)["time"])
-                hist_years, hist_gt = _goelzer2025_read_limgr_gt(
+                hist_years, hist_gt = _goelzer2025_read_mass_af_gt(
                     hist_nc, first_year=GOELZER2025_HIST_LAST_YEAR - hist_len + 1,
                 )
             else:
@@ -822,7 +823,7 @@ def load_goelzer2025_gis():
                 )
                 if not os.path.exists(proj_nc):
                     continue
-                proj_years, proj_gt = _goelzer2025_read_limgr_gt(proj_nc, first_year=GOELZER2025_PROJ_FIRST_YEAR)
+                proj_years, proj_gt = _goelzer2025_read_mass_af_gt(proj_nc, first_year=GOELZER2025_PROJ_FIRST_YEAR)
 
                 years = np.concatenate([hist_years, proj_years])
                 mass_gt = np.concatenate([hist_gt, proj_gt])
