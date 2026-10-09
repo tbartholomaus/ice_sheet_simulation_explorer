@@ -206,14 +206,13 @@ ism_meta = {
                                      "sliding_law": "Not applicable (statistical emulator)",
                                      "initialization": "Not applicable (statistical emulator)"},
 
-    # DeConto & Pollard (2016). Data Set S1 gives only the model and each
-    # run's MICI parameters (shown in hover), not the sliding law or
-    # initialization, so those defer to the paper rather than being guessed.
-    ("DeConto2016", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "See paper",
-                                   "initialization": "See paper"},
-    # DeConto et al. (2021): same model (updated), same caveat.
-    ("DeConto2021", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "See paper",
-                                   "initialization": "See paper"},
+    # DeConto & Pollard (2016) and DeConto et al. (2021), PSU3D-ICE: Weertman
+    # sliding and spin-up initialization, per the user (2026-10-09) -- the
+    # data files themselves report neither.
+    ("DeConto2016", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "Weertman",
+                                   "initialization": "Spin-up"},
+    ("DeConto2021", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "Weertman",
+                                   "initialization": "Spin-up"},
 }
 
 
