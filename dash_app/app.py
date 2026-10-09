@@ -154,7 +154,8 @@ main = html.Main(className="content", children=[
             "Median (line), 25–75% (darker band) and 5–95% (faint band) of simulated cumulative change, zeroed at "
             "the start of the averaging window (shaded), against IMBIE observations (black, hatched ±2σ). "
             "With more than 8 groups only the 25–75% band is drawn (hover for 5–95%). "
-            "Drag to pan through time (out to 2100) and scroll to zoom; double-click to return to the window. "
+            "Drag to pan through time (out to 2100); scroll, use the box-zoom tool, or drag the y-axis to zoom, "
+            "including vertically. Double-click to return to the window. "
             "Click a legend entry to hide it; double-click to show it alone.",
             [graph("ts-graph", 460, scrollZoom=True, doubleClick="autosize"),
              dcc.Store(id="ts-view"),  # the x range the user panned/zoomed to, for the current window
@@ -506,12 +507,15 @@ def _user_chips(store):
     return chips, len(chips) >= U.MAX_ENSEMBLES
 
 
-# After any pan/zoom of the time series, refit each panel's y axis to the
-# data now in view: the series run to 2100, where values dwarf those near the
-# window, and Plotly keeps a fixed y range while panning. A double-click
-# (which autoranges to 1950-2100) is turned into "back to the window". Runs in
-# the browser; y-only relayouts it causes are ignored, so it can't loop. The
-# resulting x range goes to the ts-view store so a server rebuild keeps it.
+# After a sideways PAN of the time series (the visible span of years is
+# unchanged), refit each panel's y axis to the data now in view: the series
+# run to 2100, where values dwarf those near the window, and Plotly keeps the
+# old y range while panning. Zooms are left alone -- a box zoom, scroll zoom
+# or y-axis drag sets the vertical range the user asked for, and refitting
+# would undo it. A double-click (which autoranges to 1950-2100) is turned
+# into "back to the window". Runs in the browser; y-only relayouts are
+# ignored, so it can't loop. The resulting x range goes to the ts-view store
+# so a server rebuild keeps it.
 app.clientside_callback(
     """
     function(relayout) {
@@ -521,9 +525,18 @@ app.clientside_callback(
         if (!gd || !gd._fullLayout || !gd._fullData) return nu;
         const meta = (gd.layout && gd.layout.meta) || {};
         const reset = relayout["xaxis.autorange"] || relayout["xaxis2.autorange"];
+        const xr = reset && meta.window ? meta.window : gd._fullLayout.xaxis.range.slice();
+        // Previous visible span, kept on window (the graph div gets replaced on
+        // rebuilds) and keyed to the averaging window, which resets the view.
+        const span = xr[1] - xr[0], key = meta.lo + "-" + meta.hi;
+        const prev = window.__tsSpanKey === key && window.__tsSpan
+            ? window.__tsSpan : (meta.window ? meta.window[1] - meta.window[0] : span);
+        window.__tsSpan = span; window.__tsSpanKey = key;
+        const panned = Math.abs(span - prev) < 1e-6 * Math.max(1, Math.abs(prev));
+        const view = {lo: meta.lo, hi: meta.hi, x: reset ? null : xr};
+        if (!reset && !panned) return view;  // a zoom: keep the user's vertical range
         const upd = {};
         if (reset && meta.window) upd["xaxis.range"] = meta.window.slice();
-        const xr = reset && meta.window ? meta.window : gd._fullLayout.xaxis.range.slice();
         [["x", "xaxis", "yaxis"], ["x2", "xaxis2", "yaxis2"]].forEach(([xid, xax, yax]) => {
             if (!gd._fullLayout[xax]) return;
             const [x0, x1] = xr;  // the panels share one x range (matches="x")
@@ -541,7 +554,7 @@ app.clientside_callback(
             }
         });
         if (Object.keys(upd).length) Plotly.relayout(gd, upd);
-        return {lo: meta.lo, hi: meta.hi, x: reset ? null : xr};
+        return view;
     }
     """,
     Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
