@@ -108,11 +108,7 @@ sidebar = html.Aside(className="sidebar", children=[
             id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
             options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
                       "value": s} for s in SOURCE_LABELS]),
-        html.Div(id="user-chip", className="user-chip", style={"display": "none"}, children=[
-            html.Span(className="swatch", style={"background": U.USER_COLOR}),
-            html.Span(id="user-chip-text"),
-            html.Button("Remove", id="user-remove", className="link-button user-remove", n_clicks=0),
-        ]),
+        html.Div(id="user-chips"),  # one row per uploaded ensemble, with its own Remove link
         html.Button("+ Add your own ensemble", id="upload-open", className="upload-button", n_clicks=0),
     ])),
     control("Group by", html.Div([
@@ -221,7 +217,8 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
                 ", then an experiment name or number for each simulation."], className="lede"),
         html.Pre(UPLOAD_EXAMPLE, className="example"),
         html.P(f"Annual or finer time steps are fine. Up to {U.MAX_RUNS:,} simulations and "
-               f"{U.MAX_BYTES // 1_000_000} MB. Your file stays in this browser tab; it isn't stored on the "
+               f"{U.MAX_BYTES // 1_000_000} MB per file, and up to {U.MAX_ENSEMBLES} ensembles at once, each "
+               "shown as its own group. Your files stay in this browser tab; they aren't stored on the "
                "server or shared with anyone.", className="note"),
         dcc.Upload(id="upload-file", className="dropzone", accept=".csv,.txt,text/csv",
                    children=html.Div(["Drag a CSV here, or ", html.Span("choose a file", className="link")])),
@@ -243,7 +240,7 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
 app.layout = html.Div(className="page", children=[
     sidebar, main, upload_modal,
     dcc.Store(id="upload-pending"),                         # parsed, not yet confirmed
-    dcc.Store(id="user-data", storage_type="session"),      # confirmed upload (this tab only)
+    dcc.Store(id="user-data", storage_type="session"),      # confirmed uploads, a list (this tab only)
 ])
 server = app.server
 
@@ -285,15 +282,15 @@ def _timeseries(years, sources, groupby, units, obs, collapse, user):
         n_missing = int((~np.isfinite(A.CHANGE_2100[m])).sum())
         if n_missing:
             gaps.append(f"{n_missing} of {int(m.sum())} {pub} runs")
-    u = U.from_store(user)
-    if u is not None:
+    users = U.from_store(user)
+    for u in users:
         n_missing = int((~np.isfinite(U.change_2015_2100(u))).sum())
         if n_missing:
             gaps.append(f"{n_missing} of {len(u.vals)} {u.label} runs (need values in 2015 or 2016 and 2100)")
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
     dim = _dim(groupby, bool(collapse))
-    y2100 = F.change_2100_figure(valid, dim, units, u)
-    return F.timeseries_figure(valid, lo, hi, dim, units, obs, u), y2100, note, _height(y2100)
+    y2100 = F.change_2100_figure(valid, dim, units, users)
+    return F.timeseries_figure(valid, lo, hi, dim, units, obs, users), y2100, note, _height(y2100)
 
 
 def _fmt_p(p):
@@ -395,16 +392,20 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
             note = (f"{DIM_LABEL[dim]} doesn't vary across this selection (or isn't shared by both ice "
                     "sheets), so the strongest factor is shown.")
         dim = top["characteristic"]
-    u, ub = U.from_store(user), None
-    if u is not None and (both or u.ice_sheet == scope):
-        # Same definition as A.bias: rate minus the observed rate, per unit
-        # area when pooling both ice sheets. Shown beside, never inside, the
-        # ANOVA and best-match statistics -- an upload has no metadata.
-        ub = U.rates(u, lo, hi) - A.imbie_rate(u.ice_sheet, lo, hi, obs)[0]
-        ub = ub * 1e12 / ICE_SHEET_AREA_M2[u.ice_sheet] if both else ub * F.units_info(units)[0]
-        note = (note + " " if note else "") + (f"{u.label} is shown for comparison only; it isn't part of the "
+    uploads = []
+    for u in U.from_store(user):
+        if both or u.ice_sheet == scope:
+            # Same definition as A.bias: rate minus the observed rate, per unit
+            # area when pooling both ice sheets. Shown beside, never inside, the
+            # ANOVA and best-match statistics -- an upload has no metadata.
+            ub = U.rates(u, lo, hi) - A.imbie_rate(u.ice_sheet, lo, hi, obs)[0]
+            uploads.append((u, ub * 1e12 / ICE_SHEET_AREA_M2[u.ice_sheet] if both else ub * F.units_info(units)[0]))
+    if uploads:
+        names = ", ".join(u.label for u, _ in uploads)
+        verb = "is" if len(uploads) == 1 else "are"
+        note = (note + " " if note else "") + (f"{names} {verb} shown for comparison only, not as part of the "
                                                "ANOVA or the best-match shares.")
-    box = F.bias_figure(b, w, mask, dim, label, obs, ub, u)
+    box = F.bias_figure(b, w, mask, dim, label, obs, uploads)
     rows, cut = A.low_bias_enrichment(b[mask], w[mask], RUNS[dim].to_numpy()[mask], LOW_BIAS_FRAC)
     enrich = F.enrichment_figure(rows, dim, LOW_BIAS_FRAC)
     return (summary, _anova_table(one_way, combined, dim), box, f"Bias by {_lower(DIM_LABEL[dim])}", note, enrich,
@@ -438,16 +439,23 @@ def _upload_modal(*_):
 
 
 @app.callback(Output("upload-pending", "data"), Output("upload-status", "children"),
-              Output("upload-step2", "style"), Output("upload-status", "className"),
-              Input("upload-file", "contents"), State("upload-file", "filename"), prevent_initial_call=True)
-def _upload_parse(contents, filename):
+              Output("upload-step2", "style"), Output("upload-status", "className"), Output("upload-name", "value"),
+              Input("upload-file", "contents"), State("upload-file", "filename"), State("user-data", "data"),
+              prevent_initial_call=True)
+def _upload_parse(contents, filename, store):
     if not contents:
-        return None, None, {"display": "none"}, "upload-status"
+        return None, None, {"display": "none"}, "upload-status", no_update
+    if len(U.entries(store)) >= U.MAX_ENSEMBLES:
+        return (None, f"Up to {U.MAX_ENSEMBLES} ensembles can be shown at once; remove one first.",
+                {"display": "none"}, "upload-status error", no_update)
     try:
         payload, summary = U.parse_upload(contents, filename)
     except ValueError as e:
-        return None, f"{filename}: {e}", {"display": "none"}, "upload-status error"
-    return payload, f"{filename}: {summary}", {"display": "block"}, "upload-status ok"
+        return None, f"{filename}: {e}", {"display": "none"}, "upload-status error", no_update
+    # Default legend name: the file name, made unique among current uploads.
+    stem = os.path.splitext(os.path.basename(filename or ""))[0][:40]
+    name = U.unique_label(stem, {e["label"] for e in U.entries(store)})
+    return payload, f"{filename}: {summary}", {"display": "block"}, "upload-status ok", name
 
 
 @app.callback(Output("upload-add", "disabled"), Input("upload-pending", "data"), Input("upload-ice", "value"))
@@ -456,25 +464,40 @@ def _upload_ready(pending, ice):
 
 
 @app.callback(Output("user-data", "data"), Output("upload-file", "contents"), Output("upload-ice", "value"),
-              Input("upload-add", "n_clicks"), Input("user-remove", "n_clicks"),
-              State("upload-pending", "data"), State("upload-ice", "value"), State("upload-name", "value"),
-              prevent_initial_call=True)
-def _upload_commit(_add, _remove, pending, ice, name):
-    if ctx.triggered_id == "user-remove":
-        return None, no_update, no_update
-    if not (pending and ice):
+              Input("upload-add", "n_clicks"), Input({"type": "user-remove", "index": dash.ALL}, "n_clicks"),
+              State("user-data", "data"), State("upload-pending", "data"), State("upload-ice", "value"),
+              State("upload-name", "value"), prevent_initial_call=True)
+def _upload_commit(_add, _removes, store, pending, ice, name):
+    """Add the confirmed upload to the list, or drop the one whose Remove
+    link was clicked. Each upload keeps the color it was given."""
+    current = U.entries(store)
+    if isinstance(ctx.triggered_id, dict):
+        if not ctx.triggered[0]["value"]:  # chips re-rendered, not clicked
+            return no_update, no_update, no_update
+        label = ctx.triggered_id["index"]
+        return [e for e in current if e["label"] != label], no_update, no_update
+    if not (pending and ice) or len(current) >= U.MAX_ENSEMBLES:
         return no_update, no_update, no_update
+    taken = {e["label"] for e in current}
+    entry = {**pending, "ice_sheet": ice, "label": U.unique_label(name, taken),
+             "color": U.free_color({e.get("color") for e in current})}
     # Reset the dialog so the next upload starts fresh.
-    return {**pending, "ice_sheet": ice, "label": (name or "").strip() or U.DEFAULT_LABEL}, None, None
+    return current + [entry], None, None
 
 
-@app.callback(Output("user-chip", "style"), Output("user-chip-text", "children"), Input("user-data", "data"))
-def _user_chip(user):
-    if not user:
-        return {"display": "none"}, ""
-    n = len(user["names"])
-    where = {"AIS": "Antarctica", "GIS": "Greenland"}[user["ice_sheet"]]
-    return {"display": "flex"}, f"{user['label']} ({where}, {n} simulation{'s' if n != 1 else ''})"
+@app.callback(Output("user-chips", "children"), Output("upload-open", "disabled"), Input("user-data", "data"))
+def _user_chips(store):
+    chips = []
+    for u in U.from_store(store):
+        n = len(u.names)
+        where = {"AIS": "Antarctica", "GIS": "Greenland"}[u.ice_sheet]
+        chips.append(html.Div(className="user-chip", children=[
+            html.Span(className="swatch", style={"background": u.color}),
+            html.Span(f"{u.label} ({where}, {n} simulation{'s' if n != 1 else ''})", className="user-chip-text"),
+            html.Button("Remove", id={"type": "user-remove", "index": u.label},
+                        className="link-button user-remove", n_clicks=0),
+        ]))
+    return chips, len(chips) >= U.MAX_ENSEMBLES
 
 
 @app.callback(Output("collapse-warning", "style"), Input("collapse", "value"))

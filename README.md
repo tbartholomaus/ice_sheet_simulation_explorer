@@ -98,6 +98,7 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
 | Goelzer 2025 (PROTECT GIS) | Goelzer et al. (2025), *The Cryosphere* 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 |
 | Edwards 2021 (AIS Main, AIS Risk Averse, GIS) | Edwards et al. (2021), *Nature* 593, 74–82, https://doi.org/10.1038/s41586-021-03302-y; samples from https://github.com/tamsinedwards/emulandice |
+| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). Uncorrected runs, decadal values interpolated to annual |
 | IMBIE3 observations | Otosaka et al. (2026), *Scientific Data*, https://doi.org/10.1038/s41597-026-08088-0 |
 | IMBIE2 observations | Otosaka et al. (2023), *Earth System Science Data* 15, 1597, https://doi.org/10.5194/essd-15-1597-2023 |
 

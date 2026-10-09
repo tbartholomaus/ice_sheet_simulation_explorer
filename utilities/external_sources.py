@@ -1061,6 +1061,79 @@ def load_edwards2021_gis(n_samples=None, keep_through_year=None):
     return _load_edwards2021("GrIS", n_samples=n_samples, keep_through_year=keep_through_year)
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# DeConto & Pollard (2016), "Contribution of Antarctica to past and future
+# sea-level rise", Nature 531, 591-597, https://doi.org/10.1038/nature17145
+# (PSU3D-ICE with hydrofracturing and ice-cliff failure, i.e. MICI).
+#
+# The paper's own archive doesn't include its run time series; the Edwards
+# et al. (2019) Code Ocean capsule (0349088) has only per-run snapshots
+# (1992-2017 and 2100). The time series used here are Data Set S1 of Kopp
+# et al. (2017), "Evolving understanding of Antarctic ice-sheet physics and
+# ambiguity in probabilistic sea-level projections", Earth's Future 5,
+# 1217-1233, https://doi.org/10.1002/2017EF000663 (DeConto and Pollard are
+# co-authors): file eft2271-sup-0002-2017ef000663-ds01.tsv, downloaded by
+# hand from the article's Supporting Information (Wiley refuses scripted
+# downloads), licensed CC BY-NC-ND 4.0 with the article.
+#
+# Layout: one row per (ensemble member, ice sheet AIS/WAIS/EAIS, scenario),
+# columns OCFAQ (sic; OCFAC), CREVLIQ, VCLIF, Pliocene/LIG sea level (m),
+# then contribution to GMSL in mm at 2000, 2010, ..., 2300, zeroed at 2000.
+# 29 members: the DP16 runs passing the Pliocene (5-15 m) and LIG targets.
+# Scenarios come raw ("RCP 8.5") and with Kopp et al.'s ocean-temperature
+# bias correction ("RCP 8.5 (BC)"). Checked: WAIS + EAIS == AIS exactly, and
+# the raw 2050 values reproduce Kopp et al.'s text (RCP8.5 median -3 cm,
+# range -9 to +12 cm; RCP2.6 median -2 cm, range -10 to +6 cm).
+#
+# Per user decisions (2026-10-08): raw (uncorrected) runs only, AIS total
+# only, linearly interpolated from the decadal values to annual so the
+# source works with any averaging window. ND licence: dash_app bundles the
+# original file unmodified and converts it at startup (dash_app/data.py
+# _load_deconto2016) instead of shipping a reformatted derivative.
+# ═════════════════════════════════════════════════════════════════════════
+
+DECONTO2016_FILENAME = "eft2271-sup-0002-2017ef000663-ds01.tsv"
+DECONTO2016_SCENARIOS = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}  # raw only
+DECONTO2016_PROTOCOL_LABEL = "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected"
+DECONTO2016_CLIMATE_MODEL_LABEL = "Not reported in Data Set S1"
+
+
+def load_deconto2016_ais(path=None, keep_through_year=2100):
+    """Loads DeConto & Pollard (2016)'s Antarctic runs from Kopp et al.
+    (2017) Data Set S1 (see the section comment above for provenance and
+    scope) as a dataframe shaped like the other loaders: Year (annual,
+    linearly interpolated from the decadal values), Cumulative ice sheet
+    mass change (Gt; mm GMSL x -362.5, so ice loss is negative), Group,
+    Model, Exp, IS, plus climate_model/scenario/protocol and a
+    `mici_params` text column with each run's parameters.
+
+    `path`: the downloaded TSV; defaults to the copy bundled in
+    dash_app/data/. The file can't be fetched automatically."""
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "dash_app", "data", DECONTO2016_FILENAME)
+    raw = pd.read_csv(path, sep="\t")
+    raw = raw[(raw["Ice Sheet"] == "AIS") & raw["Scenario"].isin(DECONTO2016_SCENARIOS)]
+    dec_years = np.array([int(c) for c in raw.columns if c.isdigit()])
+    years = np.arange(dec_years.min(), min(dec_years.max(), keep_through_year) + 1)
+    rows, meta = [], []
+    for _, r in raw.iterrows():
+        scen = DECONTO2016_SCENARIOS[r["Scenario"]]
+        exp = f"{scen.replace('.', '')}_m{int(r['Ensemble Member']):02d}"  # e.g. RCP85_m07
+        mm = np.interp(years, dec_years, r[[str(y) for y in dec_years]].to_numpy(dtype=float))
+        rows.append(pd.DataFrame({
+            "Year": years, "Cumulative ice sheet mass change (Gt)": -mm * GT_PER_M_SLE,
+            "Group": "DeConto2016", "Model": "PSU3D-ICE", "Exp": exp, "IS": "AIS",
+        }))
+        meta.append({
+            "Exp": exp, "climate_model": DECONTO2016_CLIMATE_MODEL_LABEL, "scenario": scen,
+            "protocol": DECONTO2016_PROTOCOL_LABEL,
+            "mici_params": (f"OCFAC {r['OCFAQ']:g}, CREVLIQ {r['CREVLIQ']:g}, VCLIF {r['VCLIF']:g} km/yr; "
+                            f"Pliocene {r['Pliocene SL (m)']:.1f} m, LIG {r['LIG SL (m)']:.1f} m"),
+        })
+    return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
+
+
 def exp_meta_from_df(df, extra_cols):
     """Builds a get_exp_meta()-style {Exp: {...}} dict from one of this
     module's loaded dataframes, whose exp-level classification (scenario,

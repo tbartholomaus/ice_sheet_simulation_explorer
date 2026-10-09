@@ -92,7 +92,7 @@ def obs_name(obs):
     return f"{OBS_PRODUCTS[obs]['label']} observed (±2σ)"
 
 
-def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, user=None):
+def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, users=()):
     f, rate_label, _ = units_info(units)
     rates = A.run_rates(lo, hi)
     ok = valid & np.isfinite(rates)
@@ -105,16 +105,17 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, user=
     for row, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
         imbie, imbie_se = A.imbie_rate(ice, lo, hi, obs)
-        ur, unames = None, None
-        if user is not None and user.ice_sheet == ice:
-            r = U.rates(user, lo, hi)
-            fin = np.isfinite(r)
-            if fin.any():
-                ur, unames = r[fin], np.asarray(user.names)[fin]
-        if not cats and ur is None:
+        uploads = []  # (upload, finite rates, their simulation names) for this ice sheet
+        for u in users:
+            if u.ice_sheet == ice:
+                r = U.rates(u, lo, hi)
+                fin = np.isfinite(r)
+                if fin.any():
+                    uploads.append((u, r[fin], np.asarray(u.names)[fin]))
+        if not cats and not uploads:
             _empty(fig, row, 1)
             continue
-        xs_all = np.r_[rates[ok & (_ICE == ice)], ur if ur is not None else []] * f
+        xs_all = np.concatenate([rates[ok & (_ICE == ice)]] + [r for _, r, _ in uploads]) * f
         lo_x, hi_x = min(xs_all.min(), imbie * f), max(xs_all.max(), imbie * f)
         pad = max(0.12 * (hi_x - lo_x), 1e-3)
         grid = np.linspace(lo_x - pad, hi_x + pad, 160)
@@ -142,8 +143,8 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, user=
                     x=[med], y=[MEDIAN_Y], mode="markers", legendgroup=str(cat), showlegend=False,
                     marker=dict(symbol="triangle-down", size=12, color=color, line=dict(width=1, color=INK)),
                     hovertemplate=f"{cat} median: %{{x:.3g}} {rate_label}<extra></extra>"), row=row, col=1)
-        if ur is not None:
-            _user_rates(fig, row, user.label, ur * f, unames, grid, rate_label, show_medians)
+        for k, (u, r, names) in enumerate(uploads):
+            _user_rates(fig, row, u, r * f, names, grid, rate_label, show_medians, k)
         band = sorted([(imbie - 2 * imbie_se) * f, (imbie + 2 * imbie_se) * f])
         fig.add_vrect(x0=band[0], x1=band[1], fillcolor=rgba(IMBIE_COLOR, 0.18), line_width=0, row=row, col=1)
         fig.add_trace(go.Scatter(
@@ -166,27 +167,27 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, user=
     return fig
 
 
-def _user_rates(fig, row, label, x, names, grid, rate_label, show_medians):
-    """The visitor's upload in one rates panel: its own density curve, dots
-    and median, in USER_COLOR, equally weighted (it is never pooled)."""
-    c = U.USER_COLOR
+def _user_rates(fig, row, u, x, names, grid, rate_label, show_medians, k):
+    """One of the visitor's uploads in a rates panel: its own density curve,
+    dots and median, in its own color, equally weighted (never pooled)."""
+    c, label, group = u.color, u.label, f"user:{u.label}"
     dens = A.kde_curve(x, np.ones_like(x), grid)
     fig.add_trace(go.Scatter(x=grid, y=np.full_like(grid, KDE_Y0), mode="lines", line=dict(width=0),
-                             hoverinfo="skip", showlegend=False, legendgroup="user"), row=row, col=1)
+                             hoverinfo="skip", showlegend=False, legendgroup=group), row=row, col=1)
     fig.add_trace(go.Scatter(
         x=grid, y=KDE_Y0 + dens * KDE_H, mode="lines", fill="tonexty", line=dict(color=c, width=2),
-        fillcolor=rgba(c, 0.18), name=label, legendgroup="user", showlegend=True, legendrank=2,
+        fillcolor=rgba(c, 0.18), name=label, legendgroup=group, showlegend=True, legendrank=2 + k,
         hoverinfo="skip"), row=row, col=1)
-    jitter = np.random.default_rng(7).uniform(-1, 1, len(x))
+    jitter = np.random.default_rng(7 + k).uniform(-1, 1, len(x))
     fig.add_trace(go.Scatter(
-        x=x, y=jitter * STRIP_H, mode="markers", legendgroup="user", showlegend=False,
+        x=x, y=jitter * STRIP_H, mode="markers", legendgroup=group, showlegend=False,
         marker=dict(color=c, size=6 if len(x) <= 30 else 4, opacity=0.8 if len(x) <= 30 else 0.45,
                     line=dict(width=0.5, color="white")),
         text=[f"{label}: {n}<br><b>Rate: {v:.3g} {rate_label}</b>" for n, v in zip(names, x)],
         hovertemplate="%{text}<extra></extra>"), row=row, col=1)
     if show_medians:
         fig.add_trace(go.Scatter(
-            x=[np.median(x)], y=[MEDIAN_Y], mode="markers", legendgroup="user", showlegend=False,
+            x=[np.median(x)], y=[MEDIAN_Y], mode="markers", legendgroup=group, showlegend=False,
             marker=dict(symbol="triangle-down", size=12, color=c, line=dict(width=1, color=INK)),
             hovertemplate=f"{label} median: %{{x:.3g}} {rate_label}<extra></extra>"), row=row, col=1)
 
@@ -195,16 +196,17 @@ def _user_rates(fig, row, label, x, names, grid, rate_label, show_medians):
 
 TS_MAX_OUTER_BANDS = 8
 
-def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, user=None):
+def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=()):
     f, _, cum_label = units_info(units)
     fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.08,
                         subplot_titles=[ICE_SHEET_NAMES[s] for s in ICE_SHEETS])
     legend_seen = set()
     for col, ice in enumerate(ICE_SHEETS, start=1):
         series = A.timeseries(valid, ice, dim, lo, hi)
-        if user is not None and user.ice_sheet == ice:
-            us = U.timeseries(user, lo, hi)
-            series = series + ([us] if us else [])
+        for u in users:
+            if u.ice_sheet == ice:
+                us = U.timeseries(u, lo, hi)
+                series = series + ([us] if us else [])
         fig.add_vrect(x0=lo, x1=hi + 1, fillcolor="rgba(250, 204, 21, 0.13)", line_width=0, row=1, col=col)
         ax = "" if col == 1 else str(col)
         fig.add_annotation(text=f"rate window {lo}–{hi}", x=(lo + hi + 1) / 2, y=0.99, xref=f"x{ax}", yref=f"y{ax} domain",
@@ -297,7 +299,7 @@ def _tick_style(labels, panel_px=NARROWEST_PANEL_PX):
     return -90, int(max(8, min(12, slot - 2)))
 
 
-def change_2100_figure(valid, dim, units, user=None):
+def change_2100_figure(valid, dim, units, users=()):
     f, _, cum_label = units_info(units)
     ok = valid & np.isfinite(A.CHANGE_2100)
     w = A.run_weights(ok)
@@ -306,11 +308,13 @@ def change_2100_figure(valid, dim, units, user=None):
     label_drop = 0  # px the slanted labels hang below the axis; the figure grows by it
     for col, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
-        uc = None
-        if user is not None and user.ice_sheet == ice:
-            uc = U.change_2015_2100(user)
-            uc = uc[np.isfinite(uc)] if np.isfinite(uc).any() else None
-        if not cats and uc is None:
+        uploads = []
+        for u in users:
+            if u.ice_sheet == ice:
+                c = U.change_2015_2100(u)
+                if np.isfinite(c).any():
+                    uploads.append((u, c[np.isfinite(c)]))
+        if not cats and not uploads:
             _empty(fig, 1, col)
             continue
         for cat, m in cats:
@@ -322,13 +326,13 @@ def change_2100_figure(valid, dim, units, user=None):
                 fillcolor=rgba(color, 0.35), line=dict(color=color, width=1.6), showlegend=False,
                 name=f"{cat} (n={int(m.sum())})", hoverinfo="y+name"), row=1, col=col)
         labels = [c for c, _ in cats]
-        if uc is not None:
+        for u, uc in uploads:
             q = np.quantile(uc * f, [0.05, 0.25, 0.5, 0.75, 0.95])
             fig.add_trace(go.Box(
-                x=[user.label], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
-                fillcolor=rgba(U.USER_COLOR, 0.35), line=dict(color=U.USER_COLOR, width=2), showlegend=False,
-                name=f"{user.label} (n={len(uc)})", hoverinfo="y+name"), row=1, col=col)
-            labels.append(user.label)
+                x=[u.label], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
+                fillcolor=rgba(u.color, 0.35), line=dict(color=u.color, width=2), showlegend=False,
+                name=f"{u.label} (n={len(uc)})", hoverinfo="y+name"), row=1, col=col)
+            labels.append(u.label)
         fig.add_hline(y=0, line=dict(color="#9aa3af", dash="dot", width=1), row=1, col=col)
         angle, size = _tick_style(labels)
         longest = max(len(str(c)) for c in labels) * 7 * size / 12
@@ -341,10 +345,11 @@ def change_2100_figure(valid, dim, units, user=None):
 
 # ── 4. Bias ───────────────────────────────────────────────────────────────
 
-def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, user_bias=None, user=None):
+def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, uploads=()):
     """Weighted box (5/25/50/75/95) + points of bias per category of `dim`,
     sorted by median bias (most negative at top); dashed zero = perfect
-    match to IMBIE."""
+    match to IMBIE. `uploads`: [(upload, per-simulation bias)], drawn as
+    extra rows at the bottom for comparison only."""
     col = RUNS[dim].to_numpy()
     cats = []
     for c in set(col[mask]):
@@ -370,21 +375,23 @@ def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, user_bias=None, us
             text=[f"{_PUB[j]}: {RUNS.group[j]} / {RUNS.model[j]} / {RUNS.exp[j]}" for j in idx],
             hovertemplate=f"%{{text}}<br>Bias: %{{x:.3g}} {bias_label}<extra></extra>"))
     ticks = [str(c) for _, c, _ in cats]
-    if user_bias is not None and np.isfinite(user_bias).any():
-        # The upload as one extra row at the bottom, for comparison only.
-        i, fin = len(cats), np.isfinite(user_bias)
-        ub, names = user_bias[fin], np.asarray(user.names)[fin]
+    for k, (u, ub_all) in enumerate(uploads):
+        # Each upload as one extra row at the bottom, for comparison only.
+        fin = np.isfinite(ub_all)
+        if not fin.any():
+            continue
+        i, ub, names = len(ticks), ub_all[fin], np.asarray(u.names)[fin]
         q = np.quantile(ub, [0.05, 0.25, 0.5, 0.75, 0.95])
         fig.add_trace(go.Box(y=[i], q1=[q[1]], median=[q[2]], q3=[q[3]], lowerfence=[q[0]], upperfence=[q[4]],
-                             orientation="h", width=0.6, fillcolor=rgba(U.USER_COLOR, 0.25),
-                             line=dict(color=U.USER_COLOR, width=2), showlegend=False, hoverinfo="x+name",
-                             name=f"{user.label} (n={len(ub)})"))
+                             orientation="h", width=0.6, fillcolor=rgba(u.color, 0.25),
+                             line=dict(color=u.color, width=2), showlegend=False, hoverinfo="x+name",
+                             name=f"{u.label} (n={len(ub)})"))
         fig.add_trace(go.Scatter(
-            x=ub, y=i + np.random.default_rng(7).uniform(-1, 1, len(ub)) * 0.26, mode="markers", showlegend=False,
-            marker=dict(color=U.USER_COLOR, size=5, opacity=0.7, line_width=0),
-            text=[f"{user.label}: {n}" for n in names],
+            x=ub, y=i + np.random.default_rng(7 + k).uniform(-1, 1, len(ub)) * 0.26, mode="markers", showlegend=False,
+            marker=dict(color=u.color, size=5, opacity=0.7, line_width=0),
+            text=[f"{u.label}: {n}" for n in names],
             hovertemplate=f"%{{text}}<br>Bias: %{{x:.3g}} {bias_label}<extra></extra>"))
-        ticks.append(f"<b>{user.label}</b>")
+        ticks.append(f"<b>{u.label}</b>")
     fig.add_vline(x=0, line=dict(color=INK, dash="dash", width=1))
     fig.update_layout(template=TEMPLATE, height=max(300, 110 + (34 if len(ticks) <= 12 else 28) * len(ticks)),
                       xaxis_title=f"Bias vs. {OBS_PRODUCTS[obs]['label']} ({bias_label})",

@@ -155,9 +155,10 @@ a { color: var(--accent); }
   font: inherit; font-size: 13px; font-weight: 600;
 }
 .upload-button:hover { background: #dbe8f7; }
-.user-chip { align-items: flex-start; margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.user-chip { display: flex; align-items: flex-start; margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.35; }
 .user-chip .swatch { margin: 4px 7px 0 21px; }
-.user-chip #user-chip-text { flex: 1; min-width: 0; }
+.user-chip .user-chip-text { flex: 1; min-width: 0; }
+.upload-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .user-remove { margin-left: 8px; font-size: 12px; font-weight: 500; flex: none; }
 
 .modal-backdrop {

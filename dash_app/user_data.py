@@ -1,13 +1,14 @@
 """
-A visitor's own uploaded ensemble: CSV parsing/validation and the same
+A visitor's own uploaded ensembles: CSV parsing/validation and the same
 numbers analysis.py computes for the bundled studies (rates, time-series
 bands, 2015->2100 change).
 
 Uploads are per visitor: the parsed data lives in the browser (a dcc.Store)
 and comes back with each request, and is never merged into the shared run
 table -- data.RUNS/CUM are module globals shared by every visitor of the
-deployed app. An upload is always drawn as its own group, so it is never
-pooled with bundled runs and its runs can simply be weighted equally.
+deployed app. Several uploads can be shown at once; each is always drawn as
+its own group, so it is never pooled with bundled runs (or other uploads) and
+its runs can simply be weighted equally.
 """
 
 import base64
@@ -24,7 +25,10 @@ from data import YEAR_GRID, proj_start
 MAX_BYTES = 5_000_000
 MAX_RUNS = 1000
 YEAR_RANGE = (1800, 2500)
-USER_COLOR = "#00a0a8"  # teal: unused by every study and category palette
+MAX_ENSEMBLES = 5
+# One color per upload slot, chosen to stand apart from the study colors.
+USER_COLORS = ["#00a0a8", "#d49a00", "#6a9a00", "#4c6ef5", "#a0522d"]
+USER_COLOR = USER_COLORS[0]
 DEFAULT_LABEL = "Your ensemble"
 
 
@@ -86,13 +90,37 @@ def parse_upload(contents, filename):
     return payload, summary
 
 
+def entries(store):
+    """The store's list of uploads (a lone dict is a pre-multi-upload
+    session's single upload)."""
+    if not store:
+        return []
+    return [store] if isinstance(store, dict) else [e for e in store if e and e.get("values")]
+
+
 def from_store(store):
-    """Browser store dict -> namespace of numpy arrays, or None."""
-    if not store or not store.get("values"):
-        return None
-    vals = np.array([[np.nan if v is None else v for v in col] for col in store["values"]], dtype=float)
-    return SimpleNamespace(label=store.get("label") or DEFAULT_LABEL, ice_sheet=store["ice_sheet"],
-                           names=store["names"], years=np.asarray(store["years"], dtype=float), vals=vals)
+    """Browser store -> list of namespaces of numpy arrays (possibly empty)."""
+    out = []
+    for i, e in enumerate(entries(store)):
+        vals = np.array([[np.nan if v is None else v for v in col] for col in e["values"]], dtype=float)
+        out.append(SimpleNamespace(label=e.get("label") or DEFAULT_LABEL, ice_sheet=e["ice_sheet"],
+                                   color=e.get("color") or USER_COLORS[i % len(USER_COLORS)],
+                                   names=e["names"], years=np.asarray(e["years"], dtype=float), vals=vals))
+    return out
+
+
+def unique_label(name, taken):
+    """`name`, or `name (2)`, `name (3)`... if another upload already uses it
+    (labels double as legend entries and category names)."""
+    base = (name or "").strip() or DEFAULT_LABEL
+    label, k = base, 2
+    while label in taken:
+        label, k = f"{base} ({k})", k + 1
+    return label
+
+
+def free_color(taken):
+    return next((c for c in USER_COLORS if c not in taken), USER_COLORS[len(taken) % len(USER_COLORS)])
 
 
 def rates(u, lo, hi):
@@ -134,7 +162,7 @@ def timeseries(u, lo, hi):
         col = sub[:, j]
         if np.isfinite(col).any():
             q[:, j] = weighted_quantiles(col, np.ones_like(col), TS_QUANTILES)
-    return {"category": u.label, "years": years, "q": q, "n_runs": int(ok.sum()), "color": USER_COLOR}
+    return {"category": u.label, "years": years, "q": q, "n_runs": int(ok.sum()), "color": u.color}
 
 
 def change_2015_2100(u):

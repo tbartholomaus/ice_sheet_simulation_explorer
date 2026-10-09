@@ -205,6 +205,12 @@ ism_meta = {
     ("Edwards2021", "emulandice"): {"ice_model": "emulandice",
                                      "sliding_law": "Not applicable (statistical emulator)",
                                      "initialization": "Not applicable (statistical emulator)"},
+
+    # DeConto & Pollard (2016). Data Set S1 gives only the model and each
+    # run's MICI parameters (shown in hover), not the sliding law or
+    # initialization, so those defer to the paper rather than being guessed.
+    ("DeConto2016", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "See paper",
+                                   "initialization": "See paper"},
 }
 
 
@@ -271,12 +277,45 @@ edwards2021_gis = _read_csv("external_sources_edwards2021_gis.csv.gz")
 # by (ice sheet, Exp), and the two variants must not overwrite each other.
 edwards2021_ais_risk = _read_csv("external_sources_edwards2021_ais_risk.csv.gz")
 edwards2021_ais_risk["Exp"] = "RISK_" + edwards2021_ais_risk["Exp"].astype(str)
+
+
+def _load_deconto2016():
+    """DeConto & Pollard (2016) Antarctic runs from Kopp et al. (2017,
+    Earth's Future) Data Set S1, bundled byte-for-byte as downloaded (its
+    CC BY-NC-ND licence allows sharing it unmodified, so the reshaping
+    happens here at startup). Same transform as
+    utilities/external_sources.py load_deconto2016_ais(), which documents
+    provenance: raw (uncorrected) RCP2.6/4.5/8.5 runs, AIS total, decadal mm
+    GMSL (zeroed at 2000) linearly interpolated to annual through 2100 and
+    converted to Gt (x -362.5)."""
+    raw = pd.read_csv(os.path.join(DATA_DIR, "eft2271-sup-0002-2017ef000663-ds01.tsv"), sep="\t")
+    scen = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}
+    raw = raw[(raw["Ice Sheet"] == "AIS") & raw["Scenario"].isin(scen)]
+    dec = np.array([int(c) for c in raw.columns if c.isdigit() and int(c) <= 2100])
+    years = np.arange(dec.min(), dec.max() + 1)
+    vals = raw[[str(y) for y in dec]].to_numpy(dtype=float)
+    out = []
+    for (_, r), v in zip(raw.iterrows(), vals):
+        sc = scen[r["Scenario"]]
+        out.append(pd.DataFrame({
+            "Year": years, MASS_COL: np.interp(years, dec, v) / GT_TO_MM_SLE,  # mm GMSL -> Gt (loss negative)
+            "Group": "DeConto2016", "Model": "PSU3D-ICE", "Exp": f"{sc.replace('.', '')}_m{int(r['Ensemble Member']):02d}",
+            "climate_model": "Not reported in Data Set S1", "scenario": sc,
+            "protocol": "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected",
+            "mici_params": (f"OCFAC {r['OCFAQ']:g}, CREVLIQ {r['CREVLIQ']:g}, VCLIF {r['VCLIF']:g} km/yr; "
+                            f"Pliocene {r['Pliocene SL (m)']:.1f} m, LIG {r['LIG SL (m)']:.1f} m"),
+        }))
+    return pd.concat(out, ignore_index=True)
+
+
+deconto2016_ais = _load_deconto2016()
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
 gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais_risk, []))
+ais_exp_meta.update(_exp_meta_from_df(deconto2016_ais, ["mici_params"]))
 gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
 EXTRA_SOURCES = [
@@ -294,12 +333,13 @@ EXTRA_SOURCES = [
     {"label": "Edwards 2021 (AIS Main)", "df": edwards2021_ais, "color": "#e7298a"},
     {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#a6114f"},
     {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
+    {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
 ]
 
 for _src, _is in [
     ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
     ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS Main)", "AIS"),
-    ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"),
+    ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"), ("DeConto & Pollard 2016", "AIS"),
 ]:
     next(s for s in EXTRA_SOURCES if s["label"] == _src)["df"]["IS"] = _is
 
@@ -355,6 +395,8 @@ def _build_hover(group, model, exp, ice_sheet, ism_m, exp_m, publication):
         extra = f"<br>Basal melt param: {exp_m['basal_melt_param']}"
     elif "ocean_sensitivity" in exp_m:
         extra = f"<br>Ocean sensitivity: {exp_m['ocean_sensitivity']}"
+    elif "mici_params" in exp_m:
+        extra = f"<br>{exp_m['mici_params']}"
     return (
         f"<b>{group} / {model}</b> ({publication})<br>"
         f"Experiment: {exp}<br>"
@@ -439,7 +481,7 @@ _edwards_baseline_2015()
 for _s in EXTRA_SOURCES:
     _s["df"] = None
 del ismip6_ais, ismip6_gis, rahlves2025_gis, coulon2024_ais, aschwanden2022_gis, goelzer2025_gis
-del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis
+del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais
 import gc  # noqa: E402
 gc.collect()
 IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()
