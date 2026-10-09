@@ -56,6 +56,12 @@ a { color: var(--accent); }
 
 .sources label { display: flex; align-items: center; padding: 3px 0; cursor: pointer; font-size: 13px; }
 .sources input { margin: 0 8px 0 0; accent-color: var(--accent); }
+/* sub-headings inside the studies checklist (disabled options, checkbox hidden) */
+.sources label:has(input[value^="__heading_"]) { cursor: default; padding: 10px 0 2px; }
+.sources label:has(input[value^="__heading_"]):first-child { padding-top: 0; }
+.sources input[value^="__heading_"] { display: none; }
+.sources-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; flex: 0 0 10px; }
 
 .toggle label { display: flex; align-items: center; cursor: pointer; font-size: 13px; }

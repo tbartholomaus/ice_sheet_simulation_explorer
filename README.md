@@ -21,9 +21,10 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
 
 - **Averaging window:** the years over which rates and bias are computed. Time series are zeroed at the
   window's start.
-- **Simulation studies:** which ensembles to include (listed under [Data](#data)): the ISMIP6 ensembles
-  first, then the other ice sheet model studies by publication date, then the Edwards et al. (2021) emulator
-  results, which come from a statistical emulator rather than an ice sheet model.
+- **Simulation studies:** which ensembles to include (listed under [Data](#data)), in two groups.
+  "Physics-based models" lists the ISMIP6 ensembles first, then the other ice sheet model studies by publication
+  date. "Emulations and syntheses" lists the Edwards et al. (2021) emulator results and the IPCC AR6 assessed
+  projections, which aren't runs of an ice sheet model.
 - **Group by:** split every plot by study, ice sheet model, initialization, sliding law, climate
   scenario or GCM. You can optionally pool similar RCP and SSP scenarios into "composite" scenarios.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -102,6 +103,7 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 | Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025 |
 | Goelzer 2025 (PROTECT GIS) | Goelzer et al. (2025), *The Cryosphere* 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 |
 | Edwards 2021 (AIS Main, AIS Risk Averse, GIS) | Edwards et al. (2021), *Nature* 593, 74–82, https://doi.org/10.1038/s41586-021-03302-y; samples from https://github.com/tamsinedwards/emulandice |
+| IPCC AR6 (AIS, GIS) | Fox-Kemper et al. (2021), IPCC AR6 WG1 Chapter 9; data: Garner et al. (2021), IPCC AR6 Sea Level Projections, https://doi.org/10.5281/zenodo.5914710 (CC-BY-4.0). Medium-confidence (all five SSPs) and low-confidence (SSP1-2.6, 2-4.5, 5-8.5) projections; each "run" is one percentile path (1st–99th), decadal values interpolated to annual from the 2005 baseline |
 | IMBIE3 observations | Otosaka et al. (2026), *Scientific Data*, https://doi.org/10.1038/s41597-026-08088-0 |
 | IMBIE2 observations | Otosaka et al. (2023), *Earth System Science Data* 15, 1597, https://doi.org/10.5194/essd-15-1597-2023 |
 
@@ -109,7 +111,7 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 and that IMBIE's grounded-ice observations track. For ISMIP6 (both ice sheets) and Goelzer et al. (2025), mass
 is ice volume above flotation (`ivaf`) × each model's own ice density (`rhoi`, 900–918 kg/m³). Rahlves et al.
 (2025) provides mass above flotation directly. The studies published as sea-level contributions (Coulon,
-Edwards, DeConto) are converted to mass at 362.5 Gt per mm, the same factor used by ISMIP6 and IMBIE. Aschwanden
+Edwards, DeConto, IPCC AR6) are converted to mass at 362.5 Gt per mm, the same factor used by ISMIP6 and IMBIE. Aschwanden
 et al. (2019) provides cumulative mass that its authors convert to sea level at the same factor.
 
 `utilities/external_sources.py` documents how each external dataset was obtained and processed, and

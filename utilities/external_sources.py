@@ -1202,6 +1202,144 @@ def load_deconto2021_ais(keep_through_year=2100):
     return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# IPCC AR6 WG1 sea-level projections of the ice sheets: Fox-Kemper et al.
+# (2021), Chapter 9 of Climate Change 2021: The Physical Science Basis, with
+# the FACTS framework (Kopp et al., 2023, GMD) and the data set Garner et al.
+# (2021), "IPCC AR6 Sea Level Projections", Zenodo,
+# https://doi.org/10.5281/zenodo.5914710 (CC-BY-4.0).
+#
+# Files used: ar6.zip -> ar6/global/confidence_output_files/
+# {medium,low}_confidence/<ssp>/{AIS,GIS}_<ssp>_<conf>_confidence_values.nc,
+# the report's assessed projections. Each holds global-mean sea-level
+# contribution in mm, relative to 2005 (the 1995-2014 baseline), at 107
+# quantiles x 2020, 2030, ..., 2150. Only those ~16 small members are read,
+# via HTTP range requests on the 890 MB zip (its central directory, then
+# each member), never the whole archive.
+#
+# Per user decisions (2026-10-09):
+# - Medium AND low confidence. Medium: SSP1-1.9, 1-2.6, 2-4.5, 3-7.0, 5-8.5.
+#   Low (adds marine ice cliff instability / expert judgement methods): only
+#   published for SSP1-2.6, 2-4.5, 5-8.5; labelled "SSPx-y.z (low confidence)".
+# - Each "run" is one quantile path (the 1st, 2nd, ..., 99th percentile
+#   traced across years), so the 99 paths sample each distribution evenly
+#   and medians/boxes reproduce the AR6 values. They are NOT physical
+#   trajectories: rates between paths don't form a true ensemble spread.
+# - 2005 is set to 0 and the decadal values are interpolated linearly to
+#   annual steps; 2005-2020 is therefore a straight line from the baseline,
+#   not a projection, but lets AR6 join the rate comparisons.
+# Conversion: mm GMSL x -362.5 Gt/mm (ice loss negative), as for Edwards.
+# ═════════════════════════════════════════════════════════════════════════
+
+AR6_ZIP_URL = "https://zenodo.org/api/records/5914710/files/ar6.zip/content"
+AR6_SCENARIOS = {  # (ssp code, confidence) -> scenario label
+    **{(s, "medium"): lab for s, lab in (("ssp119", "SSP1-1.9"), ("ssp126", "SSP1-2.6"), ("ssp245", "SSP2-4.5"),
+                                         ("ssp370", "SSP3-7.0"), ("ssp585", "SSP5-8.5"))},
+    **{(s, "low"): f"{lab} (low confidence)" for s, lab in (("ssp126", "SSP1-2.6"), ("ssp245", "SSP2-4.5"),
+                                                            ("ssp585", "SSP5-8.5"))},
+}
+AR6_PERCENTILES = np.arange(1, 100)  # 1st..99th quantile paths
+AR6_BASE_YEAR = 2005
+AR6_CLIMATE_MODEL_LABEL = "AR6 emulated warming (no discrete GCM)"
+
+
+def _remote_zip_member(url, member, cache_name):
+    """Fetches one member of a remote zip into CACHE_DIR/cache_name using HTTP
+    range requests (the zip's central directory, cached, then the member
+    alone), and returns the local path. Handles zip64 and deflate."""
+    import struct
+    import zlib
+
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    out = os.path.join(CACHE_DIR, cache_name)
+    if os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+
+    def get(start, end):
+        req = urllib.request.Request(url, headers={"Range": f"bytes={start}-{end}"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return r.read()
+
+    cd_path = os.path.join(CACHE_DIR, "ar6_zip_central_directory.bin")
+    if not os.path.exists(cd_path):
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=0-0"}), timeout=120) as r:
+            size = int(r.headers["Content-Range"].split("/")[-1])
+        tail = get(size - 400_000, size - 1)
+        z64 = tail.rfind(b"PK\x06\x06")
+        if z64 >= 0:
+            cd_size, cd_off = struct.unpack("<QQ", tail[z64 + 40:z64 + 56])
+        else:
+            i = tail.rfind(b"PK\x05\x06")
+            cd_size, cd_off = struct.unpack("<II", tail[i + 12:i + 20])
+        with open(cd_path, "wb") as f:
+            f.write(get(cd_off, cd_off + cd_size - 1))
+    cd = open(cd_path, "rb").read()
+    p = 0
+    while p < len(cd) and cd[p:p + 4] == b"PK\x01\x02":
+        method = struct.unpack("<H", cd[p + 10:p + 12])[0]
+        csize, usize = struct.unpack("<II", cd[p + 20:p + 28])
+        nlen, elen, clen = struct.unpack("<HHH", cd[p + 28:p + 34])
+        off = struct.unpack("<I", cd[p + 42:p + 46])[0]
+        name = cd[p + 46:p + 46 + nlen].decode()
+        if name == member:
+            extra = cd[p + 46 + nlen:p + 46 + nlen + elen]
+            vals = []
+            if extra[:2] == b"\x01\x00":  # zip64 extra field
+                n = struct.unpack("<H", extra[2:4])[0] // 8
+                vals = list(struct.unpack("<" + "Q" * n, extra[4:4 + 8 * n]))
+            if usize == 0xFFFFFFFF:
+                usize = vals.pop(0)
+            if csize == 0xFFFFFFFF:
+                csize = vals.pop(0)
+            if off == 0xFFFFFFFF:
+                off = vals.pop(0)
+            hdr = get(off, off + 29)
+            n2, e2 = struct.unpack("<HH", hdr[26:30])
+            data = get(off + 30 + n2 + e2, off + 30 + n2 + e2 + csize - 1)
+            data = zlib.decompress(data, -15) if method == 8 else data
+            assert len(data) == usize, (member, len(data), usize)
+            with open(out, "wb") as f:
+                f.write(data)
+            return out
+        p += 46 + nlen + elen + clen
+    raise FileNotFoundError(f"{member} not found in {url}")
+
+
+def load_ar6_icesheet(ice_sheet, keep_through_year=2100):
+    """Loads the IPCC AR6 projections for `ice_sheet` ("AIS" or "GIS") as a
+    dataframe shaped like the other loaders: Year (annual from 2005),
+    Cumulative ice sheet mass change (Gt), Group "IPCCAR6", Model "FACTS",
+    Exp (one per scenario x confidence x percentile path), IS, plus
+    climate_model/scenario/protocol. See the section comment above."""
+    from netCDF4 import Dataset
+
+    rows, meta = [], []
+    for (ssp, conf), label in AR6_SCENARIOS.items():
+        member = (f"ar6/global/confidence_output_files/{conf}_confidence/{ssp}/"
+                  f"{ice_sheet}_{ssp}_{conf}_confidence_values.nc")
+        path = _remote_zip_member(AR6_ZIP_URL, member, f"ar6_{ice_sheet}_{ssp}_{conf}_confidence_values.nc")
+        ds = Dataset(path)
+        q = np.asarray(ds.variables["quantiles"][:], dtype=float)
+        dec_years = np.asarray(ds.variables["years"][:], dtype=int)
+        slc = np.asarray(ds.variables["sea_level_change"][:, :, 0], dtype=float)  # (quantile, year), mm
+        ds.close()
+        keep = dec_years <= keep_through_year
+        x = np.r_[AR6_BASE_YEAR, dec_years[keep]]
+        years = np.arange(AR6_BASE_YEAR, x.max() + 1)
+        for pct in AR6_PERCENTILES:
+            i = int(np.argmin(np.abs(q - pct / 100)))
+            assert abs(q[i] - pct / 100) < 1e-4, (member, pct, q[i])
+            mm = np.interp(years, x, np.r_[0.0, slc[i, keep]])
+            exp = f"{ssp}_{conf}_p{pct:02d}"
+            rows.append(pd.DataFrame({
+                "Year": years, "Cumulative ice sheet mass change (Gt)": -mm * GT_PER_M_SLE,
+                "Group": "IPCCAR6", "Model": "FACTS", "Exp": exp, "IS": ice_sheet,
+            }))
+            meta.append({"Exp": exp, "climate_model": AR6_CLIMATE_MODEL_LABEL, "scenario": label,
+                         "protocol": f"AR6 {conf} confidence, {pct}th percentile path"})
+    return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
+
+
 def exp_meta_from_df(df, extra_cols):
     """Builds a get_exp_meta()-style {Exp: {...}} dict from one of this
     module's loaded dataframes, whose exp-level classification (scenario,

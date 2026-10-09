@@ -213,6 +213,13 @@ ism_meta = {
                                    "initialization": "Spin-up"},
     ("DeConto2021", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "Weertman",
                                    "initialization": "Spin-up"},
+
+    # IPCC AR6 (Fox-Kemper et al. 2021, FACTS): an assessment combining
+    # several methods (emulators, ISMIP6 fits, LARMIP-2, expert judgement),
+    # not one ice sheet model, so these are labelled honestly.
+    ("IPCCAR6", "FACTS"): {"ice_model": "IPCC AR6 assessment (FACTS)",
+                           "sliding_law": "Not applicable (assessment)",
+                           "initialization": "Not applicable (assessment)"},
 }
 
 
@@ -312,6 +319,8 @@ def _load_deconto2016():
 
 deconto2016_ais = _load_deconto2016()
 deconto2021_ais = _read_csv("external_sources_deconto2021_ais.csv.gz")
+ar6_ais = _read_csv("external_sources_ar6_ais.csv.gz")
+ar6_gis = _read_csv("external_sources_ar6_gis.csv.gz")
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
@@ -320,12 +329,15 @@ ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais_risk, []))
 ais_exp_meta.update(_exp_meta_from_df(deconto2016_ais, ["mici_params"]))
 ais_exp_meta.update(_exp_meta_from_df(deconto2021_ais, ["mici_params"]))
+ais_exp_meta.update(_exp_meta_from_df(ar6_ais, []))
+gis_exp_meta.update(_exp_meta_from_df(ar6_gis, []))
 gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
 # Display order everywhere (sidebar, Study legends/boxes, README): ISMIP6
 # first (SOURCE_LABELS below), then the other ice-sheet-model studies by
-# publication date, then the Edwards et al. (2021) emulator studies last,
-# since they aren't ice sheet model runs themselves (user decision, 2026-10-08).
+# publication date, then the Edwards et al. (2021) emulator studies and the
+# IPCC AR6 assessment last, since they aren't ice sheet model runs themselves
+# (user decisions, 2026-10-08 and 2026-10-09).
 EXTRA_SOURCES = [
     {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
@@ -339,13 +351,18 @@ EXTRA_SOURCES = [
     {"label": "Edwards 2021 (AIS Main)", "df": edwards2021_ais, "color": "#e7298a"},
     {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#a6114f"},
     {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
+    # IPCC AR6 WG1 (2021) assessed projections, also not ice sheet model runs:
+    # last, after Edwards. Each "run" is one percentile path (1st-99th) of the
+    # medium- or low-confidence distribution; see load_ar6_icesheet().
+    {"label": "IPCC AR6 (AIS)", "df": ar6_ais, "color": "#e41a1c"},
+    {"label": "IPCC AR6 (GIS)", "df": ar6_gis, "color": "#e41a1c"},
 ]
 
 for _src, _is in [
     ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
     ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS Main)", "AIS"),
     ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"), ("DeConto & Pollard 2016", "AIS"),
-    ("DeConto 2021", "AIS"),
+    ("DeConto 2021", "AIS"), ("IPCC AR6 (AIS)", "AIS"), ("IPCC AR6 (GIS)", "GIS"),
 ]:
     next(s for s in EXTRA_SOURCES if s["label"] == _src)["df"]["IS"] = _is
 
@@ -353,6 +370,13 @@ PUBLICATION_LABEL = {"AIS": "Seroussi 2020 (ISMIP6 AIS)", "GIS": "Goelzer 2020 (
 ISMIP6_COLOR = "#636363"
 SOURCE_LABELS = [PUBLICATION_LABEL["AIS"], PUBLICATION_LABEL["GIS"]] + [s["label"] for s in EXTRA_SOURCES]
 SOURCE_DEFAULT_CHECKED = [PUBLICATION_LABEL["AIS"], PUBLICATION_LABEL["GIS"]]
+# Studies that aren't runs of a physics-based ice sheet model: statistical
+# emulators and assessments. They're listed after the physics-based models,
+# under their own heading in the sidebar.
+EMULATION_SOURCES = {"Edwards 2021 (AIS Main)", "Edwards 2021 (AIS Risk Averse)", "Edwards 2021 (GIS)",
+                     "IPCC AR6 (AIS)", "IPCC AR6 (GIS)"}
+assert SOURCE_LABELS[-len(EMULATION_SOURCES):] == [s for s in SOURCE_LABELS if s in EMULATION_SOURCES], \
+    "emulation/synthesis studies must come last in EXTRA_SOURCES"
 SOURCE_COLOR = {PUBLICATION_LABEL["AIS"]: ISMIP6_COLOR, PUBLICATION_LABEL["GIS"]: ISMIP6_COLOR,
                 **{s["label"]: s["color"] for s in EXTRA_SOURCES}}
 
@@ -487,7 +511,7 @@ _edwards_baseline_2015()
 for _s in EXTRA_SOURCES:
     _s["df"] = None
 del ismip6_ais, ismip6_gis, rahlves2025_gis, coulon2024_ais, aschwanden2022_gis, goelzer2025_gis
-del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, deconto2021_ais
+del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, deconto2021_ais, ar6_ais, ar6_gis
 import gc  # noqa: E402
 gc.collect()
 IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()

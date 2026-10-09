@@ -30,7 +30,7 @@ import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
 import user_data as U  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, EMULATION_SOURCES, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
@@ -73,6 +73,22 @@ def _dim(value, collapse=False):
 
 # ── layout ────────────────────────────────────────────────────────────────
 
+def _source_options():
+    """Studies checklist with two sub-headings. A Checklist can't hold
+    headings, so each is a disabled option (its checkbox hidden in
+    style.css); its value never matches a study, so it can't affect a plot."""
+    def study(s):
+        return {"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]), "value": s}
+
+    def heading(text, key):
+        return {"label": html.Span(text, className="sources-heading"), "value": f"__heading_{key}", "disabled": True}
+
+    physics = [s for s in SOURCE_LABELS if s not in EMULATION_SOURCES]
+    emulation = [s for s in SOURCE_LABELS if s in EMULATION_SOURCES]
+    return ([heading("Physics-based models", "physics")] + [study(s) for s in physics]
+            + [heading("Emulations and syntheses", "emulation")] + [study(s) for s in emulation])
+
+
 def control(label, child, hint=None):
     return html.Div(className="control", children=[
         html.Div(label, className="control-label"),
@@ -104,10 +120,7 @@ sidebar = html.Aside(className="sidebar", children=[
         html.Div(id="years-readout", className="readout"),
     ]), "Rates and bias are averaged over this window; time series are zeroed at its start."),
     control("Simulation studies", html.Div([
-        dcc.Checklist(
-            id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED),
-            options=[{"label": html.Span([html.Span(className="swatch", style={"background": SOURCE_COLOR[s]}), s]),
-                      "value": s} for s in SOURCE_LABELS]),
+        dcc.Checklist(id="sources", className="sources", value=list(SOURCE_DEFAULT_CHECKED), options=_source_options()),
         html.Div(id="user-chips"),  # one row per uploaded ensemble, with its own Remove link
         html.Button("+ Add your own ensemble", id="upload-open", className="upload-button", n_clicks=0),
     ])),
