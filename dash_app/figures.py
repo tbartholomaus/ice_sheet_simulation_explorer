@@ -196,11 +196,20 @@ def _user_rates(fig, row, u, x, names, grid, rate_label, show_medians, k):
 
 TS_MAX_OUTER_BANDS = 8
 
-def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=()):
+def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=(), view_x=None):
+    """`view_x`: the x range the user last panned/zoomed to for this window
+    (from the browser), so rebuilding for another control keeps their view;
+    None opens on the averaging window +/- TS_PAD_YEARS."""
     f, _, cum_label = units_info(units)
     fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.08,
                         subplot_titles=[ICE_SHEET_NAMES[s] for s in ICE_SHEETS])
     legend_seen = set()
+    window = (lo - A.TS_PAD_YEARS, hi + A.TS_PAD_YEARS + 1)  # opening x range; data runs to 2100
+    view = tuple(view_x) if view_x else window
+    visible = {1: [], 2: []}  # y values inside `view`, for the opening y range
+    def _seen(col, x, y):
+        x, y = np.asarray(x, dtype=float), np.asarray(y, dtype=float)
+        visible[col].append(y[(x >= view[0]) & (x <= view[1]) & np.isfinite(y)])
     for col, ice in enumerate(ICE_SHEETS, start=1):
         series = A.timeseries(valid, ice, dim, lo, hi)
         for u in users:
@@ -227,6 +236,7 @@ def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=()):
             prepared.append((s, s.get("color") or _color(dim, s["category"]), s["years"][ok], q[:, ok]))
         for lo_i, hi_i, alpha in bands:
             for s, color, yrs, q in prepared:
+                _seen(col, yrs, q[lo_i]); _seen(col, yrs, q[hi_i])
                 fig.add_trace(go.Scatter(
                     x=np.r_[yrs, yrs[::-1]], y=np.r_[q[hi_i], q[lo_i][::-1]], fill="toself",
                     fillcolor=rgba(color, alpha), line=dict(width=0), hoverinfo="skip",
@@ -245,6 +255,7 @@ def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=()):
         ts = A.imbie_timeseries(ice, lo, hi, obs)
         if ts is not None:
             yrs, v, s2 = ts["years"], ts["value"] * f, 2 * ts["sigma"] * abs(f)
+            _seen(col, yrs, v + s2); _seen(col, yrs, v - s2)
             # Hatched (not tinted) uncertainty so it can't be mistaken for a
             # simulation band, edged with thin lines so its extent is crisp.
             fig.add_trace(go.Scatter(
@@ -265,11 +276,22 @@ def timeseries_figure(valid, lo, hi, dim, units, obs=DEFAULT_OBS, users=()):
                 name=obs_name(obs), legendgroup="imbie", showlegend=col == 1, legendrank=1,
                 hovertemplate=f"{OBS_PRODUCTS[obs]['label']} %{{x:.2f}}: %{{y:.3g}} {cum_label}<extra></extra>"), row=1, col=col)
         fig.add_hline(y=0, line=dict(color="#9aa3af", dash="dot", width=1), row=1, col=col)
-        fig.update_xaxes(range=[lo - A.TS_PAD_YEARS, hi + A.TS_PAD_YEARS + 1], title_text="Year", row=1, col=col)
+        # Open on the averaging window; everything out to 2100 is drawn so it
+        # can be panned to. The y range fits what's in view (the 2100 values
+        # would otherwise flatten it); app.py refits it after each pan/zoom.
+        fig.update_xaxes(range=list(view), title_text="Year", row=1, col=col)
+        ys = np.concatenate(visible[col]) if visible[col] else np.array([])
+        if ys.size:
+            pad = 0.08 * max(ys.max() - ys.min(), 1e-9)
+            fig.update_yaxes(range=[ys.min() - pad, ys.max() + pad], row=1, col=col)
+    fig.update_xaxes(matches="x")  # the two panels pan and zoom together
     fig.update_yaxes(title_text=f"Change since {lo} ({cum_label})", row=1, col=1)
     # Vertical legend at the right (as in the rates panel): it scrolls when
     # long, where a horizontal one below the plots squeezes them flat.
-    fig.update_layout(template=TEMPLATE, height=460, uirevision=f"ts-{units}",
+    # uirevision includes the window, so moving the slider re-opens on the new
+    # window while other control changes keep wherever the user had panned.
+    fig.update_layout(template=TEMPLATE, height=460, uirevision=f"ts-{units}-{lo}-{hi}", dragmode="pan",
+                      meta={"window": list(window), "lo": lo, "hi": hi},  # read by app.py's clientside refit
                       legend=dict(title=DIM_LABEL.get(dim, "") if dim else None))
     return fig
 

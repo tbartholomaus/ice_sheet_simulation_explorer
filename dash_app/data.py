@@ -211,6 +211,9 @@ ism_meta = {
     # initialization, so those defer to the paper rather than being guessed.
     ("DeConto2016", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "See paper",
                                    "initialization": "See paper"},
+    # DeConto et al. (2021): same model (updated), same caveat.
+    ("DeConto2021", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "See paper",
+                                   "initialization": "See paper"},
 }
 
 
@@ -309,6 +312,7 @@ def _load_deconto2016():
 
 
 deconto2016_ais = _load_deconto2016()
+deconto2021_ais = _read_csv("external_sources_deconto2021_ais.csv.gz")
 gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
 ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
 gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
@@ -316,30 +320,33 @@ gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
 ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais_risk, []))
 ais_exp_meta.update(_exp_meta_from_df(deconto2016_ais, ["mici_params"]))
+ais_exp_meta.update(_exp_meta_from_df(deconto2021_ais, ["mici_params"]))
 gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
 
+# Display order everywhere (sidebar, Study legends/boxes, README): ISMIP6
+# first (SOURCE_LABELS below), then the other ice-sheet-model studies by
+# publication date, then the Edwards et al. (2021) emulator studies last,
+# since they aren't ice sheet model runs themselves (user decision, 2026-10-08).
 EXTRA_SOURCES = [
-    {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},
-    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
+    {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#756bb1"},
-    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},
-    # The first extra_sources paper covering BOTH ice sheets -- every other
-    # entry above is single-ice-sheet already, so no label needed an
-    # ice-sheet suffix to stay unambiguous; these two do, since otherwise
-    # two checkboxes would both read plain "Edwards 2021". Same color for
-    # both -- they render on separate AIS/GIS subplot panels, so there's no
-    # legend collision (matching how every other source picks one color
-    # regardless of panel).
+    {"label": "DeConto 2021", "df": deconto2021_ais, "color": "#d6604d"},
+    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#31a354"},
+    {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#e6550d"},  # TC 19, 1205 (Mar 2025)
+    {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#3182bd"},  # TC 19, 6887 (later 2025)
+    # Edwards et al. (2021) covers BOTH ice sheets, so its labels carry an
+    # ice-sheet suffix to stay unambiguous. Same color for AIS Main and GIS --
+    # they render on separate AIS/GIS panels, so there's no legend collision.
     {"label": "Edwards 2021 (AIS Main)", "df": edwards2021_ais, "color": "#e7298a"},
     {"label": "Edwards 2021 (AIS Risk Averse)", "df": edwards2021_ais_risk, "color": "#a6114f"},
     {"label": "Edwards 2021 (GIS)", "df": edwards2021_gis, "color": "#e7298a"},
-    {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
 ]
 
 for _src, _is in [
     ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
     ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS Main)", "AIS"),
     ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"), ("DeConto & Pollard 2016", "AIS"),
+    ("DeConto 2021", "AIS"),
 ]:
     next(s for s in EXTRA_SOURCES if s["label"] == _src)["df"]["IS"] = _is
 
@@ -481,7 +488,7 @@ _edwards_baseline_2015()
 for _s in EXTRA_SOURCES:
     _s["df"] = None
 del ismip6_ais, ismip6_gis, rahlves2025_gis, coulon2024_ais, aschwanden2022_gis, goelzer2025_gis
-del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais
+del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, deconto2021_ais
 import gc  # noqa: E402
 gc.collect()
 IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()

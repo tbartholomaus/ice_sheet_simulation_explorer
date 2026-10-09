@@ -87,9 +87,9 @@ def section(sid, title, lede, children):
     ])
 
 
-def graph(gid, height):
+def graph(gid, height, **config):
     return dcc.Loading(type="dot", color="#0b63b6", children=dcc.Graph(
-        id=gid, config={"displaylogo": False, "responsive": True}, style={"height": f"{height}px"}))
+        id=gid, config={"displaylogo": False, "responsive": True, **config}, style={"height": f"{height}px"}))
 
 
 sidebar = html.Aside(className="sidebar", children=[
@@ -154,8 +154,10 @@ main = html.Main(className="content", children=[
             "Median (line), 25–75% (darker band) and 5–95% (faint band) of simulated cumulative change, zeroed at "
             "the start of the averaging window (shaded), against IMBIE observations (black, hatched ±2σ). "
             "With more than 8 groups only the 25–75% band is drawn (hover for 5–95%). "
+            "Drag to pan through time (out to 2100) and scroll to zoom; double-click to return to the window. "
             "Click a legend entry to hide it; double-click to show it alone.",
-            [graph("ts-graph", 460),
+            [graph("ts-graph", 460, scrollZoom=True, doubleClick="autosize"),
+             dcc.Store(id="ts-view"),  # the x range the user panned/zoomed to, for the current window
              html.H3("Mass change by 2100"),
              html.P("Change from 2015 to 2100 for each group (box: 25–75%; whiskers: 5–95%; line: median).",
                     className="lede"),
@@ -272,8 +274,9 @@ def _rates(years, sources, groupby, units, medians, obs, collapse, user):
 @app.callback(Output("ts-graph", "figure"), Output("y2100-graph", "figure"), Output("y2100-note", "children"),
               Output("y2100-graph", "style"),
               Input("years", "value"), Input("sources", "value"), Input("groupby", "value"), Input("units", "value"),
-              Input("obs", "value"), Input("collapse", "value"), Input("user-data", "data"))
-def _timeseries(years, sources, groupby, units, obs, collapse, user):
+              Input("obs", "value"), Input("collapse", "value"), Input("user-data", "data"),
+              State("ts-view", "data"))
+def _timeseries(years, sources, groupby, units, obs, collapse, user, view):
     lo, hi = clamp_window(years, obs)
     valid = A.checked_mask(sources or [])
     gaps = []
@@ -290,7 +293,10 @@ def _timeseries(years, sources, groupby, units, obs, collapse, user):
     note = f"Omitted (simulation ends before 2100): {'; '.join(gaps)}." if gaps else None
     dim = _dim(groupby, bool(collapse))
     y2100 = F.change_2100_figure(valid, dim, units, users)
-    return F.timeseries_figure(valid, lo, hi, dim, units, obs, users), y2100, note, _height(y2100)
+    # A rebuild for any control other than the window keeps the user's view;
+    # an explicit range in a new figure would otherwise override uirevision.
+    view_x = view["x"] if view and view.get("x") and (view.get("lo"), view.get("hi")) == (lo, hi) else None
+    return F.timeseries_figure(valid, lo, hi, dim, units, obs, users, view_x), y2100, note, _height(y2100)
 
 
 def _fmt_p(p):
@@ -498,6 +504,47 @@ def _user_chips(store):
                         className="link-button user-remove", n_clicks=0),
         ]))
     return chips, len(chips) >= U.MAX_ENSEMBLES
+
+
+# After any pan/zoom of the time series, refit each panel's y axis to the
+# data now in view: the series run to 2100, where values dwarf those near the
+# window, and Plotly keeps a fixed y range while panning. A double-click
+# (which autoranges to 1950-2100) is turned into "back to the window". Runs in
+# the browser; y-only relayouts it causes are ignored, so it can't loop. The
+# resulting x range goes to the ts-view store so a server rebuild keeps it.
+app.clientside_callback(
+    """
+    function(relayout) {
+        const nu = window.dash_clientside.no_update;
+        if (!relayout || !Object.keys(relayout).some(k => k.startsWith("xaxis"))) return nu;
+        const gd = document.querySelector("#ts-graph .js-plotly-plot");
+        if (!gd || !gd._fullLayout || !gd._fullData) return nu;
+        const meta = (gd.layout && gd.layout.meta) || {};
+        const reset = relayout["xaxis.autorange"] || relayout["xaxis2.autorange"];
+        const upd = {};
+        if (reset && meta.window) upd["xaxis.range"] = meta.window.slice();
+        const xr = reset && meta.window ? meta.window : gd._fullLayout.xaxis.range.slice();
+        [["x", "xaxis", "yaxis"], ["x2", "xaxis2", "yaxis2"]].forEach(([xid, xax, yax]) => {
+            if (!gd._fullLayout[xax]) return;
+            const [x0, x1] = xr;  // the panels share one x range (matches="x")
+            let lo = Infinity, hi = -Infinity;
+            gd._fullData.forEach(t => {
+                if (t.xaxis !== xid || t.visible !== true || !t.x || !t.y) return;
+                for (let i = 0; i < t.x.length; i++) {
+                    const x = +t.x[i], y = +t.y[i];
+                    if (x >= x0 && x <= x1 && isFinite(y)) { if (y < lo) lo = y; if (y > hi) hi = y; }
+                }
+            });
+            if (isFinite(lo)) {
+                const pad = 0.08 * Math.max(hi - lo, 1e-9);
+                upd[yax + ".range"] = [lo - pad, hi + pad];
+            }
+        });
+        if (Object.keys(upd).length) Plotly.relayout(gd, upd);
+        return {lo: meta.lo, hi: meta.hi, x: reset ? null : xr};
+    }
+    """,
+    Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
 
 
 @app.callback(Output("collapse-warning", "style"), Input("collapse", "value"))

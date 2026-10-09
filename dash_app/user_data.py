@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-from analysis import TS_PAD_YEARS, TS_QUANTILES, _fast_slope, weighted_quantiles
+from analysis import TS_END_YEAR, TS_QUANTILES, _fast_slope, weighted_quantiles
 from data import YEAR_GRID, proj_start
 
 MAX_BYTES = 5_000_000
@@ -149,7 +149,7 @@ def timeseries(u, lo, hi):
     """One analysis.timeseries-style entry for the upload (equal weights),
     or None when no simulation has a value at lo or lo + 1."""
     grid = _grid(u)
-    years = np.arange(lo - TS_PAD_YEARS, hi + TS_PAD_YEARS + 1)
+    years = np.arange(YEAR_GRID[0], TS_END_YEAR + 1)  # all of it, like analysis.timeseries
     base = grid[:, lo - YEAR_GRID[0]].copy()
     missing = ~np.isfinite(base)
     base[missing] = grid[missing, lo + 1 - YEAR_GRID[0]]

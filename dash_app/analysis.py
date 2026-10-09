@@ -12,7 +12,8 @@ import scipy.stats
 from scipy.stats import linregress
 
 from data import (
-    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, MASS_COL, RUN_VALS, RUN_YEARS, RUNS, YEAR_GRID, proj_start,
+    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, MASS_COL, RUN_VALS, RUN_YEARS, RUNS, SOURCE_LABELS,
+    YEAR_GRID, proj_start,
 )
 
 _ICE = RUNS["ice_sheet"].to_numpy()
@@ -111,7 +112,11 @@ def category_masks(valid, ice_sheet, dim):
     if dim is None:
         return [("All simulations", m)] if m.any() else []
     col = RUNS[dim].to_numpy()
-    return [(c, m & (col == c)) for c in sorted(set(col[m]))]
+    cats = set(col[m])
+    # Studies in their display order (ISMIP6, then by date, emulators last);
+    # every other characteristic alphabetically.
+    order = [c for c in SOURCE_LABELS if c in cats] if dim == "publication" else sorted(cats)
+    return [(c, m & (col == c)) for c in order]
 
 
 # ── time series ───────────────────────────────────────────────────────────
@@ -120,13 +125,17 @@ TS_PAD_YEARS = 6
 TS_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 
 
+TS_END_YEAR = 2100
+
+
 def timeseries(valid, ice_sheet, dim, lo, hi):
     """Per category: years and weighted 5/25/50/75/95 % of cumulative change
-    rebased to 0 at `lo`, over [lo - 6, hi + 6]. A run with no value at
+    rebased to 0 at `lo`, for every year with data through TS_END_YEAR (the
+    figure opens on [lo - 6, hi + 6] and the rest is there to pan to). A run with no value at
     `lo` but one at `lo + 1` is rebased there instead -- the same one-year
     fallback change_2015_2100 uses; runs with neither are left out. (Edwards
     2021's implied 2015 zero is filled in by data.py, so it needs neither.)"""
-    years = np.arange(lo - TS_PAD_YEARS, hi + TS_PAD_YEARS + 1)
+    years = np.arange(YEAR_GRID[0], TS_END_YEAR + 1)
     cols = years - YEAR_GRID[0]
     base = CUM[:, lo - YEAR_GRID[0]].copy()
     missing = ~np.isfinite(base)
@@ -146,14 +155,13 @@ def timeseries(valid, ice_sheet, dim, lo, hi):
 
 
 def imbie_timeseries(ice_sheet, lo, hi, obs=DEFAULT_OBS):
-    """IMBIE cumulative change rebased to 0 at Jan `lo`, with 1-sigma
+    """IMBIE's whole record, as cumulative change rebased to 0 at Jan `lo`, with 1-sigma
     uncertainty of that change. IMBIE accumulates its cumulative uncertainty
     in quadrature (checked: the file's end value matches annual errors summed
     in quadrature), so the uncertainty of change since `lo` is
     sqrt(|U(t)^2 - U(lo)^2|)."""
-    full = IMBIE[obs][ice_sheet]
-    df = full[(full["Year"] >= lo - TS_PAD_YEARS) & (full["Year"] < hi + TS_PAD_YEARS + 1)]
-    at0 = full.loc[full["Year"] == lo]
+    df = IMBIE[obs][ice_sheet]
+    at0 = df.loc[df["Year"] == lo]
     if at0.empty:
         return None
     u = df["Cumulative ice sheet mass change uncertainty (Gt)"].to_numpy()

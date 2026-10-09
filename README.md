@@ -21,7 +21,9 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
 
 - **Averaging window:** the years over which rates and bias are computed. Time series are zeroed at the
   window's start.
-- **Simulation studies:** which ensembles to include (listed under [Data](#data)).
+- **Simulation studies:** which ensembles to include (listed under [Data](#data)): the ISMIP6 ensembles
+  first, then the other ice sheet model studies by publication date, then the Edwards et al. (2021) emulator
+  results, which come from a statistical emulator rather than an ice sheet model.
 - **Group by:** split every plot by study, ice sheet model, initialization, sliding law, climate
   scenario or GCM. You can optionally pool similar RCP and SSP scenarios into "composite" scenarios.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -93,12 +95,13 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 |---|---|
 | Seroussi 2020 (ISMIP6 AIS) | Seroussi et al. (2020), *The Cryosphere* 14, 3033–3070, https://doi.org/10.5194/tc-14-3033-2020 |
 | Goelzer 2020 (ISMIP6 GIS) | Goelzer et al. (2020), *The Cryosphere* 14, 3071–3096, https://doi.org/10.5194/tc-14-3071-2020 |
-| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025 |
-| Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024 |
+| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). Uncorrected runs, decadal values interpolated to annual |
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
+| DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5) |
+| Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024 |
+| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025 |
 | Goelzer 2025 (PROTECT GIS) | Goelzer et al. (2025), *The Cryosphere* 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 |
 | Edwards 2021 (AIS Main, AIS Risk Averse, GIS) | Edwards et al. (2021), *Nature* 593, 74–82, https://doi.org/10.1038/s41586-021-03302-y; samples from https://github.com/tamsinedwards/emulandice |
-| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). Uncorrected runs, decadal values interpolated to annual |
 | IMBIE3 observations | Otosaka et al. (2026), *Scientific Data*, https://doi.org/10.1038/s41597-026-08088-0 |
 | IMBIE2 observations | Otosaka et al. (2023), *Earth System Science Data* 15, 1597, https://doi.org/10.5194/essd-15-1597-2023 |
 

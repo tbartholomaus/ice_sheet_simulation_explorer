@@ -1134,6 +1134,73 @@ def load_deconto2016_ais(path=None, keep_through_year=2100):
     return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# DeConto, Pollard, Alley, Velicogna, Gasson, Gomez, Sadai, Condron,
+# Gilford, Ashe, Kopp, Li & Dutton (2021), "The Paris Climate Agreement and
+# future sea-level rise from Antarctica", Nature 593, 83-89,
+# https://doi.org/10.1038/s41586-021-03427-0 (PSU3D-ICE, updated since DP16).
+#
+# Source: the paper's Source Data for Figure 1 (41586_2021_3427_MOESM2_ESM.xlsx
+# on static-content.springer.com, which unlike Wiley/Code Ocean serves
+# scripted downloads). Four sheets -- "+1.5 ºC", "+2.0 ºC", "+3.0 ºC" and
+# "RCP8.5 sea level equiv. (m)" -- each with Year (annual, 2000-2300) and one
+# column per run: Antarctic contribution to sea level in METRES, zeroed at
+# 2000. The same 109 runs appear in every sheet, named param_<a>_<b> with
+# a = 15..195 (step 15) and b = 2..13. Read here as CREVLIQ (hydrofracturing)
+# and CLIFVMAX (maximum cliff-failure rate): the same Run85_<CREVLIQ>_<CLIFVMAX>
+# convention as Gilford & DeConto's PSU3D-ICE ensembles (Zenodo 3478486,
+# whose record names those two parameters). Checked: the +3 ºC median rate in
+# 2090-2100 is 0.41 cm/yr, vs. the abstract's "about 0.5 cm per year by 2100".
+#
+# Licence: the article is not open access (Crossref lists only Springer
+# Nature's text-and-data-mining terms, no Creative Commons licence).
+#
+# dash_app's bundled CSV (annual 2000-2100, all 436 runs):
+#   load_deconto2021_ais().to_csv(
+#       "dash_app/data/external_sources_deconto2021_ais.csv.gz", index=False, compression="gzip")
+# ═════════════════════════════════════════════════════════════════════════
+
+DECONTO2021_SOURCE_DATA_URL = (
+    "https://static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03427-0/"
+    "MediaObjects/41586_2021_3427_MOESM2_ESM.xlsx"
+)
+DECONTO2021_PROTOCOL_LABEL = "Figure 1 source data (calibrated ensemble)"
+DECONTO2021_CLIMATE_MODEL_LABEL = "Not reported in source data"
+
+
+def _deconto2021_scenario(sheet_name):
+    """Sheet name -> scenario label: "+1.5 ºC sea level equiv. (m)" -> "+1.5 °C"."""
+    head = sheet_name.strip().split(" sea level")[0].strip()
+    return head.replace("º", "°")
+
+
+def load_deconto2021_ais(keep_through_year=2100):
+    """Loads DeConto et al. (2021)'s Antarctic runs from the paper's Figure 1
+    source data (see the section comment above) as a dataframe shaped like
+    the other loaders: Year (annual), Cumulative ice sheet mass change (Gt;
+    m SLE x -362,500, so ice loss is negative), Group, Model, Exp, IS, plus
+    climate_model/scenario/protocol and `mici_params` (the run's CREVLIQ and
+    CLIFVMAX). 109 runs x 4 warming scenarios = 436 Exps."""
+    path = _download(DECONTO2021_SOURCE_DATA_URL, "deconto2021_fig1_source_data.xlsx", min_expected_bytes=500_000)
+    rows, meta = [], []
+    for sheet, d in pd.read_excel(path, sheet_name=None).items():
+        scen = _deconto2021_scenario(sheet)
+        d = d[d["Year"] <= keep_through_year]
+        tag = scen.replace("+", "").replace(" °C", "C").replace(".", "")  # e.g. 15C, RCP85
+        for col in [c for c in d.columns if str(c).startswith("param_")]:
+            crev, clif = (int(v) for v in str(col).split("_")[1:3])
+            exp = f"{tag}_c{crev:03d}_v{clif:02d}"
+            rows.append(pd.DataFrame({
+                "Year": d["Year"].astype(int).to_numpy(),
+                "Cumulative ice sheet mass change (Gt)": -d[col].to_numpy(dtype=float) * 1000 * GT_PER_M_SLE,
+                "Group": "DeConto2021", "Model": "PSU3D-ICE", "Exp": exp, "IS": "AIS",
+            }))
+            meta.append({"Exp": exp, "climate_model": DECONTO2021_CLIMATE_MODEL_LABEL, "scenario": scen,
+                         "protocol": DECONTO2021_PROTOCOL_LABEL,
+                         "mici_params": f"CREVLIQ {crev}, CLIFVMAX {clif} (run {col})"})
+    return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
+
+
 def exp_meta_from_df(df, extra_cols):
     """Builds a get_exp_meta()-style {Exp: {...}} dict from one of this
     module's loaded dataframes, whose exp-level classification (scenario,
