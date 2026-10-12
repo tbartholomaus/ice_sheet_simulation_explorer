@@ -1,5 +1,7 @@
 # Ice Sheet Simulation Explorer
 
+> This tool was only possible through the use of AI. I've done my best to personally double and triple check the outputs of this tool, and review some of the key pieces of code, but that hasn't been possible in every instance. As such, I invite your critical eye as well.  I encourage you to review or clone the code and examine the results, and I welcome all feedback, through git, email, phone, etc.  I hope you find the tool constructive and useful. Thanks for coming and having a look.  - Tim
+
 **How do simulations of ice sheet mass loss compare with observations?**
 
 This repository holds an interactive web app and an accompanying Jupyter notebook. Both compare published
