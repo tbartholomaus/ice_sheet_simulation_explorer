@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 
-from analysis import TS_END_YEAR, TS_QUANTILES, _fast_slope, weighted_quantiles
+from analysis import TS_END_YEAR, TS_QUANTILES, stacked_rates, weighted_quantiles
 from data import YEAR_GRID, proj_start
 
 MAX_BYTES = 5_000_000
@@ -134,14 +134,13 @@ def free_color(taken):
 
 def rates(u, lo, hi):
     """Per-simulation rate (Gt/yr) over [lo, hi] inclusive -- the same
-    window rule analysis.run_rates applies to the bundled runs."""
-    out = np.full(len(u.vals), np.nan)
-    inwin = (u.years >= lo) & (u.years <= hi)
-    for i, v in enumerate(u.vals):
-        m = inwin & np.isfinite(v)
-        if m.sum() >= 2:
-            out[i] = _fast_slope(u.years[m], v[m])
-    return out
+    window rule analysis.run_rates applies to the bundled runs, computed by
+    the same analysis.stacked_rates: each simulation's non-missing values are
+    passed in as one run. Not cached -- uploads come with each request."""
+    ok = np.isfinite(u.vals)
+    sim = np.nonzero(ok)[0]  # simulation (row) of each non-missing value
+    years = np.broadcast_to(u.years, u.vals.shape)[ok]
+    return stacked_rates(lo, hi, sim, years, u.vals[ok], len(u.vals))
 
 
 def _grid(u):

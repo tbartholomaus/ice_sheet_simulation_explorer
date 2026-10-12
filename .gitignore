@@ -222,6 +222,7 @@ __marimo__/
 *.png
 *.pdf
 v7_CMIP5_pub/
+profile_log.txt
 
 # macOS
 .DS_Store

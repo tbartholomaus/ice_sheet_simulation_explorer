@@ -68,9 +68,19 @@ OBS_PRODUCTS = {
                "url": "https://doi.org/10.5194/essd-15-1597-2023", "last_year": 2020},
 }
 DEFAULT_OBS = "imbie3"
+
+
+def _imbie_arrays(df):
+    """A loaded IMBIE frame as plain arrays: a few hundred monthly values,
+    small enough that analysis.py recomputes from them per request."""
+    return {"year": df["Year"].to_numpy(dtype=float), "mass": df[MASS_COL].to_numpy(dtype=float),
+            "sigma": df["Cumulative ice sheet mass change uncertainty (Gt)"].to_numpy(dtype=float)}
+
+
+# IMBIE[obs][ice_sheet] -> {"year", "mass" (cumulative Gt), "sigma" (its 1-sigma, Gt)}
 IMBIE = {
-    "imbie3": {"AIS": _load_imbie2026("antarctica"), "GIS": _load_imbie2026("greenland")},
-    "imbie2": {"AIS": _load_imbie2023("antarctica"), "GIS": _load_imbie2023("greenland")},
+    "imbie3": {"AIS": _imbie_arrays(_load_imbie2026("antarctica")), "GIS": _imbie_arrays(_load_imbie2026("greenland"))},
+    "imbie2": {"AIS": _imbie_arrays(_load_imbie2023("antarctica")), "GIS": _imbie_arrays(_load_imbie2023("greenland"))},
 }
 
 
@@ -444,8 +454,8 @@ def _build_hover(group, model, exp, ice_sheet, ism_m, exp_m, publication):
 
 
 def _build_runs():
-    """One row per simulation across every source, plus each run's raw
-    (Year, cumulative Gt) arrays and an (n_runs x YEAR_GRID) matrix on
+    """One row per simulation across every source, plus lists of each run's
+    raw (Year, cumulative Gt) arrays and an (n_runs x YEAR_GRID) matrix on
     integer years. Integer years only for the matrix: ISMIP6 AIS reports
     half-year steps where only cumulative (not rate) is populated, and
     grouping on mixed half/whole years is what broke the AIS lines in the
@@ -491,6 +501,12 @@ def _build_runs():
 
 
 RUNS, RUN_YEARS, RUN_VALS, YEAR_GRID, CUM = _build_runs()
+# Runs have different time steps and spans, so rather than one small array
+# per run, every run's points are stacked end to end in run order, with
+# RUN_ID[k] naming the run (RUNS row) point k belongs to. Lets
+# analysis.run_rates fit all runs at once instead of looping over them.
+RUN_ID = np.repeat(np.arange(len(RUN_YEARS)), [len(y) for y in RUN_YEARS])
+RUN_YEARS, RUN_VALS = np.concatenate(RUN_YEARS), np.concatenate(RUN_VALS)
 RUNS[COMPOSITE_DIM] = RUNS["scenario"].map(lambda s: SCENARIO_COMPOSITE.get(s, s))
 
 

@@ -12,7 +12,7 @@ import scipy.stats
 from scipy.stats import linregress
 
 from data import (
-    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, MASS_COL, RUN_VALS, RUN_YEARS, RUNS, SOURCE_LABELS,
+    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, RUN_ID, RUN_VALS, RUN_YEARS, RUNS, SOURCE_LABELS,
     YEAR_GRID, proj_start,
 )
 
@@ -21,36 +21,46 @@ _PUB = RUNS["publication"].to_numpy()
 _GROUP = RUNS["group"].to_numpy()
 
 
-def _fast_slope(x, y):
-    """Closed-form OLS slope (== scipy.stats.linregress(x, y).slope)."""
-    if len(x) < 2:
-        return np.nan
-    xd = x - x.mean()
-    ssxx = np.dot(xd, xd)
-    return np.nan if ssxx == 0 else np.dot(xd, y - y.mean()) / ssxx
+def stacked_rates(lo, hi, run_id, years, vals, n_runs):
+    """Per-run rate (Gt/yr) over [lo, hi] inclusive -- the same window
+    semantics as the original app's _rows_for_window. NaN where a run has
+    fewer than 2 points in the window.
+
+    All runs are fitted at once from data.py's stacked layout: run_id[k] is
+    the run (0..n_runs-1) point k belongs to, so runs may differ in length
+    and time step. Each run's rate equals scipy.stats.linregress on its own
+    windowed points (checked in tests/test_analysis.py). Used for the
+    bundled runs (run_rates) and for uploads (user_data.rates)."""
+    m = (years >= lo) & (years <= hi)
+    rid, x, y = run_id[m], years[m], vals[m]
+    cnt = np.bincount(rid, minlength=n_runs)
+    with np.errstate(invalid="ignore", divide="ignore"):  # runs with no points: 0/0, masked below
+        xd = x - (np.bincount(rid, x, n_runs) / cnt)[rid]
+        yd = y - (np.bincount(rid, y, n_runs) / cnt)[rid]
+        sxx = np.bincount(rid, xd * xd, n_runs)
+        out = np.bincount(rid, xd * yd, n_runs) / sxx
+    out[(cnt < 2) | (sxx == 0)] = np.nan
+    return out
 
 
 @lru_cache(maxsize=64)
 def run_rates(lo, hi):
-    """Per-run rate (Gt/yr) over [lo, hi] inclusive -- the same window
-    semantics as the original app's _rows_for_window. NaN where a run has
-    fewer than 2 points in the window."""
-    out = np.full(len(RUNS), np.nan)
-    for i, (y, v) in enumerate(zip(RUN_YEARS, RUN_VALS)):
-        m = (y >= lo) & (y <= hi)
-        if m.sum() >= 2:
-            out[i] = _fast_slope(y[m], v[m])
+    """stacked_rates for the bundled runs, one per RUNS row. Cached so a
+    window a visitor returns to costs nothing (~4 ms otherwise); at most 64
+    windows x 13,902 floats, ~7 MB. Read-only, since every request shares
+    the cached array."""
+    out = stacked_rates(lo, hi, RUN_ID, RUN_YEARS, RUN_VALS, len(RUNS))
     out.setflags(write=False)
     return out
 
 
-@lru_cache(maxsize=128)
 def imbie_rate(ice_sheet, lo, hi, obs=DEFAULT_OBS):
     """(slope, stderr) of IMBIE cumulative mass over Jan lo .. Dec hi, from
-    observation product `obs` (a data.OBS_PRODUCTS key)."""
-    df = IMBIE[obs][ice_sheet]
-    m = (df["Year"] >= lo) & (df["Year"] < hi + 1)
-    r = linregress(df.loc[m, "Year"], df.loc[m, MASS_COL])
+    observation product `obs` (a data.OBS_PRODUCTS key). A few hundred
+    monthly values, so not cached (~0.3 ms)."""
+    d = IMBIE[obs][ice_sheet]
+    m = (d["year"] >= lo) & (d["year"] < hi + 1)
+    r = linregress(d["year"][m], d["mass"][m])
     return r.slope, r.stderr
 
 
@@ -160,16 +170,15 @@ def imbie_timeseries(ice_sheet, lo, hi, obs=DEFAULT_OBS):
     in quadrature (checked: the file's end value matches annual errors summed
     in quadrature), so the uncertainty of change since `lo` is
     sqrt(|U(t)^2 - U(lo)^2|)."""
-    df = IMBIE[obs][ice_sheet]
-    at0 = df.loc[df["Year"] == lo]
-    if at0.empty:
+    d = IMBIE[obs][ice_sheet]
+    at0 = np.flatnonzero(d["year"] == lo)
+    if not len(at0):
         return None
-    u = df["Cumulative ice sheet mass change uncertainty (Gt)"].to_numpy()
-    u0 = at0["Cumulative ice sheet mass change uncertainty (Gt)"].iloc[0]
+    i = at0[0]
     return {
-        "years": df["Year"].to_numpy(),
-        "value": df[MASS_COL].to_numpy() - at0[MASS_COL].iloc[0],
-        "sigma": np.sqrt(np.abs(u ** 2 - u0 ** 2)),
+        "years": d["year"],
+        "value": d["mass"] - d["mass"][i],
+        "sigma": np.sqrt(np.abs(d["sigma"] ** 2 - d["sigma"][i] ** 2)),
     }
 
 

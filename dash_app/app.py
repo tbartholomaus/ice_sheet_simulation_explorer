@@ -102,7 +102,6 @@ def section(sid, title, lede, children):
         html.H2(title), html.P(lede, className="lede"), *children,
     ])
 
-
 def graph(gid, height, **config):
     return dcc.Loading(type="dot", color="#0b63b6", children=dcc.Graph(
         id=gid, config={"displaylogo": False, "responsive": True, **config}, style={"height": f"{height}px"}))
