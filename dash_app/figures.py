@@ -50,13 +50,16 @@ def units_info(units):
 
 
 def _empty(fig, row, col, text="No simulations selected for this ice sheet"):
-    """Centre `text` in the (row, col) panel. Its axes' domain is named
-    explicitly (e.g. "x2 domain"): a plain "x domain" always means the first
-    panel's axes, so the message used to land on the other ice sheet."""
+    """Centre `text` in the (row, col) panel, placed in figure ("paper")
+    coordinates at the middle of that panel's axis domains. Referencing the
+    panel's own axes instead ("x2 domain") isn't reliable: an empty panel has
+    no traces, and Plotly.js then falls back to the first panel's axes, so
+    the message landed on the other ice sheet."""
     sp = fig.get_subplot(row, col)
-    xa, ya = (a.plotly_name.replace("axis", "") for a in (sp.xaxis, sp.yaxis))
+    (x0, x1), (y0, y1) = sp.xaxis.domain, sp.yaxis.domain
     fig.add_annotation(text=text, showarrow=False, font=dict(color=MUTED), bgcolor="rgba(255,255,255,0.9)",
-                       borderpad=4, xref=f"{xa} domain", yref=f"{ya} domain", x=0.5, y=0.5)
+                       borderpad=4, xref="paper", yref="paper", x=(x0 + x1) / 2, y=(y0 + y1) / 2,
+                       xanchor="center", yanchor="middle")
 
 
 def _point_style(mask):
