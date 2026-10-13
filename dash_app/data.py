@@ -407,7 +407,7 @@ GROUP_DIMENSIONS = [
 ANOVA_CHARACTERISTICS = ["ice_model", "sliding_law", "initialization", "scenario", "climate_model"]
 DIM_LABEL = {k: v for k, v in GROUP_DIMENSIONS if k}
 
-# "Collapse RCPs and SSPs": each RCP pooled with the SSP of the same nominal
+# "Combine RCPs and SSPs": each RCP pooled with the SSP of the same nominal
 # 2100 forcing (W/m^2). Not equivalent scenarios -- the app shows a warning
 # whenever this is on. Scenarios without a counterpart keep their names.
 SCENARIO_COMPOSITE = {

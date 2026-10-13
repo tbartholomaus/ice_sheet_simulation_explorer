@@ -64,7 +64,7 @@ GROUP_OPTIONS = [{"label": label, "value": key or "all"} for key, label in GROUP
 
 
 def _dim(value, collapse=False):
-    """Run-table column for a Group by value; with "Collapse RCPs and SSPs"
+    """Run-table column for a Group by value; with "Combine RCPs and SSPs"
     on, the scenario grouping uses the pooled composite column instead."""
     if value in (None, "all"):
         return None
@@ -126,11 +126,11 @@ sidebar = html.Aside(className="sidebar", children=[
     control("Group by", html.Div([
         dcc.Dropdown(id="groupby", clearable=False, searchable=False, value="all", options=GROUP_OPTIONS),
         dcc.Checklist(id="collapse", className="toggle collapse-toggle", value=[],
-                      options=[{"label": "Collapse RCPs and SSPs", "value": "on"}]),
+                      options=[{"label": "Combine RCPs and SSPs", "value": "on"}]),
         html.Div("RCP and SSP climate scenarios are not equivalent and can differ in their GMST change at 2100 "
                  "by as much as 0.5 °C.",
                  id="collapse-warning", className="warning", style={"display": "none"}),
-    ]), "Collapsing combines simulations run under similar RCP and SSP scenarios (e.g. RCP8.5 and SSP5-8.5 "
+    ]), "Combining pools simulations run under similar RCP and SSP scenarios (e.g. RCP8.5 and SSP5-8.5 "
         "become “composite 8.5”), setting aside differences in their climate trajectories."),
     control("Units", dcc.RadioItems(
         id="units", className="segmented", value="gt", inline=True,
@@ -288,32 +288,35 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
 
         html.H3("Why ice sheet models matter"),
         html.P("Ice sheet modeling is a rapidly developing field. The Greenland and Antarctic Ice Sheets "
-               "are currently losing mass and contributing to the flooding of coastal communities, globally. One of the "
-               "essential ways society anticipates how much sea level will rise in the coming decades and centuries is through projections of the "
-               "future of the ice sheets, produced by ice sheet models."),
+               "are currently losing mass and contributing to the flooding of coastal communities, globally. "
+               "One of the essential ways society anticipates how much sea level will rise in the coming decades "
+               "and centuries is through projections of the future of the ice sheets, produced by ice sheet "
+               "models."),
 
         html.H3("What is an ice sheet model?"),
-        html.P("An ice sheet model is computer code that simulates how an ice sheet flows, gains mass from snowfall, "
-               "and loses it by melting and by discharging ice into the ocean. Driven by the atmosphere and ocean "
-               "of a climate model and associated future climate scenario, it calculates how the ice sheet's thickness, extent and flow "
-               "change through time."),
+        html.P("An ice sheet model is computer code that simulates how an ice sheet flows, gains mass from "
+               "snowfall, and loses it by melting and by discharging ice into the ocean. Driven by the atmosphere "
+               "and ocean of a climate model and associated future climate scenario, it calculates how the ice "
+               "sheet's thickness, extent and flow change through time."),
         html.P(["Running one involves ", html.B("on the order of 100 decisions"), ": which equations describe "
                 "ice flow, how the ice slides over its bed, how the model is started from today's ice sheet, "
                 "which climate model and emissions scenario drive it, how ice shelves melt and break off, the "
                 "grid resolution, and many more. These decisions shape both the ", html.B("future trajectory"),
                 " of the ice sheets (how much ice they lose in coming decades and centuries) and ",
-                html.B("how well the models reproduce the changes observed"), " over the last few decades."]),
+                html.B("how well the models reproduce the changes observed"), " over the last few decades. "
+                "However, it is not yet clear which decisions will most credibly simulate the ice sheets, "
+                "or even how some of these modeling decisions affect the accuracy of a simulation."]),
 
         html.H3("The idea behind this app"),
         html.P("This app is built around the goal of learning which modeling decisions lead to more "
-               "realistic projections of ice sheet change. The app allows a user to identify which simulations have "
-               "the least bias when their rates of recent ice sheet change are compared with satellite "
+               "realistic projections of ice sheet change. The app allows a user to identify which simulations "
+               "have the least bias when their rates of recent ice sheet change are compared with satellite "
                "observations from IMBIE, the Ice Sheet Mass Balance Inter-comparison Exercise. By exploring "
                "the data yourself, you can develop your own intuition and insight about the results."),
 
         html.H3("What's on the page"),
-        html.P("For a selected set of published simulations of ice sheet change (the Simulation Studies in the sidebar), "
-                       "this app presents:"),
+        html.P("For a selected set of published simulations of ice sheet change (the Simulation Studies in the "
+               "sidebar), this app presents:"),
         html.Ul(className="intro-list", children=[
             _intro_item("Rates of mass change",
                         "each simulation's average rate of mass change over a recent time window, as density "
@@ -322,8 +325,9 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
                         "how simulated mass change unfolds from the start of the averaging window, against the "
                         "observations. Drag to pan out to 2100."),
             _intro_item("Mass change by 2100",
-                        "projected change from 2015 out to 2100. You can also compare how those projections change if the selected, published simulations are constrained to only "
-                        "those whose recent rates match the observations."),
+                        "projected change from 2015 out to 2100. You can also compare how those projections "
+                        "change if the selected, published simulations are constrained to only those whose "
+                        "recent rates match the observations."),
             _intro_item("What drives bias?",
                         "how much of the spread in bias (simulated minus observed rate) each modeling decision "
                         "explains, and what the best-matching simulations have in common."),
@@ -333,18 +337,19 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
         html.Ul(className="intro-list", children=[
             _intro_item("Averaging window", "the years over which rates and bias are calculated."),
             _intro_item("Simulation studies",
-                        "which peer-reviewed, published ensembles of ice sheet simulations to include. Options include studies of both physics-based ice sheet models and, for comparison, emulations "
+                        "which peer-reviewed, published ensembles of ice sheet simulations to include. Options "
+                        "include studies of both physics-based ice sheet models and, for comparison, emulations "
                         "and syntheses. You can also add your own ensemble of simulations."),
             _intro_item("Group by",
-                        "split every plot by published study or by a modeling decision (ice sheet model, initialization, "
-                        "sliding law, climate scenario or climate model). Optionally pool similar RCP and SSP "
-                        "scenarios."),
+                        "split every plot by published study or by a modeling decision (ice sheet model, "
+                        "initialization, sliding law, climate scenario or climate model). Optionally pool similar "
+                        "RCP and SSP scenarios."),
             _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
             _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
             _intro_item("Display", "show or hide each group's median."),
         ]),
-        html.P("Hover over any plot for details. You can reopen this introduction with “About this app” at the "
-               "top right.", className="note"),
+        html.P("Hover over any plot for details. You can reopen this introduction with “About this app” at "
+               "the top right.", className="note"),
 
         html.Div(className="modal-actions", children=[
             html.Button("Start exploring", id="intro-close", className="button-primary", n_clicks=0),
