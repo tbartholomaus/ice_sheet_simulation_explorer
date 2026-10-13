@@ -348,7 +348,9 @@ def change_2100_figure(valid, dim, units, users=(), matched=None, users_matched=
             offsetgroup=None if kind == "only" else kind, **style), row=1, col=col)
 
     qs = [0.05, 0.25, 0.5, 0.75, 0.95]
+    boxgap = 0.25 if filt else 0.35
     label_drop = 0  # px the slanted labels hang below the axis; the figure grows by it
+    pair = None  # (col, category index, all-box quantiles, match-box quantiles) to label, filter on only
     for col, ice in enumerate(ICE_SHEETS, start=1):
         cats = A.category_masks(ok, ice, dim)
         uploads = []
@@ -362,26 +364,62 @@ def change_2100_figure(valid, dim, units, users=(), matched=None, users_matched=
         if not cats and not uploads:
             _empty(fig, 1, col)
             continue
-        for cat, m in cats:
+        fences = []  # every box's 5th and 95th percentiles in this panel
+        for idx, (cat, m) in enumerate(cats):
             color = _color(dim, cat)
             q = A.weighted_quantiles(A.CHANGE_2100[m] * f, w[m], qs)
             add_box(col, cat, q, color, int(m.sum()), "all" if filt else "only")
+            fences += [q[0], q[4]]
             if filt and (m & matched).any():
                 mm = m & matched
-                add_box(col, cat, A.weighted_quantiles(A.CHANGE_2100[mm] * f, w_m[mm], qs), color, int(mm.sum()), "match")
+                qm = A.weighted_quantiles(A.CHANGE_2100[mm] * f, w_m[mm], qs)
+                add_box(col, cat, qm, color, int(mm.sum()), "match")
+                fences += [qm[0], qm[4]]
+                if pair is None and len(cats) + len(users) <= 2:
+                    # Only with one or two groups per panel (e.g. "All
+                    # simulations"): with more, the boxes are too narrow for
+                    # the two labels, and the readout explains the styles.
+                    pair = (col, idx, q, qm, fences)
         labels = [c for c, _ in cats]
         for u, uc, um in uploads:
-            add_box(col, u.label, np.quantile(uc * f, qs), u.color, len(uc), "all" if filt else "only", width=2)
+            qu = np.quantile(uc * f, qs)
+            add_box(col, u.label, qu, u.color, len(uc), "all" if filt else "only", width=2)
+            fences += [qu[0], qu[4]]
             if filt and um is not None and um.any():
-                add_box(col, u.label, np.quantile(uc[um] * f, qs), u.color, int(um.sum()), "match", width=2)
+                qum = np.quantile(uc[um] * f, qs)
+                add_box(col, u.label, qum, u.color, int(um.sum()), "match", width=2)
+                fences += [qum[0], qum[4]]
             labels.append(u.label)
         fig.add_hline(y=0, line=dict(color="#9aa3af", dash="dot", width=1), row=1, col=col)
         angle, size = _tick_style(labels)
         longest = max(len(str(c)) for c in labels) * 7 * size / 12
         label_drop = max(label_drop, longest * abs(np.sin(np.radians(angle))))
         fig.update_xaxes(tickangle=angle, tickfont_size=size, automargin=True, row=1, col=col)
+    if pair is not None:
+        # With the filter on, say what the two boxes are, once: above the
+        # first pair of boxes in the first panel that has one (one or two
+        # groups only; see above). Grouped boxes
+        # sit at +/- (1 - boxgap) / 4 of a category from its centre, and a
+        # category axis accepts the category's index as a numeric position.
+        col, idx, q_all, q_match, fences = pair
+        ax = "" if col == 1 else str(col)
+        offset = (1 - boxgap) / 4
+        for dx, q, text in ((-offset, q_all, "all original<br>selected simulations"),
+                            (offset, q_match, "only those<br>meeting validation")):
+            fig.add_annotation(x=idx + dx, y=q[4], xref=f"x{ax}", yref=f"y{ax}", text=text, showarrow=False,
+                               yanchor="bottom", yshift=4, font=dict(size=10, color=MUTED), align="center")
+        # Headroom so the labels clear the panel's title.
+        lo, hi = float(np.nanmin(fences + [0])), float(np.nanmax(fences + [0]))
+        span = max(hi - lo, 1e-9)
+        fig.update_yaxes(range=[lo - 0.06 * span, hi + 0.22 * span], autorange=False, row=1, col=col)
+    # Every other panel autoscales -- said explicitly, because after a figure
+    # that fixed a panel's range (the labelled view above), Plotly would
+    # otherwise keep autorange off and fall back to a default [-1, 4] range.
+    for c in (1, 2):
+        if pair is None or c != pair[0]:
+            fig.update_yaxes(autorange=True, row=1, col=c)
     fig.update_yaxes(title_text=f"Change 2015–2100 ({cum_label})", row=1, col=1)
-    fig.update_layout(template=TEMPLATE, height=int(400 + label_drop), boxgap=0.35 if not filt else 0.25,
+    fig.update_layout(template=TEMPLATE, height=int(400 + label_drop), boxgap=boxgap,
                       boxgroupgap=0.12, boxmode="group" if filt else "overlay", uirevision=f"y2100-{units}")
     return fig
 
