@@ -50,8 +50,13 @@ def units_info(units):
 
 
 def _empty(fig, row, col, text="No simulations selected for this ice sheet"):
-    fig.add_annotation(text=text, showarrow=False, font=dict(color=MUTED), row=row, col=col,
-                       xref="x domain", yref="y domain", x=0.5, y=0.5)
+    """Centre `text` in the (row, col) panel. Its axes' domain is named
+    explicitly (e.g. "x2 domain"): a plain "x domain" always means the first
+    panel's axes, so the message used to land on the other ice sheet."""
+    sp = fig.get_subplot(row, col)
+    xa, ya = (a.plotly_name.replace("axis", "") for a in (sp.xaxis, sp.yaxis))
+    fig.add_annotation(text=text, showarrow=False, font=dict(color=MUTED), bgcolor="rgba(255,255,255,0.9)",
+                       borderpad=4, xref=f"{xa} domain", yref=f"{ya} domain", x=0.5, y=0.5)
 
 
 def _point_style(mask):
@@ -159,7 +164,7 @@ def rates_figure(valid, lo, hi, dim, units, show_medians, obs=DEFAULT_OBS, users
             hovertemplate=f"{OBS_PRODUCTS[obs]['label']} observed: {imbie * f:.3g} ± {2 * imbie_se * abs(f):.2g} {rate_label}<extra></extra>"),
             row=row, col=1)
         fig.add_vline(x=0, line=dict(color="#9aa3af", dash="dot", width=1), row=row, col=1)
-        fig.update_xaxes(title_text=f"Rate of {'sea-level contribution' if units == 'sle' else 'mass change'} ({rate_label})",
+        fig.update_xaxes(title_text=f"{lo}–{hi} average rate of {'sea-level contribution' if units == 'sle' else 'mass change'} ({rate_label})",
                          autorange="reversed" if units == "sle" else True, row=row, col=1)
         fig.update_yaxes(visible=False, range=[-0.3, 1.05], row=row, col=1)
     fig.update_layout(template=TEMPLATE, height=760, uirevision=f"rates-{units}",

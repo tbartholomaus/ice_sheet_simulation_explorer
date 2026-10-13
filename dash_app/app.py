@@ -153,6 +153,8 @@ sidebar = html.Aside(className="sidebar", children=[
 
 main = html.Main(className="content", children=[
     html.Header(className="page-header", children=[
+        html.Button("ⓘ About this app", id="intro-open", className="about-button", n_clicks=0,
+                    title="Show the introduction to this app again"),
         html.H1("How do simulations of ice sheet mass loss compare with observations?"),
         html.P("Compare simulated rates of ice sheet mass change with satellite observations, see how "
                "simulations evolve through time and by 2100, and explore which modeling choices drive "
@@ -272,8 +274,84 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
     ]),
 ])
 
+def _intro_item(term, text):
+    return html.Li([html.B(term), " — ", text])
+
+
+# Overview shown over the app when it opens; "About this app" (top right)
+# brings it back.
+intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"display": "flex"}, children=[
+    html.Div(className="modal intro", role="dialog", **{"aria-labelledby": "intro-title"}, children=[
+        html.Button("×", id="intro-x", className="intro-x", n_clicks=0, title="Close"),
+        html.Div("Ice Sheet Simulation Explorer", className="brand-top"),
+        html.H2("Learning from ice sheet simulations", id="intro-title"),
+
+        html.H3("Why ice sheet models matter"),
+        html.P("Ice sheet modeling is a rapidly developing field. The Greenland and Antarctic ice sheets hold "
+               "enough ice to raise global sea level by tens of metres, and they are losing mass. One of the "
+               "essential ways society anticipates how much sea level will rise is through projections of the "
+               "future of the ice sheets, produced by ice sheet models."),
+
+        html.H3("What is an ice sheet model?"),
+        html.P("An ice sheet model is a computer simulation of how an ice sheet flows, gains mass from snowfall, "
+               "and loses it by melting and by discharging ice into the ocean. Driven by the atmosphere and ocean "
+               "of a climate model or scenario, it calculates how the ice sheet's thickness, extent and flow "
+               "change through time."),
+        html.P(["Running one involves ", html.B("on the order of 100 decisions"), ": which equations describe "
+                "ice flow, how the ice slides over its bed, how the model is started from today's ice sheet, "
+                "which climate model and emissions scenario drive it, how ice shelves melt and break off, the "
+                "grid resolution, and many more. These decisions shape both the ", html.B("future trajectory"),
+                " of the ice sheets (how much ice they lose in coming decades and centuries) and ",
+                html.B("how well the models reproduce the changes observed"), " over the last few decades."]),
+
+        html.H3("The idea behind this app"),
+        html.P("This app is built around the expectation that we can learn which modeling decisions lead to more "
+               "realistic projections of ice sheet change. It does this by identifying which simulations have "
+               "the least bias when their rates of recent ice sheet change are compared with satellite "
+               "observations from IMBIE, the Ice Sheet Mass Balance Inter-comparison Exercise. By exploring "
+               "the data yourself, you can develop your own intuition and insight about the results."),
+
+        html.H3("What's on the page"),
+        html.Ul(className="intro-list", children=[
+            _intro_item("Rates of mass change",
+                        "each simulation's average rate of mass change over the averaging window, as density "
+                        "curves and dots, against the observed IMBIE rate."),
+            _intro_item("Mass change through time",
+                        "how simulated mass change unfolds from the start of the averaging window, against the "
+                        "observations. Drag to pan out to 2100."),
+            _intro_item("Mass change by 2100",
+                        "projected change from 2015 to 2100. You can also compare all simulations with only "
+                        "those whose recent rates match the observations."),
+            _intro_item("What drives bias?",
+                        "how much of the spread in bias (simulated minus observed rate) each modeling decision "
+                        "explains, and what the best-matching simulations have in common."),
+        ]),
+
+        html.H3("The sidebar controls"),
+        html.Ul(className="intro-list", children=[
+            _intro_item("Averaging window", "the years over which rates and bias are calculated."),
+            _intro_item("Simulation studies",
+                        "which published ensembles to include: physics-based ice sheet models, then emulations "
+                        "and syntheses. You can also add your own ensemble."),
+            _intro_item("Group by",
+                        "split every plot by study or by a modeling decision (ice sheet model, initialization, "
+                        "sliding law, climate scenario or climate model). Optionally pool similar RCP and SSP "
+                        "scenarios."),
+            _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
+            _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
+            _intro_item("Display", "show or hide each group's median."),
+        ]),
+        html.P("Hover over any plot for details. You can reopen this introduction with “About this app” at the "
+               "top right.", className="note"),
+
+        html.Div(className="modal-actions", children=[
+            html.Button("Start exploring", id="intro-close", className="button-primary", n_clicks=0),
+        ]),
+    ]),
+])
+
 app.layout = html.Div(className="page", children=[
-    sidebar, main, upload_modal,
+    sidebar, main, upload_modal, intro_modal,
     dcc.Store(id="upload-pending"),                         # parsed, not yet confirmed
     dcc.Store(id="user-data", storage_type="session"),      # confirmed uploads, a list (this tab only)
 ])
@@ -493,7 +571,7 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     rows, cut = A.low_bias_enrichment(b[mask], w[mask], RUNS[dim].to_numpy()[mask], LOW_BIAS_FRAC)
     enrich = F.enrichment_figure(rows, dim, LOW_BIAS_FRAC)
     return (summary, _anova_table(one_way, combined, dim), box, f"Bias by {_lower(DIM_LABEL[dim])}", note, enrich,
-            f"What do the best-matching runs share? (|bias| ≤ {cut:.3g} {label})", _height(box), _height(enrich))
+            f"What do the best-matching simulations share? (|bias| ≤ {cut:.3g} {label})", _height(box), _height(enrich))
 
 
 @app.callback(Output("groupby", "value"), Output("bias-groupby", "value"),
@@ -511,6 +589,15 @@ def _sync_groupby(sidebar, local, _clicks):
     if src == "bias-groupby":
         return local, no_update
     return no_update, sidebar
+
+
+# ── introduction ──────────────────────────────────────────────────────────
+
+@app.callback(Output("intro-modal", "style"),
+              Input("intro-open", "n_clicks"), Input("intro-close", "n_clicks"), Input("intro-x", "n_clicks"),
+              prevent_initial_call=True)
+def _intro_modal(*_):
+    return {"display": "flex" if ctx.triggered_id == "intro-open" else "none"}
 
 
 # ── upload your own ensemble ──────────────────────────────────────────────
@@ -584,15 +671,13 @@ def _user_chips(store):
     return chips, len(chips) >= U.MAX_ENSEMBLES
 
 
-# After a sideways PAN of the time series (the visible span of years is
-# unchanged), refit each panel's y axis to the data now in view: the series
-# run to 2100, where values dwarf those near the window, and Plotly keeps the
-# old y range while panning. Zooms are left alone -- a box zoom, scroll zoom
-# or y-axis drag sets the vertical range the user asked for, and refitting
-# would undo it. A double-click (which autoranges to 1950-2100) is turned
-# into "back to the window". Runs in the browser; y-only relayouts are
-# ignored, so it can't loop. The resulting x range goes to the ts-view store
-# so a server rebuild keeps it.
+# Time series view handling. Pans and zooms leave the y axis exactly where the
+# user's gesture puts it (user decision, 2026-10-13: no automatic refitting).
+# A double-click (which Plotly turns into an autorange over 1950-2100) is
+# turned into "back to the opening view": the averaging window, with each
+# panel's y axis fitted to the data in it, as the figure first opens. Runs in
+# the browser; y-only relayouts are ignored, so it can't loop. The x range
+# goes to the ts-view store so a server rebuild keeps it.
 app.clientside_callback(
     """
     function(relayout) {
@@ -602,21 +687,13 @@ app.clientside_callback(
         if (!gd || !gd._fullLayout || !gd._fullData) return nu;
         const meta = (gd.layout && gd.layout.meta) || {};
         const reset = relayout["xaxis.autorange"] || relayout["xaxis2.autorange"];
-        const xr = reset && meta.window ? meta.window : gd._fullLayout.xaxis.range.slice();
-        // Previous visible span, kept on window (the graph div gets replaced on
-        // rebuilds) and keyed to the averaging window, which resets the view.
-        const span = xr[1] - xr[0], key = meta.lo + "-" + meta.hi;
-        const prev = window.__tsSpanKey === key && window.__tsSpan
-            ? window.__tsSpan : (meta.window ? meta.window[1] - meta.window[0] : span);
-        window.__tsSpan = span; window.__tsSpanKey = key;
-        const panned = Math.abs(span - prev) < 1e-6 * Math.max(1, Math.abs(prev));
-        const view = {lo: meta.lo, hi: meta.hi, x: reset ? null : xr};
-        if (!reset && !panned) return view;  // a zoom: keep the user's vertical range
-        const upd = {};
-        if (reset && meta.window) upd["xaxis.range"] = meta.window.slice();
+        if (!reset || !meta.window) {
+            return {lo: meta.lo, hi: meta.hi, x: gd._fullLayout.xaxis.range.slice()};
+        }
+        const [x0, x1] = meta.window;
+        const upd = {"xaxis.range": meta.window.slice()};
         [["x", "xaxis", "yaxis"], ["x2", "xaxis2", "yaxis2"]].forEach(([xid, xax, yax]) => {
             if (!gd._fullLayout[xax]) return;
-            const [x0, x1] = xr;  // the panels share one x range (matches="x")
             let lo = Infinity, hi = -Infinity;
             gd._fullData.forEach(t => {
                 if (t.xaxis !== xid || t.visible !== true || !t.x || !t.y) return;
@@ -630,8 +707,8 @@ app.clientside_callback(
                 upd[yax + ".range"] = [lo - pad, hi + pad];
             }
         });
-        if (Object.keys(upd).length) Plotly.relayout(gd, upd);
-        return view;
+        Plotly.relayout(gd, upd);
+        return {lo: meta.lo, hi: meta.hi, x: null};
     }
     """,
     Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
