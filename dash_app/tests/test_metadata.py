@@ -1,11 +1,14 @@
 """Tests for the simulation metadata (metadata.py + data.py's run table).
 
-These pin the decisions of the metadata review (ismip6_check_261123/
-metadata_review/01_Seroussi2020_ISMIP6_AIS.md) so a later edit can't
-silently undo them.
+These pin the encodings in dash_app/metadata/ (decided in the metadata
+review, ismip6_check_261123/metadata_review/) so a later edit can't
+silently change them, and check that the metadata files and the bundled
+data agree.
 
 Run from dash_app/:  python -m pytest
 """
+
+import os
 
 import numpy as np
 import pandas as pd
@@ -31,7 +34,7 @@ def test_every_run_has_an_exact_metadata_row():
 
 def test_no_fallback_for_unknown_keys():
     with pytest.raises(KeyError):
-        M.model_meta("AIS", "ULB", "FETISH1")  # the key the old substring fallback used to land on
+        M.model_meta("AIS", "ULB", "FETISH1")  # a similar-looking but nonexistent key
     with pytest.raises(KeyError):
         M.model_meta("GIS", "ULB", "fETISh_16km")  # AIS model never borrowed for GIS
 
@@ -141,3 +144,46 @@ def test_external_study_weighs_one_ismip6_configuration():
     w = A.run_weights(valid)
     coulon = (RUNS["publication"] == "Coulon 2024").to_numpy()
     assert np.isclose(w[coulon].sum(), 188 / 16)
+
+
+# ── the metadata files ────────────────────────────────────────────────────
+
+def test_every_study_has_a_models_and_an_experiments_file():
+    for stem in M.STUDIES:
+        for kind in ("models", "experiments"):
+            assert os.path.isfile(os.path.join(M.META_DIR, f"{stem}_{kind}.csv")), (stem, kind)
+
+
+def test_seroussi_experiments_are_verbatim_table_1():
+    e = pd.read_csv(os.path.join(M.META_DIR, "Seroussi2020_experiments.csv"), comment="#", dtype=str)
+    assert list(e.columns) == ["Experiment", "AOGCM", "Scenario", "Ocean forcing", "Ocean sensitivity",
+                               "Ice shelf fracture", "Tier"]
+    assert set(e["Ocean sensitivity"]) == {"Medium", "Medium*", "High*", "Low*", "PIGL"}
+
+
+def test_every_bundled_run_has_an_experiment_row():
+    for ice, group, model, exp in RUNS[["ice_sheet", "group", "model", "exp"]].drop_duplicates().itertuples(index=False):
+        M.run_meta(ice, group, model, exp)  # raises KeyError if missing
+
+
+@pytest.mark.parametrize("fn, stem, prefix", [
+    ("external_sources_rahlves2025_gis.csv.gz", "Rahlves2025", ""),
+    ("external_sources_coulon2024_ais.csv.gz", "Coulon2024", ""),
+    ("external_sources_aschwanden2022_gis.csv.gz", "Aschwanden2019", ""),
+    ("external_sources_goelzer2025_gis.csv.gz", "Goelzer2025", ""),
+    ("external_sources_deconto2021_ais.csv.gz", "DeConto2021", ""),
+    ("external_sources_edwards2021_ais.csv.gz", "Edwards2021", ""),
+    ("external_sources_edwards2021_ais_risk.csv.gz", "Edwards2021", "RISK_"),
+    ("external_sources_edwards2021_gis.csv.gz", "Edwards2021", ""),
+    ("external_sources_ar6_ais.csv.gz", "IPCCAR6", ""),
+    ("external_sources_ar6_gis.csv.gz", "IPCCAR6", ""),
+])
+def test_bundled_data_agrees_with_experiments_file(fn, stem, prefix):
+    """The bundled data still carries climate_model/scenario columns written
+    by utilities/external_sources.py; if the data are regenerated they must
+    stay consistent with the study's experiments file."""
+    d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", fn), dtype=str, keep_default_na=False,
+                    usecols=["IS", "Exp", "climate_model", "scenario"]).drop_duplicates("Exp")
+    for ice, exp, gcm, scen in d[["IS", "Exp", "climate_model", "scenario"]].itertuples(index=False):
+        e = M.EXP_META[(stem, ice, prefix + exp)]
+        assert (e["climate_model"], e["scenario"]) == (gcm, scen), (stem, exp)

@@ -1,0 +1,15 @@
+# Experiments of Goelzer et al. (2020), The future sea-level contribution of the Greenland ice sheet: a multi-model
+# ensemble study of ISMIP6, The Cryosphere 14, 3071-3096, https://doi.org/10.5194/tc-14-3071-2020.
+# NOT YET REVIEWED. Experiment metadata carried over from the app's earlier lookup table (labelled there as Goelzer et al.
+# 2020 Table 1 & Appendix); not yet checked against the paper.
+# How each column is used by the app is in experiment_columns.csv.
+Experiment,climate_model,scenario,protocol,study_ocean_sensitivity
+exp05,MIROC5,RCP8.5,Standard,Medium
+exp06,NorESM,RCP8.5,Standard,Medium
+exp07,MIROC5,RCP2.6,Standard,Medium
+exp08,HadGEM2-ES,RCP8.5,Standard,Medium
+exp09,MIROC5,RCP8.5,Standard,High
+exp10,MIROC5,RCP8.5,Standard,Low
+expa01,IPSL-CM5A-MR,RCP8.5,Standard,Medium
+expa02,CSIRO-Mk3.6,RCP8.5,Standard,Medium
+expa03,ACCESS1.3,RCP8.5,Standard,Medium

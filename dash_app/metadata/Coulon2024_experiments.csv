@@ -1,0 +1,106 @@
+# Experiments of Coulon et al. (2024), Disentangling the drivers of future Antarctic ice loss with a historically
+# calibrated ice-sheet model, The Cryosphere 18, 653-681, https://doi.org/10.5194/tc-18-653-2024
+# (data https://doi.org/10.5281/zenodo.8398771).
+# NOT YET REVIEWED. Experiment metadata as written into the bundled data by utilities/external_sources.py load_coulon2024_ais().
+# How each column is used by the app is in experiment_columns.csv.
+Experiment,climate_model,scenario,protocol,basal_melt_param
+member000,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member001,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member002,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member003,CESM2-WACCM,SSP5-8.5,Not applicable,Plume
+member004,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member005,UKESM1-0-LL,SSP5-8.5,Not applicable,Plume
+member006,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member007,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member008,CESM2-WACCM,SSP5-8.5,Not applicable,Plume
+member009,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member010,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member011,CESM2-WACCM,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member012,UKESM1-0-LL,SSP5-8.5,Not applicable,PICO
+member013,UKESM1-0-LL,SSP5-8.5,Not applicable,PICO
+member014,CESM2-WACCM,SSP5-8.5,Not applicable,Plume
+member015,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member016,CESM2-WACCM,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member017,MRI-ESM2-0,SSP5-8.5,Not applicable,Plume
+member018,MRI-ESM2-0,SSP5-8.5,Not applicable,Plume
+member019,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member020,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member021,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member022,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member023,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member024,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member025,UKESM1-0-LL,SSP5-8.5,Not applicable,PICO
+member026,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member027,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member028,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member029,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member030,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member031,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member032,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member033,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member034,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member035,MRI-ESM2-0,SSP5-8.5,Not applicable,Plume
+member036,MRI-ESM2-0,SSP5-8.5,Not applicable,PICO
+member037,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member038,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member039,UKESM1-0-LL,SSP5-8.5,Not applicable,Plume
+member040,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member041,MRI-ESM2-0,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member042,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member043,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member044,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member045,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member046,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member047,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member048,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member049,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member050,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member051,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member052,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member053,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member054,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member055,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member056,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member057,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member058,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member059,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member060,MRI-ESM2-0,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member061,UKESM1-0-LL,SSP5-8.5,Not applicable,Plume
+member062,UKESM1-0-LL,SSP5-8.5,Not applicable,Plume
+member063,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member064,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member065,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member066,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member067,UKESM1-0-LL,SSP5-8.5,Not applicable,Plume
+member068,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member069,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member070,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member071,CESM2-WACCM,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member072,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member073,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member074,UKESM1-0-LL,SSP5-8.5,Not applicable,PICO
+member075,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Plume
+member076,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member077,MRI-ESM2-0,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member078,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member079,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member080,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member081,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member082,UKESM1-0-LL,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member083,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member084,CESM2-WACCM,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member085,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member086,MRI-ESM2-0,SSP5-8.5,Not applicable,Plume
+member087,MRI-ESM2-0,SSP5-8.5,Not applicable,Plume
+member088,MRI-ESM2-0,SSP5-8.5,Not applicable,Quadratic-local (Antarctic slope)
+member089,CESM2-WACCM,SSP5-8.5,Not applicable,PICO
+member090,UKESM1-0-LL,SSP5-8.5,Not applicable,PICO
+member091,CESM2-WACCM,SSP5-8.5,Not applicable,Plume
+member092,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member093,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member094,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic
+member095,MRI-ESM2-0,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member096,UKESM1-0-LL,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member097,CESM2-WACCM,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)
+member098,IPSL-CM6A-LR,SSP5-8.5,Not applicable,PICO
+member099,IPSL-CM6A-LR,SSP5-8.5,Not applicable,ISMIP6 Nonlocal quadratic (slope-dependent)

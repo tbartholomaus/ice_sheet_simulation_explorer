@@ -75,8 +75,7 @@ def run_weights(valid):
     run of another study counts typical_model_n / n_study, so a whole study
     weighs about as much as one typical ISMIP6 model configuration. A
     configuration is one (group, model) pair -- every model version counts
-    on its own (decision 2026-11-23); before that review this was runs per
-    institution. Without ISMIP6 in a panel, everything is 1."""
+    on its own. Without ISMIP6 in a panel, everything is 1."""
     w = np.zeros(len(RUNS))
     for ice_sheet in ("AIS", "GIS"):
         m = valid & (_ICE == ice_sheet)

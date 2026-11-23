@@ -1,0 +1,9 @@
+# Model configurations of DeConto and Pollard (2016), Contribution of Antarctica to past and future sea-level rise, Nature 531,
+# 591-597, https://doi.org/10.1038/nature17145; runs from Kopp et al. (2017), Earth's Future,
+# https://doi.org/10.1002/2017EF000663, Data Set S1 (bundled as eft2271-sup-0002-2017ef000663-ds01.tsv).
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+DeConto2016,PSU3D-ICE,not yet reviewed,,PSU3D-ICE,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Weertman (unreviewed),,,,,,

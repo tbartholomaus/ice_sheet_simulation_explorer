@@ -1,0 +1,11 @@
+# Model configurations of Goelzer et al. (2025), PROTECT Greenland ensemble, The Cryosphere 19, 6887,
+# https://doi.org/10.5194/tc-19-6887-2025 (data https://doi.org/10.11582/2025.lf9m2wd0).
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+Goelzer2025,Elmer/Ice,not yet reviewed,,Elmer/Ice,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Inverse control method + 20-yr relaxation (unreviewed),,,,Linear & Weertman (m=1/3) (unreviewed),,,,,,
+Goelzer2025,IMAU-ICE,not yet reviewed,,IMAU-ICE,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Hybrid: basal inversion + paleo spin-up (unreviewed),,,,Basal inversion (variable) (unreviewed),,,,,,
+Goelzer2025,CISM,not yet reviewed,,CISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Schoof (2005) (unreviewed),,,,,,
+Goelzer2025,GISM,not yet reviewed,,GISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Iterative assimilation + 2-cycle spin-up (unreviewed),,,,Optimized coefficients (variable) (unreviewed),,,,,,

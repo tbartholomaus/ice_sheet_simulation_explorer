@@ -2,25 +2,25 @@
 Simulation metadata: one shared source of truth for the Dash app (data.py)
 and the exploration notebook (exploring_fits/analyze_slr_predictions_interactive.ipynb).
 
-Everything is read from the CSV tables in dash_app/metadata/ (comment lines
-start with "#"):
+Everything lives in CSV files in dash_app/metadata/ (lines starting with "#"
+are comments), so the encoding can be checked without reading any code:
 
-  ismip6_ais_models.csv               reviewed: Seroussi et al. (2020) Table 3,
-                                      Appendix C, plus the sliding-law literature check
-  ismip6_ais_experiments.csv          reviewed: Seroussi et al. (2020) Table 1
-  unreviewed_models.csv               ISMIP6-GIS and the non-ISMIP6 studies, carried
-                                      over unchanged until each paper is reviewed
-  ismip6_gis_experiments_unreviewed.csv
-
-The review and every decision behind the class columns are documented in
-metadata_review/01_Seroussi2020_ISMIP6_AIS.md (in the ismip6_check_261123
-review folder).
+  <Study>_models.csv        one row per model configuration (Group/Model). For
+                            each characteristic, *_described says how the sources
+                            describe it, *_source where, and *_encoded the value
+                            the app uses.
+  <Study>_experiments.csv   one row per experiment, transcribed from the study
+                            (verbatim column names and values where the study
+                            has an experiment table).
+  experiment_columns.csv    which experiment column fills which app field, and
+                            how verbatim values map to encoded ones.
+  encoding_rules.csv        the allowed encoded values of each field, in display
+                            order, and the rule that assigns each.
 
 Model metadata is keyed by (ice_sheet, group, model): every model
-configuration/version is independent, and AIS and GIS rows can never borrow
-from each other. Lookups are exact -- an unknown key raises KeyError rather
-than falling back to a similar-looking group (the old substring fallback
-silently mislabeled runs).
+configuration is independent, and AIS and GIS rows never borrow from each
+other. Lookups are exact; an unknown key raises KeyError. Every file is
+validated when this module is imported.
 """
 
 import os
@@ -32,99 +32,143 @@ META_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metadata")
 NOT_REVIEWED = "Not yet reviewed"
 UNREVIEWED_SUFFIX = " (unreviewed)"
 
-# Categorical fields a run carries, used for grouping and the bias ANOVA.
-# initialization / sliding_law / stress_balance / resolution hold the CLASS
-# (decided scheme); the verbatim paper codes and details live in other fields.
-CLASS_FIELDS = ["ice_model", "initialization", "sliding_law", "stress_balance", "resolution"]
-EXP_CLASS_FIELDS = ["ocean_forcing", "ocean_sensitivity"]
-
-# Display order of each class vocabulary (anything else sorts after, alphabetically).
-CATEGORY_ORDER = {
-    "initialization": ["Spin-up / equilibrium", "Hybrid (thickness-nudged)", "Data assimilation (velocity inversion)"],
-    "sliding_law": ["Linear", "Power law (Weertman)", "Budd", "Coulomb-limited"],
-    "stress_balance": ["Shallow", "Higher-order"],
-    "resolution": ["≤5 km", ">5–10 km", ">10–20 km", ">20 km"],
-    "ocean_forcing": ["Open", "Standard"],
-    "ocean_sensitivity": ["Low", "Medium", "High", "PIGL"],
+# The studies, in the order their files are read, with the ice sheet of
+# single-ice-sheet studies (the others have an "Ice sheet" column).
+STUDIES = {
+    "Seroussi2020": "AIS", "Goelzer2020": "GIS", "DeConto2016": "AIS", "Aschwanden2019": "GIS",
+    "DeConto2021": "AIS", "Coulon2024": "AIS", "Rahlves2025": "GIS", "Goelzer2025": "GIS",
+    "Edwards2021": None, "IPCCAR6": None,
 }
 
+# Model characteristics, as run-table columns (the encoded value of each).
+CLASS_FIELDS = ["ice_model", "initialization", "sliding_law", "stress_balance", "resolution"]
+# Experiment characteristics the app groups by.
+EXP_FIELDS = ["climate_model", "scenario", "ocean_forcing", "ocean_sensitivity", "ice_shelf_fracture"]
 
-def _read(name, **kw):
-    return pd.read_csv(os.path.join(META_DIR, name), comment="#", keep_default_na=False, **kw)
+
+def _read(name):
+    return pd.read_csv(os.path.join(META_DIR, name), comment="#", dtype=str, keep_default_na=False)
 
 
 def resolution_bin(res_min_km):
-    """Bin of the finest grid resolution; an edge belongs to the lower bin."""
+    """Bin of the finest grid resolution; a bin edge belongs to the lower bin."""
     r = float(res_min_km)
     return "≤5 km" if r <= 5 else ">5–10 km" if r <= 10 else ">10–20 km" if r <= 20 else ">20 km"
 
 
-def _ais_models():
-    df = _read("ismip6_ais_models.csv", dtype=str)
+# ── encoding rules ────────────────────────────────────────────────────────
+
+RULES = _read("encoding_rules.csv")
+VOCAB = {f: list(g["encoded_value"]) for f, g in RULES[RULES["field"] != "(any)"].groupby("field", sort=False)}
+CATEGORY_ORDER = VOCAB  # display order of each field's values
+
+
+def _check_encoded(field, value, status, where):
+    if field == "ice_model":
+        ok = bool(value)
+    elif status == "reviewed":
+        ok = value in VOCAB[field]
+    elif status == "not yet reviewed":
+        ok = value == NOT_REVIEWED or value.endswith(UNREVIEWED_SUFFIX)
+    else:  # not applicable: emulators and assessments
+        ok = value.startswith("Not applicable")
+    if not ok:
+        raise ValueError(f"{where}: {field} = {value!r} isn't allowed for review_status {status!r} "
+                         "(see encoding_rules.csv)")
+
+
+# ── models ────────────────────────────────────────────────────────────────
+
+def _load_models():
     out = {}
-    for row in df.to_dict(orient="records"):
-        assert row["resolution"] == resolution_bin(row["res_min_km"]), row
-        row["review_status"] = "reviewed (Seroussi et al. 2020)"
-        out[("AIS", row["group"], row["model"])] = row
+    for stem, ice in STUDIES.items():
+        for row in _read(f"{stem}_models.csv").to_dict(orient="records"):
+            row["study"] = stem
+            row["ice_sheet"] = row.pop("Ice sheet", ice)
+            where = f"{stem}_models.csv {row['Group']}/{row['Model']}"
+            for f in CLASS_FIELDS:
+                row[f] = row[f"{f}_encoded"]
+                _check_encoded(f, row[f], row["review_status"], where)
+            if row["review_status"] == "reviewed" and row["resolution"] != resolution_bin(row["res_min_km"]):
+                raise ValueError(f"{where}: resolution_encoded doesn't match res_min_km")
+            key = (row["ice_sheet"], row["Group"], row["Model"])
+            if key in out:
+                raise ValueError(f"{where}: duplicate model key {key}")
+            out[key] = row
     return out
 
 
-def _unreviewed_models():
-    df = _read("unreviewed_models.csv", dtype=str)
-    out = {}
-    for row in df.to_dict(orient="records"):
-        na = row["review_status"] == "not applicable"
-        if na:
-            # Emulators/assessments: no ice sheet model physics to classify.
-            fill = row["legacy_initialization"]
-            row.update(initialization=fill, sliding_law=row["legacy_sliding_law"],
-                       stress_balance=fill, resolution=fill)
-        else:
-            row.update(initialization=row["legacy_initialization"] + UNREVIEWED_SUFFIX,
-                       sliding_law=row["legacy_sliding_law"] + UNREVIEWED_SUFFIX,
-                       stress_balance=NOT_REVIEWED, resolution=NOT_REVIEWED)
-        # The Edwards (2021) AIS rows are two studies sharing one model key;
-        # they agree, so keep the first.
-        out.setdefault((row["ice_sheet"], row["group"], row["model"]), row)
-    return out
-
-
-MODEL_META = {**_unreviewed_models(), **_ais_models()}
+MODEL_META = _load_models()
 
 
 def model_meta(ice_sheet, group, model):
-    """Metadata dict for one model configuration. Exact match only."""
+    """Metadata of one model configuration. Exact match only."""
     try:
         return MODEL_META[(ice_sheet, group, model)]
     except KeyError:
         raise KeyError(f"No metadata row for ice_sheet={ice_sheet!r}, group={group!r}, model={model!r}; "
-                       "add it to dash_app/metadata/ (no fallback by design).") from None
+                       "add it to the study's file in dash_app/metadata/.") from None
 
 
-def ismip6_experiments():
-    """{(ice_sheet, exp): dict} for the ISMIP6 experiments."""
-    ais = _read("ismip6_ais_experiments.csv", dtype=str)
+# ── experiments ───────────────────────────────────────────────────────────
+
+COLUMNS = _read("experiment_columns.csv")
+
+
+def _value_map(text):
+    return dict(pair.split("=", 1) for pair in (p.strip() for p in text.split(";")) if pair)
+
+
+def _load_experiments():
     out = {}
-    for row in ais.to_dict(orient="records"):
-        row["ice_shelf_fracture"] = row["ice_shelf_fracture"] == "True"
-        row["protocol"] = row["ocean_forcing"]  # kept for older callers
-        out[("AIS", row["exp"])] = row
-    gis = _read("ismip6_gis_experiments_unreviewed.csv", dtype=str)
-    for row in gis.to_dict(orient="records"):
-        row.update(ocean_forcing=NOT_REVIEWED, ice_shelf_fracture=False,
-                   legacy_ocean_sensitivity=row.pop("ocean_sensitivity"), ocean_sensitivity=NOT_REVIEWED)
-        out[("GIS", row["exp"])] = row
+    for stem, ice in STUDIES.items():
+        spec = COLUMNS[COLUMNS["study"] == stem]
+        to_field = dict(zip(spec["file_column"], spec["app_field"]))
+        maps = {c: _value_map(v) for c, v in zip(spec["file_column"], spec["value_map"]) if v}
+        df = _read(f"{stem}_experiments.csv")
+        undescribed = set(df.columns) - set(to_field)
+        if undescribed:
+            raise ValueError(f"{stem}_experiments.csv: columns {sorted(undescribed)} aren't in experiment_columns.csv")
+        for row in df.to_dict(orient="records"):
+            meta = {"study": stem, "extras": {}}
+            for col, val in row.items():
+                field = to_field[col]
+                val = maps.get(col, {}).get(val, val)
+                if field == "(hover)":
+                    if val:
+                        meta["extras"][col.replace("_", " ")] = val
+                elif field != "(key)":
+                    meta[field] = val
+            if "ice_shelf_fracture" in meta:
+                meta["ice_shelf_fracture"] = meta["ice_shelf_fracture"] == "True"
+            for f in ("ocean_forcing", "ocean_sensitivity"):
+                if f in meta and meta[f] not in VOCAB[f]:
+                    raise ValueError(f"{stem}_experiments.csv {row['Experiment']}: {f} = {meta[f]!r} "
+                                     "isn't in encoding_rules.csv")
+            key = (stem, row.get("Ice sheet", ice), row["Experiment"])
+            if key in out:
+                raise ValueError(f"{stem}_experiments.csv: duplicate experiment {key}")
+            out[key] = meta
     return out
 
 
-def external_exp_fields(model_row):
-    """Experiment-level class fields for a non-ISMIP6 study, until reviewed."""
-    fill = model_row["stress_balance"] if model_row["review_status"] == "not applicable" else NOT_REVIEWED
-    return {"ocean_forcing": fill, "ocean_sensitivity": fill, "ice_shelf_fracture": False}
+EXP_META = _load_experiments()
+
+
+def run_meta(ice_sheet, group, model, exp):
+    """(model metadata, experiment metadata) of one run. Experiment metadata
+    is completed with the app fields its study doesn't provide: "Not yet
+    reviewed", or "Not applicable (...)" for emulators and assessments."""
+    m = model_meta(ice_sheet, group, model)
+    try:
+        e = EXP_META[(m["study"], ice_sheet, str(exp))]
+    except KeyError:
+        raise KeyError(f"No row for experiment {exp!r} ({ice_sheet}) in {m['study']}_experiments.csv") from None
+    fill = m["stress_balance"] if m["review_status"] == "not applicable" else NOT_REVIEWED
+    return m, {"ocean_forcing": fill, "ocean_sensitivity": fill, "ice_shelf_fracture": False, **e}
 
 
 def category_order(dim, cats):
-    """`cats` in the field's display order, unknown categories alphabetically after."""
+    """`cats` in the field's display order, any others alphabetically after."""
     order = CATEGORY_ORDER.get(dim, [])
-    known = [c for c in order if c in cats]
-    return known + sorted(c for c in cats if c not in order)
+    return [c for c in order if c in cats] + sorted(c for c in cats if c not in order)

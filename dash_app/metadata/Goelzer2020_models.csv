@@ -1,0 +1,28 @@
+# Model configurations of Goelzer et al. (2020), The future sea-level contribution of the Greenland ice sheet: a multi-model
+# ensemble study of ISMIP6, The Cryosphere 14, 3071-3096, https://doi.org/10.5194/tc-14-3071-2020.
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+AWI,ISSM1,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+AWI,ISSM2,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+AWI,ISSM3,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+BGC,BISICLES,not yet reviewed,,BISICLES,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Linear viscous (unreviewed),,,,,,
+GSFC,ISSM,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+ILTS_PIK,SICOPOLIS1,not yet reviewed,,SICOPOLIS,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Weertman (unreviewed),,,,,,
+ILTS_PIK,SICOPOLIS2,not yet reviewed,,SICOPOLIS,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Weertman (unreviewed),,,,,,
+IMAU,IMAUICE1,not yet reviewed,,IMAU-ICE,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+IMAU,IMAUICE2,not yet reviewed,,IMAU-ICE,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+JPL,ISSM,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Linear viscous (unreviewed),,,,,,
+JPL,ISSMPALEO,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Linear viscous (unreviewed),,,,,,
+LSCE,GRISLI,not yet reviewed,,GRISLI,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+MUN,GSM1,not yet reviewed,,GSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Coulomb and Weertman (unreviewed),,,,,,
+MUN,GSM2,not yet reviewed,,GSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Linear viscous and Weertman (unreviewed),,,,,,
+NCAR,CISM,not yet reviewed,,CISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Regularized Coulomb (unreviewed),,,,,,
+UAF,PISM1,not yet reviewed,,PISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Pseudo-plastic (Coulomb) (unreviewed),,,,,,
+UAF,PISM2,not yet reviewed,,PISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Pseudo-plastic (Coulomb) (unreviewed),,,,,,
+UCIJPL,ISSM1,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Linear viscous (unreviewed),,,,,,
+UCIJPL,ISSM2,not yet reviewed,,ISSM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Linear viscous (unreviewed),,,,,,
+VUB,GISM,not yet reviewed,,GISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,
+VUW,PISM,not yet reviewed,,PISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Pseudo-plastic (Coulomb) (unreviewed),,,,,,

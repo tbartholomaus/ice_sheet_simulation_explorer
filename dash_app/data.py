@@ -87,13 +87,12 @@ IMBIE = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Simulation metadata lives in dash_app/metadata/ and is read through
-# metadata.py -- one documented table per source, shared with the notebook,
-# keyed exactly by (ice_sheet, group, model) for models and by
-# (publication, experiment) for experiments. ISMIP6-AIS (Seroussi et al.
-# 2020) has been reviewed against the paper and the wider literature;
-# everything else is carried over unchanged and labelled "(unreviewed)" /
-# "Not yet reviewed" until its paper is reviewed.
+# Simulation metadata lives in dash_app/metadata/ -- a <Study>_models.csv and
+# a <Study>_experiments.csv per study, plus encoding_rules.csv -- and is read
+# through metadata.py, which the notebook shares. ISMIP6-AIS (Seroussi et
+# al. 2020) has been reviewed against the paper and the wider literature;
+# the other studies' encodings are logged as they are, marked "(unreviewed)"
+# / "Not yet reviewed", until each study is reviewed.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,23 +117,6 @@ def _read_csv(name):
     path = os.path.join(DATA_DIR, name)
     cols = pd.read_csv(path, nrows=0).columns
     return pd.read_csv(path, dtype={c: "category" for c in _TEXT_COLS if c in cols})
-
-
-# Source-specific experiment columns carried into the hover text. A study's
-# own "ocean_sensitivity" (Rahlves 2025) is kept as legacy_ocean_sensitivity,
-# so it can't be mistaken for the reviewed ISMIP6 field of the same name.
-_EXTRA_EXP_COLS = ["ocean_sensitivity", "basal_melt_param", "retreat_percentile", "mici_params"]
-
-
-def _exp_meta_from_df(df):
-    cols = ["Exp", "climate_model", "scenario", "protocol"] + [c for c in _EXTRA_EXP_COLS if c in df.columns]
-    unique = df[cols].drop_duplicates("Exp")
-    out = {}
-    for row in unique.to_dict(orient="records"):
-        if "ocean_sensitivity" in row:
-            row["legacy_ocean_sensitivity"] = row.pop("ocean_sensitivity")
-        out[str(row.pop("Exp"))] = {k: (str(v) if v == v else "") for k, v in row.items()}
-    return out
 
 
 ismip6_ais = _read_csv("ismip6_ais.csv.gz")
@@ -175,11 +157,7 @@ def _load_deconto2016():
         out.append(pd.DataFrame({
             "Year": years, MASS_COL: np.interp(years, dec, v) / GT_TO_MM_SLE,  # mm GMSL -> Gt (loss negative)
             "Group": "DeConto2016", "Model": "PSU3D-ICE", "Exp": f"{sc.replace('.', '')}_m{int(r['Ensemble Member']):02d}",
-            "climate_model": "Not reported in Data Set S1", "scenario": sc,
-            "protocol": "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected",
-            "mici_params": (f"OCFAC {r['OCFAQ']:g}, CREVLIQ {r['CREVLIQ']:g}, VCLIF {r['VCLIF']:g} km/yr; "
-                            f"Pliocene {r['Pliocene SL (m)']:.1f} m, LIG {r['LIG SL (m)']:.1f} m"),
-        }))
+        }))  # each member's metadata: metadata/DeConto2016_experiments.csv
     return pd.concat(out, ignore_index=True)
 
 
@@ -240,13 +218,6 @@ assert SOURCE_LABELS[-len(EMULATION_SOURCES):] == [s for s in SOURCE_LABELS if s
 SOURCE_COLOR = {PUBLICATION_LABEL["AIS"]: ISMIP6_COLOR, PUBLICATION_LABEL["GIS"]: ISMIP6_COLOR,
                 **{s["label"]: s["color"] for s in EXTRA_SOURCES}}
 
-# Experiment metadata keyed by (publication, experiment id): ISMIP6 from the
-# metadata tables, every other study from its own bundled CSV. Keying by
-# study means two studies can never overwrite each other's experiment ids.
-EXP_META = {(PUBLICATION_LABEL[ice], exp): v for (ice, exp), v in M.ismip6_experiments().items()}
-for _s in EXTRA_SOURCES:
-    for _exp, _v in _exp_meta_from_df(_s["df"]).items():
-        EXP_META[(_s["label"], _exp)] = _v
 
 # (key, label) -- key is a run-table column; None = no grouping. The model
 # characteristics hold the classes decided in the metadata review
@@ -306,13 +277,13 @@ def _km(row):
 def _build_hover(group, model, exp, ism_m, exp_m, publication):
     code = lambda k: f" [{ism_m[k]}]" if ism_m.get(k) else ""  # noqa: E731 -- verbatim paper code
     sliding = ism_m["sliding_law"]
-    if ism_m.get("sliding_law_detail"):
-        sliding += f" — {ism_m['sliding_law_detail']}, {ism_m['sliding_exponent']}"
+    if ism_m.get("sliding_exponent"):
+        sliding += f" ({ism_m['sliding_exponent']})"
     lines = [
         f"<b>{group} / {model}</b> ({publication})",
         f"Experiment: {exp}",
         f"Ice model: {ism_m['ice_model']}",
-        f"Initialization: {ism_m['initialization']}{code('init_code')}",
+        f"Initialization: {ism_m['initialization']}{code('initialization_code')}",
         f"Sliding law: {sliding}",
         f"Stress balance: {ism_m['stress_balance']}{code('stress_balance_code')}",
         f"Resolution: {ism_m['resolution']}{_km(ism_m)}",
@@ -321,12 +292,8 @@ def _build_hover(group, model, exp, ism_m, exp_m, publication):
         f"Ocean forcing: {exp_m['ocean_forcing']}",
         f"Ocean sensitivity: {exp_m['ocean_sensitivity']}",
     ]
-    if publication not in PUBLICATION_LABEL.values():
-        lines.append(f"Protocol: {exp_m['protocol']}")
-    for key, label in (("basal_melt_param", "Basal melt param"), ("legacy_ocean_sensitivity", "Study's ocean sensitivity"),
-                       ("retreat_percentile", "Retreat percentile"), ("mici_params", None)):
-        if exp_m.get(key):
-            lines.append(f"{label}: {exp_m[key]}" if label else exp_m[key])
+    for label, value in exp_m["extras"].items():  # columns shown in hover only (experiment_columns.csv)
+        lines.append(f"{label[:1].upper() + label[1:]}: {value}")
     if exp_m["ice_shelf_fracture"]:
         lines.append("<b>Ice-shelf collapse imposed: excluded from the bias analysis</b>")
     if ism_m["review_status"] == "not yet reviewed":
@@ -360,18 +327,12 @@ def _build_runs():
         for ice_sheet, group, model, exp in key_rows:
             # Exact lookups only: a run without a metadata row is an error,
             # never a silent borrow from a similar-looking model.
-            ism_m = M.model_meta(ice_sheet, group, model)
-            exp_m = EXP_META[(publication, exp)]
-            if publication not in PUBLICATION_LABEL.values():
-                exp_m = {**exp_m, **M.external_exp_fields(ism_m)}
+            ism_m, exp_m = M.run_meta(ice_sheet, group, model, exp)
             meta.append({
                 "ice_sheet": ice_sheet, "publication": publication,
                 "group": group, "model": model, "exp": exp,
                 **{k: ism_m[k] for k in M.CLASS_FIELDS},
-                **{k: exp_m[k] for k in M.EXP_CLASS_FIELDS},
-                "scenario": exp_m["scenario"],
-                "climate_model": exp_m["climate_model"],
-                "ice_shelf_fracture": bool(exp_m["ice_shelf_fracture"]),
+                **{k: exp_m[k] for k in M.EXP_FIELDS},
                 "review_status": ism_m["review_status"],
                 "hover": _build_hover(group, model, exp, ism_m, exp_m, publication),
             })

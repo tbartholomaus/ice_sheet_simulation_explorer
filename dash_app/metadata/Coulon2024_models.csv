@@ -1,0 +1,9 @@
+# Model configurations of Coulon et al. (2024), Disentangling the drivers of future Antarctic ice loss with a historically
+# calibrated ice-sheet model, The Cryosphere 18, 653-681, https://doi.org/10.5194/tc-18-653-2024
+# (data https://doi.org/10.5281/zenodo.8398771).
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+Coulon2024,Kori-ULB,not yet reviewed,,Kori-ULB/f.ETISh,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Data assimilation (unreviewed),,,,Weertman (unreviewed),,,,,,

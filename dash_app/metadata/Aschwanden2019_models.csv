@@ -1,0 +1,10 @@
+# Model configurations of Aschwanden et al. (2019), Contribution of the Greenland Ice Sheet to sea level over the next
+# millennium, Science Advances 5, eaav9396; runs from the uncalibrated (prior) large ensemble of
+# Aschwanden and Brinkerhoff (2022), GRL 49, e2022GL099058, https://doi.org/10.1029/2022GL099058
+# (archive https://doi.org/10.18739/A2KW57K4R; GCM per member from doi:10.18739/A2222R58F).
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+Aschwanden2019,PISM,not yet reviewed,,PISM,,,,Not yet reviewed,,,,,Not yet reviewed,,,,,,Spin-up (unreviewed),,,,Pseudo-plastic (unreviewed),,,,,,

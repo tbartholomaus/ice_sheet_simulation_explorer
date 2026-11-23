@@ -29,10 +29,11 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   projections, which aren't runs of an ice sheet model.
 - **Group by:** split every plot by study, ice sheet model, initialization, sliding law, stress balance,
   resolution (finest grid), ocean forcing, ocean sensitivity, climate scenario or GCM. You can optionally pool
-  similar RCP and SSP scenarios into "composite" scenarios. The model metadata behind these groupings lives in
-  `dash_app/metadata/` (see `dash_app/metadata.py`); so far the ISMIP6-Antarctica ensemble has been reviewed
-  against Seroussi et al. (2020) and the wider literature, and every other study's labels carry an
-  "(unreviewed)" / "Not yet reviewed" tag until its paper is reviewed.
+  similar RCP and SSP scenarios into "composite" scenarios. The metadata behind these groupings is in
+  `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
+  description beside the encoded value (see `dash_app/metadata/README.md`). So far the ISMIP6-Antarctica
+  ensemble has been reviewed against Seroussi et al. (2020) and the wider literature; the other studies'
+  encodings are logged as they are, marked "(unreviewed)" / "Not yet reviewed", until each is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
 - **Observations:** IMBIE3 (through 2023) or IMBIE2 (through 2020).
 
@@ -143,11 +144,38 @@ et al. (2019) provides cumulative mass that its authors convert to sea level at 
 the choices made along the way. If you use results from this tool, please cite the original studies
 above.
 
+## Simulation metadata: please check it
+
+The comparisons in this tool are only as good as the metadata attached to each simulation: which ice sheet
+model, initialization, sliding law, stress balance, resolution, climate model, scenario and ocean forcing
+it used. Getting these right means reading each study closely and making judgment calls, and mistakes are
+easy to make. **Please review and double-check these encodings**, especially for any model or study you
+know well.
+
+All of it is in plain CSV files in [`dash_app/metadata/`](dash_app/metadata/), with no metadata
+hard-coded anywhere else:
+
+- `dash_app/metadata/<Study>_models.csv`: one row per model configuration. For each characteristic, the
+  source's own description (quoted where possible) and where it comes from sit beside the value the app
+  encodes, with notes on any ambiguity.
+- `dash_app/metadata/<Study>_experiments.csv`: one row per experiment, transcribed from the study.
+- `dash_app/metadata/encoding_rules.csv`: every allowed encoded value and the rule that assigns it.
+- `dash_app/metadata/experiment_columns.csv`: how each experiments column is used.
+
+[`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them. So far the
+ISMIP6-Antarctica ensemble (`Seroussi2020_*.csv`) has been reviewed against its paper and the wider
+literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
+reviewed", until each is reviewed. If you find an encoding you disagree with, please
+[open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,
+the row and your source.
+
 ## Repository layout
 
 ```
 dash_app/        the web app: app.py (layout + callbacks), data.py, analysis.py, figures.py,
                  user_data.py, assets/, and the bundled data/
+dash_app/metadata/  the simulation metadata: a models and an experiments CSV per study, plus the
+                 encoding rules (read by metadata.py, shared by the app and the notebook)
 exploring_fits/  the notebook and the ISMIP6 files it reads
 utilities/       data loaders shared by the notebook (and used to build dash_app/data/)
 ```
@@ -165,7 +193,8 @@ code or its results.
 
 ## Suggestions and corrections
 
-Suggestions for new features, additional datasets, and corrections of any kind are very welcome. Please
+Suggestions for new features, additional datasets, and corrections of any kind (including to the
+simulation metadata in `dash_app/metadata/`) are very welcome. Please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) or contact Tim
 Bartholomaus.
 
