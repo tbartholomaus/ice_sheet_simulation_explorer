@@ -1,0 +1,28 @@
+# ISMIP6-Antarctica model configurations (one row per Group/Model; every configuration is
+# independent, decision 2026-11-23). Verbatim codes from Seroussi et al. (2020) Table 3
+# (stress_balance_code, res_min_km/res_max_km, init_code, init_year, open_melt, standard_melt);
+# sliding laws from Appendix C cross-checked against initMIP-Antarctica (Seroussi et al. 2019),
+# ABUMIP (Sun et al. 2020), LARMIP-2 (Levermann et al. 2020) and model papers (sliding_law_source).
+# Class columns follow the decisions logged in metadata_review/01_Seroussi2020_ISMIP6_AIS.md:
+#   initialization: SP/Eq -> Spin-up / equilibrium; SP+/DA* -> Hybrid (thickness-nudged);
+#                   DA/DA+ -> Data assimilation (velocity inversion)
+#   sliding_law: cascade Coulomb-limited > Budd (effective-pressure dependent) > Linear > Power law (Weertman)
+#   stress_balance: Hybrid/SIA+SSA/SSA -> Shallow; L1L2/HO/Stokes -> Higher-order
+#   resolution: bin of res_min_km (<=5, >5-10, >10-20, >20 km; an edge belongs to the lower bin)
+group,model,ice_model,stress_balance_code,stress_balance,res_min_km,res_max_km,resolution,init_code,init_year,initialization,sliding_law,sliding_law_detail,sliding_exponent,effective_pressure,sliding_law_source,sliding_law_confidence,open_melt,standard_melt
+AWI,PISM1,PISM,Hybrid,Shallow,8,8,>5–10 km,Eq,2005,Spin-up / equilibrium,Coulomb-limited,"Pseudo-plastic, Mohr–Coulomb till",q not stated,yes (till),Levermann et al. 2020 A10,medium,Quad,Nonlocal
+DOE,MALI,MALI,HO,Higher-order,2,20,≤5 km,DA+,2015,Data assimilation (velocity inversion),Linear,"Linear, inverted coefficient",m = 1,no,Seroussi et al. 2020 C2; Seroussi et al. 2019; Levermann et al. 2020; Sun et al. 2020,high,N/A,Nonlocal anom.
+ILTS_PIK,SICOPOLIS,SICOPOLIS,Hybrid,Shallow,8,8,>5–10 km,SP+,1990,Hybrid (thickness-nudged),Budd,"Weertman–Budd, sub-melt sliding","m = 3, p = 2",yes,Seroussi et al. 2020 C3; Sun et al. 2020,high,N/A,Nonlocal
+IMAU,IMAUICE1,IMAU-ICE,Hybrid,Shallow,32,32,>20 km,Eq,1978,Spin-up / equilibrium,Coulomb-limited,Plastic Mohr–Coulomb,q = 0,yes (till),Sun et al. 2020 Table 2; de Boer et al. 2015 Table 3,medium-high,N/A,Local anom.
+IMAU,IMAUICE2,IMAU-ICE,Hybrid,Shallow,32,32,>20 km,SP,1978,Spin-up / equilibrium,Coulomb-limited,Plastic Mohr–Coulomb,q = 0,yes (till),Sun et al. 2020 Table 2; de Boer et al. 2015 Table 3,medium-high,N/A,Local anom.
+JPL1,ISSM,ISSM,SSA,Shallow,2,50,≤5 km,DA,2007,Data assimilation (velocity inversion),Budd,"Budd, tau_b = -alpha^2 N v_b",linear,yes (N = g(rho_i H + rho_w z_b)),Schlegel et al. 2018; Levermann et al. 2020 A7,high,N/A,Nonlocal
+LSCE,GRISLI,GRISLI,Hybrid,Shallow,16,16,>10–20 km,SP+,1995,Hybrid (thickness-nudged),Linear,"Viscous till, inverted beta held fixed",m = 1,no in ISMIP6 runs (beta = C_f N in GRISLI 2.0),Quiquet et al. 2018; Le clec'h et al. 2019; Sun et al. 2020,medium,N/A,Nonlocal
+NCAR,CISM,CISM,L1L2,Higher-order,4,4,≤5 km,SP+,1995,Hybrid (thickness-nudged),Coulomb-limited,Regularized Coulomb (Schoof 2005),m = 3,yes,Seroussi et al. 2020 C7; Sun et al. 2020,high,Nonlocal + Slope,Nonlocal
+PIK,PISM1,PISM,Hybrid,Shallow,8,8,>5–10 km,SP,1850,Spin-up / equilibrium,Coulomb-limited,"Pseudo-plastic, Mohr–Coulomb till",q = 0.75,yes (till),Seroussi et al. 2020 C8; Sun et al. 2020,high,PICO,N/A
+PIK,PISM2,PISM,Hybrid,Shallow,8,8,>5–10 km,SP,2015,Spin-up / equilibrium,Coulomb-limited,"Pseudo-plastic, Mohr–Coulomb till",q = 0.75,yes (till),Seroussi et al. 2020 C8; Sun et al. 2020,high,PICO,N/A
+UCIJPL,ISSM,ISSM,HO,Higher-order,3,50,≤5 km,DA,2007,Data assimilation (velocity inversion),Budd,Budd (inverted),linear,yes,Levermann et al. 2020 A8,medium-high,PICOP,Nonlocal
+ULB,fETISh_16km,f.ETISh (Kori-ULB),Hybrid,Shallow,16,16,>10–20 km,DA*,2005,Hybrid (thickness-nudged),Power law (Weertman),Weertman,m = 2,no,Seroussi et al. 2020 C10; Sun et al. 2020,high,Plume,Nonlocal
+ULB,fETISh_32km,f.ETISh (Kori-ULB),Hybrid,Shallow,32,32,>20 km,DA*,2005,Hybrid (thickness-nudged),Power law (Weertman),Weertman,m = 2,no,Seroussi et al. 2020 C10; Sun et al. 2020,high,Plume,Nonlocal
+UTAS,ElmerIce,Elmer/Ice,Stokes,Higher-order,4,40,≤5 km,DA,2015,Data assimilation (velocity inversion),Linear,"Linear, inverted coefficient",m = 1,no,Seroussi et al. 2020 C11; Gladstone & Wang (Zenodo 5862046),medium-high,N/A,Local
+VUB,AISMPALEO,AISMPALEO,SIA+SSA,Shallow,20,20,>10–20 km,SP,2000,Spin-up / equilibrium,Budd,Weertman ∝ 1/height above buoyancy,not stated,yes (height above buoyancy),Seroussi et al. 2020 C12; Seroussi et al. 2019; Levermann et al. 2020,high,N/A,Nonlocal anom.
+VUW,PISM,PISM,Hybrid,Shallow,16,16,>10–20 km,SP,2015,Spin-up / equilibrium,Coulomb-limited,"Pseudo-plastic, Mohr–Coulomb till",q = 0.75,yes (till),Sun et al. 2020 (ARC-PISM),medium,Lin,N/A

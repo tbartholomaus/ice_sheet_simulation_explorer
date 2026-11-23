@@ -27,8 +27,12 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   "Physics-based models" lists the ISMIP6 ensembles first, then the other ice sheet model studies by publication
   date. "Emulations and syntheses" lists the Edwards et al. (2021) emulator results and the IPCC AR6 assessed
   projections, which aren't runs of an ice sheet model.
-- **Group by:** split every plot by study, ice sheet model, initialization, sliding law, climate
-  scenario or GCM. You can optionally pool similar RCP and SSP scenarios into "composite" scenarios.
+- **Group by:** split every plot by study, ice sheet model, initialization, sliding law, stress balance,
+  resolution (finest grid), ocean forcing, ocean sensitivity, climate scenario or GCM. You can optionally pool
+  similar RCP and SSP scenarios into "composite" scenarios. The model metadata behind these groupings lives in
+  `dash_app/metadata/` (see `dash_app/metadata.py`); so far the ISMIP6-Antarctica ensemble has been reviewed
+  against Seroussi et al. (2020) and the wider literature, and every other study's labels carry an
+  "(unreviewed)" / "Not yet reviewed" tag until its paper is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
 - **Observations:** IMBIE3 (through 2023) or IMBIE2 (through 2020).
 
@@ -42,9 +46,11 @@ It has four sections:
 4. **What drives bias?** Bias is a simulation's rate minus the observed rate. This section uses a weighted
    ANOVA to show how much of the spread in bias each modeling characteristic explains. It also shows the
    bias by category, and which characteristics are over-represented among the best-matching 10% of
-   simulations.
+   simulations. ISMIP6-Antarctica experiments with imposed ice-shelf collapse (exp11, exp12) are left out
+   of this section.
 
-Large ensembles are weighted so that each study counts about as much as one ISMIP6 modeling group. That
+Large ensembles are weighted so that each study counts about as much as one ISMIP6 model configuration
+(one group/model pair; each model version counts on its own). That
 keeps a 3,000-member emulator ensemble from swamping the dozen or so modeling groups behind each ISMIP6
 ensemble.
 

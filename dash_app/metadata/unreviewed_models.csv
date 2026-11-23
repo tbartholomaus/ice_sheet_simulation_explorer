@@ -1,0 +1,43 @@
+# Model metadata for every source NOT yet reviewed in the metadata audit (ISMIP6-Greenland and the
+# non-ISMIP6 studies). Values are carried over unchanged from the pre-review lookup table in data.py,
+# made explicit per (ice_sheet, publication, group, model): the old substring fallback is gone, and the
+# rows it used to resolve say so in `note`. In the app these legacy labels are shown with an
+# " (unreviewed)" suffix, so they never pool with the reviewed class vocabulary, and the new fields
+# (stress balance, resolution, ocean forcing/sensitivity) read "Not yet reviewed". review_status
+# "not applicable" = emulators and assessments, which have no ice sheet model physics.
+ice_sheet,publication,group,model,ice_model,legacy_initialization,legacy_sliding_law,review_status,note
+GIS,Goelzer 2020 (ISMIP6 GIS),AWI,ISSM1,ISSM,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),AWI,ISSM2,ISSM,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),AWI,ISSM3,ISSM,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020; was resolved through the old substring fallback to key AWI/ISSM1"
+GIS,Goelzer 2020 (ISMIP6 GIS),BGC,BISICLES,BISICLES,Data assimilation,Linear viscous,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),GSFC,ISSM,ISSM,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),ILTS_PIK,SICOPOLIS1,SICOPOLIS,Spin-up,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020; was resolved through the old substring fallback to key ILTS_PIK/SICOPOLIS"
+GIS,Goelzer 2020 (ISMIP6 GIS),ILTS_PIK,SICOPOLIS2,SICOPOLIS,Spin-up,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020; was resolved through the old substring fallback to key ILTS_PIK/SICOPOLIS"
+GIS,Goelzer 2020 (ISMIP6 GIS),IMAU,IMAUICE1,IMAU-ICE,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),IMAU,IMAUICE2,IMAU-ICE,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),JPL,ISSM,ISSM,Data assimilation,Linear viscous,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),JPL,ISSMPALEO,ISSM,Spin-up,Linear viscous,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),LSCE,GRISLI,GRISLI,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),MUN,GSM1,GSM,Spin-up,Coulomb and Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),MUN,GSM2,GSM,Spin-up,Linear viscous and Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),NCAR,CISM,CISM,Data assimilation,Regularized Coulomb,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),UAF,PISM1,PISM,Spin-up,Pseudo-plastic (Coulomb),not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),UAF,PISM2,PISM,Spin-up,Pseudo-plastic (Coulomb),not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),UCIJPL,ISSM1,ISSM,Data assimilation,Linear viscous,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),UCIJPL,ISSM2,ISSM,Data assimilation,Linear viscous,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),VUB,GISM,GISM,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Goelzer 2020 (ISMIP6 GIS),VUW,PISM,PISM,Spin-up,Pseudo-plastic (Coulomb),not yet reviewed,"Legacy entry, not yet reviewed against Goelzer et al. 2020"
+GIS,Rahlves 2025,Rahlves2025,CISM,CISM,Spin-up,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+AIS,Coulon 2024,Coulon2024,Kori-ULB,Kori-ULB/f.ETISh,Data assimilation,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+GIS,Aschwanden 2019,Aschwanden2019,PISM,PISM,Spin-up,Pseudo-plastic,not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+GIS,Goelzer 2025 (PROTECT GIS),Goelzer2025,Elmer/Ice,Elmer/Ice,Inverse control method + 20-yr relaxation,Linear & Weertman (m=1/3),not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+GIS,Goelzer 2025 (PROTECT GIS),Goelzer2025,IMAU-ICE,IMAU-ICE,Hybrid: basal inversion + paleo spin-up,Basal inversion (variable),not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+GIS,Goelzer 2025 (PROTECT GIS),Goelzer2025,CISM,CISM,Spin-up,Schoof (2005),not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+GIS,Goelzer 2025 (PROTECT GIS),Goelzer2025,GISM,GISM,Iterative assimilation + 2-cycle spin-up,Optimized coefficients (variable),not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+AIS,Edwards 2021 (AIS Main),Edwards2021,emulandice,emulandice,Not applicable (statistical emulator),Not applicable (statistical emulator),not applicable,Not a physics-based ice sheet model run
+AIS,Edwards 2021 (AIS Risk Averse),Edwards2021,emulandice,emulandice,Not applicable (statistical emulator),Not applicable (statistical emulator),not applicable,Not a physics-based ice sheet model run
+GIS,Edwards 2021 (GIS),Edwards2021,emulandice,emulandice,Not applicable (statistical emulator),Not applicable (statistical emulator),not applicable,Not a physics-based ice sheet model run
+AIS,DeConto & Pollard 2016,DeConto2016,PSU3D-ICE,PSU3D-ICE,Spin-up,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+AIS,DeConto 2021,DeConto2021,PSU3D-ICE,PSU3D-ICE,Spin-up,Weertman,not yet reviewed,"Legacy entry, not yet reviewed against the source paper"
+AIS,IPCC AR6 (AIS),IPCCAR6,FACTS,IPCC AR6 assessment (FACTS),Not applicable (assessment),Not applicable (assessment),not applicable,Not a physics-based ice sheet model run
+GIS,IPCC AR6 (GIS),IPCCAR6,FACTS,IPCC AR6 assessment (FACTS),Not applicable (assessment),Not applicable (assessment),not applicable,Not a physics-based ice sheet model run

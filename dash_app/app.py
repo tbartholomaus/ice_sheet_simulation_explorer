@@ -30,7 +30,7 @@ import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
 import user_data as U  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, EMULATION_SOURCES, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, BIAS_ELIGIBLE, COMPOSITE_DIM, DEFAULT_OBS, EMULATION_SOURCES, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
@@ -147,7 +147,7 @@ sidebar = html.Aside(className="sidebar", children=[
             f"{'; ' if k != next(iter(OBS_PRODUCTS)) else ''}{p['label']}, ",
             html.A(p["citation"], href=p["url"], target="_blank"))], "."]),
         html.P("Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and other published ensembles. "
-               "Large ensembles are weighted so each study counts about as much as one ISMIP6 institution."),
+               "Large ensembles are weighted so each study counts about as much as one ISMIP6 model configuration."),
     ]),
 ])
 
@@ -342,8 +342,8 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
                         "and syntheses. You can also add your own ensemble of simulations."),
             _intro_item("Group by",
                         "split every plot by published study or by a modeling decision (ice sheet model, "
-                        "initialization, sliding law, climate scenario or climate model). Optionally pool similar "
-                        "RCP and SSP scenarios."),
+                        "initialization, sliding law, stress balance, resolution, ocean forcing and sensitivity, "
+                        "climate scenario or climate model). Optionally pool similar RCP and SSP scenarios."),
             _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
             _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
             _intro_item("Display", "show or hide each group's median."),
@@ -519,6 +519,10 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
     both = scope == "both"
     mask = valid & (np.isin(_ICE, ["AIS", "GIS"]) if both else _ICE == scope)
+    # Imposed ice-shelf-collapse runs (ISMIP6-AIS exp11/exp12) are left out of
+    # the bias analysis; they're still drawn in every other section.
+    n_collapse = int((mask & ~BIAS_ELIGIBLE).sum())
+    mask &= BIAS_ELIGIBLE
     chars = [COMPOSITE_DIM if collapse and c == "scenario" else c for c in ANOVA_CHARACTERISTICS]
     if both:
         # Only categories present for BOTH ice sheets can be compared; anything
@@ -552,6 +556,8 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     if np.isfinite(combined["r2"]):
         summary.append(f" Together the modeling characteristics explain {100 * combined['r2']:.0f}%.")
     summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}, against {OBS_PRODUCTS[obs]['label']}.")
+    if n_collapse:
+        summary.append(f" {n_collapse} runs with imposed ice-shelf collapse are left out.")
 
     dim, note = _dim(groupby, bool(collapse)), ""
     if dim is None or dim not in one_way_chars:
