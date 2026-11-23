@@ -187,3 +187,17 @@ def test_bundled_data_agrees_with_experiments_file(fn, stem, prefix):
     for ice, exp, gcm, scen in d[["IS", "Exp", "climate_model", "scenario"]].itertuples(index=False):
         e = M.EXP_META[(stem, ice, prefix + exp)]
         assert (e["climate_model"], e["scenario"]) == (gcm, scen), (stem, exp)
+
+
+# ── display order of ordinal characteristics ─────────────────────────────
+
+def test_bias_plots_order_resolution_finest_first():
+    import figures as F
+    valid = (RUNS["publication"] == PUBLICATION_LABEL["AIS"]).to_numpy()
+    b = A.bias(valid, 2015, 2023)
+    w = A.run_weights(valid)
+    fig = F.bias_figure(b, w, valid, "resolution", "Gt/yr")
+    assert list(fig.layout.yaxis.ticktext) == M.CATEGORY_ORDER["resolution"]  # drawn top-down
+    rows, _ = A.low_bias_enrichment(b[valid], w[valid], RUNS["resolution"].to_numpy()[valid])
+    bars = F.enrichment_figure(rows, "resolution", 0.10)
+    assert list(bars.data[0].y) == M.CATEGORY_ORDER["resolution"][::-1]  # drawn bottom-up

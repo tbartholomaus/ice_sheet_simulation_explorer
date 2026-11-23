@@ -8,7 +8,13 @@ from plotly.subplots import make_subplots
 
 import analysis as A
 import user_data as U
+import metadata as M
 from data import COLOR_MAPS, DEFAULT_OBS, DIM_LABEL, OBS_PRODUCTS, GT_TO_MM_SLE, ICE_SHEET_NAMES, ICE_SHEETS, RUNS
+
+# Characteristics whose categories have a natural order (finest to coarsest
+# grid): the bias section shows these in that order rather than ranked by
+# median bias or by over-representation.
+ORDINAL_DIMS = {"resolution"}
 
 FONT = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif'
 INK = "#1f2a3c"
@@ -436,15 +442,20 @@ def change_2100_figure(valid, dim, units, users=(), matched=None, users_matched=
 
 def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, uploads=()):
     """Weighted box (5/25/50/75/95) + points of bias per category of `dim`,
-    sorted by median bias (most negative at top); dashed zero = perfect
-    match to IMBIE. `uploads`: [(upload, per-simulation bias)], drawn as
+    sorted by median bias (most negative at top) -- or, for an ordinal
+    characteristic (ORDINAL_DIMS), in its natural order, e.g. finest
+    resolution at top; dashed zero = perfect match to IMBIE. `uploads`: [(upload, per-simulation bias)], drawn as
     extra rows at the bottom for comparison only."""
     col = RUNS[dim].to_numpy()
     cats = []
     for c in set(col[mask]):
         m = mask & (col == c)
         cats.append((A.weighted_quantiles(b[m], w[m], [0.5])[0], c, m))
-    cats.sort(key=lambda t: t[0])
+    if dim in ORDINAL_DIMS:
+        order = M.category_order(dim, {c for _, c, _ in cats})
+        cats.sort(key=lambda t: order.index(t[1]))
+    else:
+        cats.sort(key=lambda t: t[0])
     sizes, alphas = _point_style(mask)
     drawn = _drawn(mask)
     # Horizontal, one row per category: long labels (study names, the 40-odd
@@ -491,7 +502,13 @@ def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, uploads=()):
 
 
 def enrichment_figure(rows, dim, frac):
-    rows = sorted(rows, key=lambda r: r["share_low_bias"] - r["share_all"])
+    if dim in ORDINAL_DIMS:
+        # Horizontal bars list categories bottom-up, so reverse the natural
+        # order to put the first category (e.g. the finest resolution) on top.
+        order = M.category_order(dim, {r["category"] for r in rows})
+        rows = sorted(rows, key=lambda r: -order.index(r["category"]))
+    else:
+        rows = sorted(rows, key=lambda r: r["share_low_bias"] - r["share_all"])
     cats = [str(r["category"]) for r in rows]
     fig = go.Figure([
         go.Bar(y=cats, x=[100 * r["share_all"] for r in rows], orientation="h", name="All selected runs",
