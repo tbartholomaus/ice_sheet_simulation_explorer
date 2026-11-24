@@ -498,6 +498,17 @@ def _robots():
     return flask.Response(f"User-agent: *\nAllow: /\n\nSitemap: {_site_root()}/sitemap.xml\n", mimetype="text/plain")
 
 
+# Google Search Console ownership check: the file Google issued, kept in
+# dash_app/ exactly as downloaded and served byte-for-byte at the site root.
+GOOGLE_VERIFICATION_FILE = "googlebe363ad6171eca24.html"
+
+
+@server.route(f"/{GOOGLE_VERIFICATION_FILE}")
+def _google_site_verification():
+    return flask.send_from_directory(os.path.dirname(os.path.abspath(__file__)), GOOGLE_VERIFICATION_FILE,
+                                     mimetype="text/html")
+
+
 @server.route("/sitemap.xml")
 def _sitemap():
     return flask.Response(
