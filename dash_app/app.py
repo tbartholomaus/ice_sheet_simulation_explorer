@@ -14,6 +14,7 @@ Run locally:   pip install -r requirements.txt && python app.py
 Deploy:        gunicorn app:server --timeout 120   (see render.yaml)
 """
 
+import json
 import os
 
 # Single-threaded BLAS/OpenMP, set before numpy is imported -- on Render's
@@ -24,6 +25,8 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
 
 import numpy as np  # noqa: E402
 import dash  # noqa: E402
+import flask  # noqa: E402
+from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
 from dash import Input, Output, State, ctx, dcc, html, no_update  # noqa: E402
 
 import analysis as A  # noqa: E402
@@ -153,8 +156,12 @@ sidebar = html.Aside(className="sidebar", children=[
 
 main = html.Main(className="content", children=[
     html.Header(className="page-header", children=[
-        html.Button("ⓘ About this app", id="intro-open", className="about-button", n_clicks=0,
-                    title="Show the introduction to this app again"),
+        html.Div(className="header-actions", children=[
+            html.Button("✉ Email me the link", id="email-open", className="about-button", n_clicks=0,
+                        title="Send yourself a link to this app"),
+            html.Button("ⓘ About this app", id="intro-open", className="about-button", n_clicks=0,
+                        title="Show the introduction to this app again"),
+        ]),
         html.H1("How do simulations of ice sheet mass loss compare with observations?"),
         html.P("Compare simulated rates of ice sheet mass change with satellite observations, see how "
                "simulations evolve through time and by 2100, and explore which modeling choices drive "
@@ -234,8 +241,91 @@ main = html.Main(className="content", children=[
     ]),
 ])
 
-app = dash.Dash(__name__, title="Ice Sheet Simulation Explorer", external_stylesheets=[
+# ── search engines ────────────────────────────────────────────────────────
+# Dash draws the page with JavaScript, so everything a crawler (or a link
+# preview) needs to know is also put in the static HTML: title, description,
+# social-card tags, schema.org data, and a <noscript> summary. SITE_URL (set
+# on Render) is the public address; without it the canonical / og:url tags are
+# left out and robots.txt / sitemap.xml use the address the request came to.
+SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
+SITE_TITLE = "Ice Sheet Simulation Explorer: ISMIP6 ice sheet models vs. IMBIE observations"
+SITE_DESCRIPTION = (
+    "Interactive tool comparing simulations of Greenland and Antarctic ice sheet mass loss (ISMIP6 and other "
+    "published ensembles) with IMBIE satellite observations: rates of mass change, sea level contribution by "
+    "2100, and which modeling choices drive bias.")
+
+_meta = [
+    {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+    {"name": "description", "content": SITE_DESCRIPTION},
+    {"name": "author", "content": "Tim Bartholomaus, University of Idaho"},
+    {"name": "robots", "content": "index, follow"},
+    {"property": "og:type", "content": "website"},
+    {"property": "og:title", "content": SITE_TITLE},
+    {"property": "og:description", "content": SITE_DESCRIPTION},
+    {"name": "twitter:card", "content": "summary"},
+    {"name": "twitter:title", "content": SITE_TITLE},
+    {"name": "twitter:description", "content": SITE_DESCRIPTION},
+]
+if SITE_URL:
+    _meta.append({"property": "og:url", "content": SITE_URL + "/"})
+
+_structured = {
+    "@context": "https://schema.org", "@type": "WebApplication",
+    "name": "Ice Sheet Simulation Explorer", "description": SITE_DESCRIPTION,
+    "applicationCategory": "EducationalApplication", "operatingSystem": "Any (web browser)",
+    "isAccessibleForFree": True, "offers": {"@type": "Offer", "price": "0"},
+    "author": {"@type": "Person", "name": "Tim Bartholomaus",
+               "affiliation": {"@type": "CollegeOrUniversity", "name": "University of Idaho"}},
+    "keywords": "ice sheet, ISMIP6, IMBIE, sea level rise, Antarctica, Greenland, ice sheet model, projections, "
+                "mass balance, glaciology",
+    "codeRepository": "https://github.com/tbartholomaus/ice_sheet_simulation_explorer",
+    **({"url": SITE_URL + "/"} if SITE_URL else {}),
+}
+
+_NOSCRIPT = """
+<h1>Ice Sheet Simulation Explorer</h1>
+<p>How do simulations of ice sheet mass loss compare with observations? This interactive tool compares
+simulated rates of Greenland and Antarctic ice sheet mass change, from ISMIP6 (the Ice Sheet Model
+Intercomparison Project for CMIP6) and other published ensembles, with satellite observations from IMBIE
+(the Ice Sheet Mass Balance Inter-comparison Exercise).</p>
+<ul>
+<li>Rates of mass change: each simulation's average rate over a recent window against the observed rate.</li>
+<li>Mass change through time, out to 2100, in gigatonnes or sea level equivalent.</li>
+<li>Mass change by 2100, for all simulations or only those that match observations.</li>
+<li>What drives bias: which modeling decisions (ice sheet model, initialization, sliding law, climate
+scenario, climate model) explain the spread between simulations and observations.</li>
+</ul>
+<p>Developed by Tim Bartholomaus at the University of Idaho. Source code:
+<a href="https://github.com/tbartholomaus/ice_sheet_simulation_explorer">github.com/tbartholomaus/ice_sheet_simulation_explorer</a>.
+This app needs JavaScript to run.</p>
+"""
+
+_index_head = "\n        ".join(filter(None, [
+    f'<link rel="canonical" href="{SITE_URL}/">' if SITE_URL else "",
+    '<script type="application/ld+json">' + json.dumps(_structured) + "</script>",
+]))
+
+app = dash.Dash(__name__, title=SITE_TITLE, update_title=None, meta_tags=_meta, external_stylesheets=[
     "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"])
+app.index_string = f"""<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {{%metas%}}
+        <title>{{%title%}}</title>
+        {{%favicon%}}
+        {{%css%}}
+        {_index_head}
+    </head>
+    <body>
+        <noscript>{_NOSCRIPT}</noscript>
+        {{%app_entry%}}
+        <footer>
+            {{%config%}}
+            {{%scripts%}}
+            {{%renderer%}}
+        </footer>
+    </body>
+</html>"""
 UPLOAD_EXAMPLE = """year,exp01,exp02,exp03
 2015,0.0,0.0,0.0
 2016,-231.4,-198.7,-260.2
@@ -274,6 +364,29 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
     ]),
 ])
 
+# "Email me the link": builds a mailto: link that opens the visitor's own email
+# app with a message to themselves holding this page's URL. Nothing is sent or
+# stored by the server; the callbacks run in the browser (see bottom of file).
+email_modal = html.Div(id="email-modal", className="modal-backdrop", style={"display": "none"}, children=[
+    html.Div(className="modal email", role="dialog", **{"aria-labelledby": "email-title"}, children=[
+        html.Button("×", id="email-x", className="intro-x", n_clicks=0, title="Close"),
+        html.H2("Email yourself a link", id="email-title"),
+        html.P("Enter your email address to send yourself a link to this app, to come back to later or open "
+               "on another computer.", className="lede"),
+        dcc.Input(id="email-address", type="email", placeholder="you@example.com", autoComplete="email",
+                  className="text-input", debounce=False, n_submit=0),
+        html.Div(id="email-url", className="email-url"),
+        html.P("This opens your own email app with the message ready; press Send there. This site doesn't "
+               "send or store your address. No email app? Use Copy link instead.", className="note"),
+        html.Div(id="email-status", className="upload-status", **{"aria-live": "polite"}),
+        html.Div(className="modal-actions", children=[
+            html.Button("Copy link", id="email-copy", className="button-secondary", n_clicks=0),
+            html.A("Open email", id="email-send", className="button-primary disabled", n_clicks=0),
+        ]),
+    ]),
+])
+
+
 def _intro_item(term, text):
     return html.Li([html.B(term), " — ", text])
 
@@ -285,6 +398,13 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
         html.Button("×", id="intro-x", className="intro-x", n_clicks=0, title="Close"),
         html.Div("Ice Sheet Simulation Explorer", className="brand-top"),
         html.H2("Learning from ice sheet simulations", id="intro-title"),
+        # Shown only on phone-width screens (CSS .mobile-only); "Click here" swaps
+        # this box for the "Email me the link" box.
+        html.P(className="mobile-only mobile-notice", children=[
+            "This app works best on a full-size computer screen. ",
+            html.Button("Click here", id="intro-email", className="link-button", n_clicks=0),
+            " to email yourself the link to this page for future perusal.",
+        ]),
 
         html.H3("Why ice sheet models matter"),
         html.P("Ice sheet modeling is a rapidly developing field. The Greenland and Antarctic Ice Sheets "
@@ -358,11 +478,32 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
 ])
 
 app.layout = html.Div(className="page", children=[
-    sidebar, main, upload_modal, intro_modal,
+    sidebar, main, upload_modal, intro_modal, email_modal,
     dcc.Store(id="upload-pending"),                         # parsed, not yet confirmed
     dcc.Store(id="user-data", storage_type="session"),      # confirmed uploads, a list (this tab only)
 ])
 server = app.server
+# Render terminates HTTPS at its proxy; trust its X-Forwarded-* headers so the
+# fallback address in robots.txt / sitemap.xml is https://, not http://.
+server.wsgi_app = ProxyFix(server.wsgi_app, x_proto=1, x_host=1)
+
+
+def _site_root():
+    return SITE_URL or flask.request.host_url.rstrip("/")
+
+
+@server.route("/robots.txt")
+def _robots():
+    return flask.Response(f"User-agent: *\nAllow: /\n\nSitemap: {_site_root()}/sitemap.xml\n", mimetype="text/plain")
+
+
+@server.route("/sitemap.xml")
+def _sitemap():
+    return flask.Response(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{_site_root()}/</loc><changefreq>monthly</changefreq></url>\n"
+        "</urlset>\n", mimetype="application/xml")
 
 
 # ── callbacks ─────────────────────────────────────────────────────────────
@@ -602,7 +743,7 @@ def _sync_groupby(sidebar, local, _clicks):
 
 @app.callback(Output("intro-modal", "style"),
               Input("intro-open", "n_clicks"), Input("intro-close", "n_clicks"), Input("intro-x", "n_clicks"),
-              prevent_initial_call=True)
+              Input("intro-email", "n_clicks"), prevent_initial_call=True)
 def _intro_modal(*_):
     return {"display": "flex" if ctx.triggered_id == "intro-open" else "none"}
 
@@ -719,6 +860,68 @@ app.clientside_callback(
     }
     """,
     Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
+
+
+# ── email me the link (all in the browser) ────────────────────────────────
+
+app.clientside_callback(
+    """
+    function(_open, _x, _intro) {
+        const src = window.dash_clientside.callback_context.triggered_id;
+        const show = src === "email-open" || src === "intro-email";
+        const url = window.location.origin + window.location.pathname;
+        if (show) setTimeout(() => { const el = document.getElementById("email-address"); if (el) el.focus(); }, 50);
+        return [{display: show ? "flex" : "none"}, url, null];
+    }
+    """,
+    Output("email-modal", "style"), Output("email-url", "children"), Output("email-status", "children"),
+    Input("email-open", "n_clicks"), Input("email-x", "n_clicks"), Input("intro-email", "n_clicks"),
+    prevent_initial_call=True)
+
+# A valid-looking address turns "Open email" into a real mailto: link; with no
+# href the anchor does nothing. ? & # , ; are refused so the address can't
+# smuggle extra recipients or headers into the link.
+app.clientside_callback(
+    """
+    function(addr) {
+        addr = (addr || "").trim();
+        if (!/^[^\\s@?&#,;]+@[^\\s@?&#,;]+\\.[^\\s@?&#,;]+$/.test(addr)) return [null, "button-primary disabled"];
+        const url = window.location.origin + window.location.pathname;
+        const subject = "Ice Sheet Simulation Explorer";
+        const body = "Here's the link to the Ice Sheet Simulation Explorer, which compares simulations of "
+            + "Greenland and Antarctic ice sheet mass loss with satellite observations:\\n\\n" + url + "\\n";
+        return ["mailto:" + addr + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body),
+                "button-primary"];
+    }
+    """,
+    Output("email-send", "href"), Output("email-send", "className"), Input("email-address", "value"))
+
+app.clientside_callback(
+    """
+    function(_send, _copy, _submit, addr) {
+        const nu = window.dash_clientside.no_update;
+        const src = window.dash_clientside.callback_context.triggered_id;
+        const link = document.getElementById("email-send");
+        const ready = link && link.getAttribute("href");
+        if (src === "email-copy") {
+            const url = window.location.origin + window.location.pathname;
+            const status = document.getElementById("email-status");
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).catch(() => {
+                    if (status) status.textContent = "Couldn't copy automatically; select the link above and copy it.";
+                });
+                return "Link copied. Paste it into an email or message.";
+            }
+            return "Select the link above and copy it.";
+        }
+        if (!ready) return (addr || "").trim() ? "Please enter a complete email address." : "Please enter your email address.";
+        if (src === "email-address") link.click();  // Enter in the address box
+        return "Your email app should open with the message ready to send. If nothing happened, use Copy link.";
+    }
+    """,
+    Output("email-status", "children", allow_duplicate=True),
+    Input("email-send", "n_clicks"), Input("email-copy", "n_clicks"), Input("email-address", "n_submit"),
+    State("email-address", "value"), prevent_initial_call=True)
 
 
 @app.callback(Output("collapse-warning", "style"), Input("collapse", "value"))

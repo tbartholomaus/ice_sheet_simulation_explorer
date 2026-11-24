@@ -27,6 +27,11 @@ services:
     # Render for an identical request) -- far more than raw CPU throttling
     # alone would explain.
     envVars:
+      # Public address of the site (e.g. https://<service>.onrender.com, no
+      # trailing slash), used for search engines' canonical URL and sitemap.
+      # sync: false -- Render asks for the value in its dashboard.
+      - key: SITE_URL
+        sync: false
       - key: OMP_NUM_THREADS
         value: "1"
       - key: OPENBLAS_NUM_THREADS

@@ -87,9 +87,10 @@ a { color: var(--accent); }
 
 .page-header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 6px; }
 .page-header { position: relative; }
-.page-header h1 { padding-right: 170px; }
+.page-header h1 { padding-right: 340px; }
+.header-actions { position: absolute; top: 0; right: 0; display: flex; gap: 8px; }
 .about-button {
-  position: absolute; top: 0; right: 0; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  padding: 7px 12px; border-radius: 8px; cursor: pointer;
   border: 1px solid var(--line); background: var(--card); color: var(--accent); font: inherit; font-size: 13px;
   font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
 }
@@ -107,6 +108,26 @@ a { color: var(--accent); }
   font-size: 24px; line-height: 1; color: var(--muted);
 }
 .intro-x:hover { color: var(--ink); }
+
+/* Keep wide content from making the whole page wider than a phone screen
+   (which also pushed the intro box off the right edge). */
+#anova-table { overflow-x: auto; }
+.page-footer a { overflow-wrap: anywhere; }
+
+/* Phone notice in the introduction: shown only on phone-width screens,
+   hidden on tablets, laptops and desktops. */
+.mobile-only { display: none; }
+@media (max-width: 767px) {
+  .mobile-only { display: block; }
+}
+.modal.intro .mobile-notice {
+  margin: 10px 0 4px; padding: 10px 12px; border-radius: 8px; line-height: 1.5;
+  background: var(--accent-soft); border: 1px solid #c6dbf2;
+}
+.link-button {
+  border: 0; padding: 0; background: none; font: inherit; font-weight: 600; color: var(--accent);
+  text-decoration: underline; cursor: pointer;
+}
 
 .card {
   background: var(--card);
@@ -219,6 +240,16 @@ a { color: var(--accent); }
 .button-primary { background: var(--accent); color: white; }
 .button-primary:disabled { background: #b8c4d3; cursor: not-allowed; }
 .button-secondary { background: var(--card); border-color: var(--line); color: var(--ink); }
+a.button-primary { text-decoration: none; display: inline-block; }
+a.button-primary.disabled { background: #b8c4d3; cursor: not-allowed; }
+
+/* "Email me the link" box (reuses .modal-backdrop / .modal) */
+.modal.email { width: min(440px, 100%); position: relative; }
+.modal.email .text-input { margin-top: 4px; }
+.email-url {
+  margin-top: 10px; padding: 7px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line);
+  font-size: 12px; color: var(--muted); word-break: break-all; user-select: all;
+}
 
 /* "match observations" filter for the 2100 panel */
 .filter-bar {
@@ -235,7 +266,7 @@ a { color: var(--accent); }
 
 @media (max-width: 900px) {
   .page-header h1 { padding-right: 0; }
-  .about-button { position: static; margin-bottom: 10px; }
+  .header-actions { position: static; margin-bottom: 10px; flex-wrap: wrap; }
   .page { flex-direction: column; }
   .sidebar { position: static; width: 100%; height: auto; flex: none; border-right: 0; border-bottom: 1px solid var(--line); }
   .content { padding: 18px 16px 40px; }
