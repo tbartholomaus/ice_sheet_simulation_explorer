@@ -7,13 +7,15 @@
 # in the archive. Which configurations ran these experiments in the open framework is recorded in
 # Goelzer2020_models.csv (ocean_forcing_encoded). How each column is used: experiment_columns.csv.
 # Reviewed 2026-11-23.
-Exp ID,GCM,RCP,Ocean sensitivity,Table 3 group
-exp05,MIROC5,8.5,Medium,Core experiments
-exp06,NorESM-M,8.5,Medium,Core experiments
-exp07,MIROC5,2.6,Medium,Core experiments
-exp08,HadGEM2-ES,8.5,Medium,Core experiments
-exp09,MIROC5,8.5,High,Core experiments
-exp10,MIROC5,8.5,Low,Core experiments
-expa01,IPSL-CM5A-MR,8.5,Medium,Extensions
-expa02,CSIRO-Mk3.6,8.5,Medium,Extensions
-expa03,ACCESS1-3,8.5,Medium,Extensions
+# "Regional climate model" is not a Table 1 column: Goelzer et al. 2020 Sect. 2 states the forcing "is produced with the
+# regional climate model MAR version v3.9".
+Exp ID,GCM,RCP,Ocean sensitivity,Table 3 group,Regional climate model
+exp05,MIROC5,8.5,Medium,Core experiments,MARv3.9
+exp06,NorESM-M,8.5,Medium,Core experiments,MARv3.9
+exp07,MIROC5,2.6,Medium,Core experiments,MARv3.9
+exp08,HadGEM2-ES,8.5,Medium,Core experiments,MARv3.9
+exp09,MIROC5,8.5,High,Core experiments,MARv3.9
+exp10,MIROC5,8.5,Low,Core experiments,MARv3.9
+expa01,IPSL-CM5A-MR,8.5,Medium,Extensions,MARv3.9
+expa02,CSIRO-Mk3.6,8.5,Medium,Extensions,MARv3.9
+expa03,ACCESS1-3,8.5,Medium,Extensions,MARv3.9

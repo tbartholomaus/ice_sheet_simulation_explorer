@@ -343,7 +343,8 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
             _intro_item("Group by",
                         "split every plot by published study or by a modeling decision (ice sheet model, "
                         "initialization, sliding law, stress balance, resolution, ocean forcing and sensitivity, "
-                        "climate scenario or climate model). Optionally pool similar RCP and SSP scenarios."),
+                        "climate scenario, climate model or regional climate model). Optionally pool similar RCP "
+                        "and SSP scenarios."),
             _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
             _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
             _intro_item("Display", "show or hide each group's median."),

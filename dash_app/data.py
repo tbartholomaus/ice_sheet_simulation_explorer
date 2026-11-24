@@ -90,7 +90,8 @@ IMBIE = {
 # Simulation metadata lives in dash_app/metadata/ -- a <Study>_models.csv and
 # a <Study>_experiments.csv per study, plus encoding_rules.csv -- and is read
 # through metadata.py, which the notebook shares. ISMIP6-AIS (Seroussi et
-# al. 2020) and ISMIP6-GIS (Goelzer et al. 2020) have been reviewed against
+# al. 2020), ISMIP6-GIS (Goelzer et al. 2020) and PROTECT-GIS (Goelzer et al.
+# 2025) have been reviewed against
 # their papers and the wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)"
 # / "Not yet reviewed", until each study is reviewed.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ IMBIE = {
 # stays deployable by copying dash_app/ alone).
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TEXT_COLS = ["IS", "Group", "Model", "Exp", "climate_model", "scenario", "protocol", "RCP",
+_TEXT_COLS = ["IS", "Group", "Model", "Exp", "climate_model", "scenario", "protocol", "RCP", "regional_climate_model",
               "ocean_sensitivity", "basal_melt_param", "retreat_percentile"]
 
 
@@ -234,9 +235,10 @@ GROUP_DIMENSIONS = [
     ("ocean_sensitivity", "Ocean sensitivity"),
     ("scenario", "Climate scenario"),
     ("climate_model", "GCM"),
+    ("regional_climate_model", "Regional climate model"),
 ]
 ANOVA_CHARACTERISTICS = ["ice_model", "sliding_law", "initialization", "stress_balance", "resolution",
-                         "ocean_forcing", "ocean_sensitivity", "scenario", "climate_model"]
+                         "ocean_forcing", "ocean_sensitivity", "scenario", "climate_model", "regional_climate_model"]
 CATEGORY_ORDER = M.CATEGORY_ORDER
 DIM_LABEL = {k: v for k, v in GROUP_DIMENSIONS if k}
 
@@ -288,6 +290,7 @@ def _build_hover(group, model, exp, ism_m, exp_m, publication):
         f"Stress balance: {ism_m['stress_balance']}{code('stress_balance_code')}",
         f"Resolution: {ism_m['resolution']}{_km(ism_m)}",
         f"Climate model: {exp_m['climate_model']}",
+        f"Regional climate model: {exp_m['regional_climate_model']}",
         f"Scenario: {exp_m['scenario']}",
         f"Ocean forcing: {exp_m['ocean_forcing']}",
         f"Ocean sensitivity: {exp_m['ocean_sensitivity']}",

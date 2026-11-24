@@ -12,11 +12,13 @@ Seroussi2020,Ocean forcing,ocean_forcing,,
 Seroussi2020,Ocean sensitivity,ocean_sensitivity,Medium*=Medium; High*=High; Low*=Low,* marks the standard-framework MeanAnt gamma0 percentiles (Table 1 footnote)
 Seroussi2020,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis (decision 2026-11-23)
 Seroussi2020,Tier,(hover),,
+Seroussi2020,Regional climate model,regional_climate_model,,
 Goelzer2020,Exp ID,(key),,
 Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
 Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,
 Goelzer2020,Ocean sensitivity,ocean_sensitivity,,Low/Medium/High = 25th/50th/75th percentiles of the retreat parameter kappa (Goelzer et al. 2020 Sect. 2)
 Goelzer2020,Table 3 group,(hover),,
+Goelzer2020,Regional climate model,regional_climate_model,,
 DeConto2016,Experiment,(key),,
 DeConto2016,climate_model,climate_model,,
 DeConto2016,scenario,scenario,,
@@ -37,10 +39,6 @@ Rahlves2025,Experiment,(key),,
 Rahlves2025,climate_model,climate_model,,
 Rahlves2025,scenario,scenario,,
 Rahlves2025,protocol,(hover),,
-Goelzer2025,Experiment,(key),,
-Goelzer2025,climate_model,climate_model,,
-Goelzer2025,scenario,scenario,,
-Goelzer2025,protocol,(hover),,
 Edwards2021,Experiment,(key),,
 Edwards2021,climate_model,climate_model,,
 Edwards2021,scenario,scenario,,
@@ -53,6 +51,10 @@ Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity t
 Coulon2024,basal_melt_param,(hover),,
 DeConto2016,mici_params,(hover),,
 DeConto2021,mici_params,(hover),,
-Goelzer2025,retreat_percentile,(hover),,
 Edwards2021,Ice sheet,(key),,
 IPCCAR6,Ice sheet,(key),,
+Goelzer2025,Experiment,(key),,
+Goelzer2025,GCM,climate_model,ACCESS1.3=ACCESS1-3; CSIRO-Mk3.6.0=CSIRO-Mk3-6-0,"CMIP model identifiers (D5); CESM2-Leo and UKESM1-0-LL-Robin are pre-CMIP6 ensemble members, kept distinct (G5)"
+Goelzer2025,Scenario,scenario,rcp26=RCP2.6; rcp85=RCP8.5; ssp126=SSP1-2.6; ssp245=SSP2-4.5; ssp585=SSP5-8.5,
+Goelzer2025,RCM,regional_climate_model,,
+Goelzer2025,Retreat percentile,ocean_sensitivity,p05=Very low; p25=Low; p50=Medium; p75=High; p95=Very high,"Percentiles of the retreat parameter kappa (decision G3, 2026-11-23)"

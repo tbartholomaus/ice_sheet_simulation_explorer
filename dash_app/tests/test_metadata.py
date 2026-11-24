@@ -160,8 +160,9 @@ def test_every_study_has_a_models_and_an_experiments_file():
 
 def test_seroussi_experiments_are_verbatim_table_1():
     e = pd.read_csv(os.path.join(M.META_DIR, "Seroussi2020_experiments.csv"), comment="#", dtype=str)
+    # Table 1's columns, plus the regional climate model documented in the file header (Sect. 2.2)
     assert list(e.columns) == ["Experiment", "AOGCM", "Scenario", "Ocean forcing", "Ocean sensitivity",
-                               "Ice shelf fracture", "Tier"]
+                               "Ice shelf fracture", "Tier", "Regional climate model"]
     assert set(e["Ocean sensitivity"]) == {"Medium", "Medium*", "High*", "Low*", "PIGL"}
 
 
@@ -188,9 +189,13 @@ def test_bundled_data_agrees_with_experiments_file(fn, stem, prefix):
     stay consistent with the study's experiments file."""
     d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", fn), dtype=str, keep_default_na=False,
                     usecols=["IS", "Exp", "climate_model", "scenario"]).drop_duplicates("Exp")
+    # The data keep the source's own spelling; translate it with the study's value maps.
+    spec = M.COLUMNS[M.COLUMNS["study"] == stem]
+    maps = {f: M._value_map(v) for f, v in zip(spec["app_field"], spec["value_map"]) if v}
     for ice, exp, gcm, scen in d[["IS", "Exp", "climate_model", "scenario"]].itertuples(index=False):
         e = M.EXP_META[(stem, ice, prefix + exp)]
-        assert (e["climate_model"], e["scenario"]) == (gcm, scen), (stem, exp)
+        expect = (maps.get("climate_model", {}).get(gcm, gcm), maps.get("scenario", {}).get(scen, scen))
+        assert (e["climate_model"], e["scenario"]) == expect, (stem, exp)
 
 
 # ── display order of ordinal characteristics ─────────────────────────────
@@ -216,7 +221,7 @@ def test_all_165_gis_runs_are_present():
 
 def test_goelzer_experiments_are_verbatim_table_1():
     e = pd.read_csv(os.path.join(M.META_DIR, "Goelzer2020_experiments.csv"), comment="#", dtype=str)
-    assert list(e.columns) == ["Exp ID", "GCM", "RCP", "Ocean sensitivity", "Table 3 group"]
+    assert list(e.columns) == ["Exp ID", "GCM", "RCP", "Ocean sensitivity", "Table 3 group", "Regional climate model"]
     assert e.set_index("Exp ID").loc["exp06", "GCM"] == "NorESM-M"  # verbatim; encoded NorESM1-M
 
 
@@ -255,3 +260,42 @@ def test_gis_model_classes():
         ("IMAU", "IMAUICE1"), ("IMAU", "IMAUICE2"), ("MUN", "GSM1"), ("MUN", "GSM2")}
     assert init[("VUW", "PISM")] == init[("UAF", "PISM1")] == "Hybrid (thickness-nudged)"
     assert init[("JPL", "ISSMPALEO")] == "Data assimilation (velocity inversion)"
+
+
+# ── PROTECT Greenland (Goelzer et al. 2025), reviewed 2026-11-23 ─────────
+
+G25 = RUNS[RUNS["publication"] == "Goelzer 2025 (PROTECT GIS)"]
+
+
+def test_goelzer2025_configurations_are_independent():
+    assert len(G25) == 1270
+    cfg = G25[["group", "model"]].drop_duplicates()
+    assert len(cfg) == 39
+    assert set(G25["ice_model"]) == {"Elmer/Ice", "IMAU-ICE", "CISM", "GISM"}  # code bases, not configurations
+
+
+def test_goelzer2025_model_classes():
+    sl = _by_config("sliding_law", G25)
+    assert sl[("Goelzer2025-IGE", "ElmerIce2")] == "Linear"
+    assert sl[("Goelzer2025-IGE", "ElmerIce3")] == "Power law (Weertman)"
+    assert all(v == "Coulomb-limited" for (g, m), v in sl.items() if g in ("Goelzer2025-IMAU", "Goelzer2025-NORCE"))
+    assert sl[("Goelzer2025-VUB", "GISMHOMv1")] == sl[("Goelzer2025-VUB", "GISMSIAv1")] == "Budd"
+    sb = _by_config("stress_balance", G25)
+    assert sb[("Goelzer2025-VUB", "GISMHOMv1")] == "Higher-order" and sb[("Goelzer2025-VUB", "GISMSIAv1")] == "Shallow"
+    res = _by_config("resolution", G25)
+    assert res[("Goelzer2025-IMAU", "IMAUICE1")] == ">20 km" and res[("Goelzer2025-IMAU", "IMAUICE5")] == ">5–10 km"
+    assert res[("Goelzer2025-NORCE", "CISM16c-MAR312-p50")] == ">10–20 km" and res[("Goelzer2025-NORCE", "CISM02-MAR39-p50")] == "≤5 km"
+
+
+def test_goelzer2025_forcing_fields():
+    pct = G25["exp"].str.split("_").str[3]
+    expect = {"p05": "Very low", "p25": "Low", "p50": "Medium", "p75": "High", "p95": "Very high"}
+    assert (G25["ocean_sensitivity"] == pct.map(expect)).all()
+    assert (G25["regional_climate_model"] == G25["exp"].str.split("_").str[2]).all()
+    assert (G25["ocean_forcing"] == "Standard").all()
+    assert {"CESM2-Leo", "CESM2", "UKESM1-0-LL-Robin", "UKESM1-0-LL", "ACCESS1-3"} <= set(G25["climate_model"])
+
+
+def test_regional_climate_model_for_ismip6():
+    assert set(AIS["regional_climate_model"]) == {"None (AOGCM output used directly)"}
+    assert set(GIS["regional_climate_model"]) == {"MARv3.9"}

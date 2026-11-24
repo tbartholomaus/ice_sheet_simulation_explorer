@@ -607,13 +607,13 @@ def load_aschwanden2022_gis():
 #   forcing, overshoot, and other idealized post-2100 continuations), which
 #   would otherwise roughly triple the row count and mix incompatible time
 #   horizons into one "rate over a selected window" comparison.
-# - NORCE's ~50 archive "model" directories (e.g. CISM04-MAR39-p50,
-#   CISM16oc-MAR312-p95) are all the SAME CISM ice sheet model at different
-#   grid resolutions/tuning variants, not distinct models -- collapsed to
-#   Model="CISM" (GOELZER2025_LAB_ICE_MODEL below) so ice_model comparisons
-#   (e.g. the misfit ANOVA) treat them as one model, as the paper's own "4
-#   ice sheet models" framing does. The resolution/tuning token is kept in
-#   Exp instead, so individual runs stay distinguishable.
+# - Every archive "model" directory is its own model configuration (the
+#   paper's Table B1 "Model" column: ElmerIce2/3, IMAUICE1-8, the NORCE
+#   CISM variants, GISMHOMv1/GISMSIAv1), which differ in sliding law,
+#   resolution, stress balance, spin-up forcing or retreat sensitivity.
+#   Group="Goelzer2025-<lab>", Model=<configuration>, Exp=<gcm>_<scenario>_
+#   <rcm>_<percentile>; each configuration's metadata is in
+#   dash_app/metadata/Goelzer2025_models.csv (metadata review 3, 2026-11-23).
 # - Raw values used -- NOT the ctrl-proj-subtracted correction
 #   ismip6_gis_to_csv() applies to the main ISMIP6 ensemble (per Goelzer's
 #   own stated preference for how ISMIP6 numbers specifically should be
@@ -630,7 +630,7 @@ GOELZER2025_LABS = ["IGE", "IMAU", "NORCE", "VUB"]
 # variants -- see module comment above), VUB runs GISM. Naming matches the
 # `ice_model` strings ism_meta already uses elsewhere in this project (e.g.
 # VUB's ISMIP6-GIS entry also reports ice_model "GISM").
-GOELZER2025_LAB_ICE_MODEL = {"IGE": "Elmer/Ice", "IMAU": "IMAU-ICE", "NORCE": "CISM", "VUB": "GISM"}
+GOELZER2025_LAB_ICE_MODEL = {"IGE": "Elmer/Ice", "IMAU": "IMAU-ICE", "NORCE": "CISM", "VUB": "GISM"}  # code base per lab
 
 # An experiment directory name is <gcm>_<scenario>_<rcm>_<percentile> (4
 # underscore-separated tokens; GCM/RCM names themselves may contain hyphens
@@ -666,57 +666,9 @@ GOELZER2025_SCENARIO_LABEL = {
 GOELZER2025_HIST_LAST_YEAR = 2014
 GOELZER2025_PROJ_FIRST_YEAR = 2015
 
-# NORCE ran the same underlying (GCM, scenario, RCM, retreat-percentile)
-# experiment at up to 4 CISM grid resolutions (02/04/08/16 km) as an
-# explicit resolution-sensitivity study -- of NORCE's 764 main-ensemble
-# experiment directories (across all its resolution/tuning-variant
-# subfolders), only 249 are actually distinct experiments; the rest are
-# coarser-resolution reruns of one of those 249 (confirmed by matching each
-# variant folder's own (gcm, scenario, rcm, percentile) experiment
-# directories against its same-tuning-suffix siblings at other
-# resolutions -- e.g. CISM04-MAR312-p25/CISM08-MAR312-p25/CISM16-MAR312-p25
-# all contain the identical 16 (gcm, scenario) experiments). Per explicit
-# user request (2026-08-03): keep ONLY the finest (smallest km) resolution
-# run for each distinct experiment, dropping every coarser duplicate, in
-# the notebook/app/analysis alike.
-#
-# The suffix group below (c/e/x/oc/t/tc, e.g. CISM16oc) is a distinct
-# calibration/tuning approach, NOT a resolution, so it's kept as part of
-# the dedup key -- the plain and "c"-calibrated CISM configs for the same
-# (gcm, scenario, rcm, percentile) both survive as separate entries, each
-# independently deduplicated down to its own finest resolution. A given
-# experiment isn't necessarily run at every resolution (21 of the 249 exist
-# at only one resolution to begin with) -- those pass through unchanged,
-# since there's no coarser duplicate of them to drop.
-GOELZER2025_NORCE_VARIANT_PATTERN = re.compile(r"^CISM(\d+)([a-z]*)-")
-
-
-def _goelzer2025_norce_finest_exp_dirs(lab_dir):
-    """For NORCE only: returns the set of (variant, exp_dir_name) pairs
-    that survive resolution deduplication -- see module comment above for
-    why. Every other lab has no resolution variants (its "model"
-    directories are the model itself, e.g. "IMAUICE1"), so the main loop
-    below only calls this for lab == "NORCE"."""
-    best = {}  # (suffix, gcm, scenario, rcm, pct) -> (resolution, variant, exp_dir_name)
-    for variant in sorted(os.listdir(lab_dir)):
-        variant_dir = os.path.join(lab_dir, variant)
-        if not os.path.isdir(variant_dir):
-            continue
-        resolution, suffix = GOELZER2025_NORCE_VARIANT_PATTERN.match(variant).groups()
-        resolution = int(resolution)
-        for exp_dir_name in sorted(os.listdir(variant_dir)):
-            if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
-                continue
-            parts = exp_dir_name.split("_")
-            if len(parts) != 4:
-                continue
-            gcm, scenario, rcm, percentile = parts
-            if scenario not in GOELZER2025_MAIN_SCENARIOS:
-                continue
-            key = (suffix, gcm, scenario, rcm, percentile)
-            if key not in best or resolution < best[key][0]:
-                best[key] = (resolution, variant, exp_dir_name)
-    return {(variant, exp_dir_name) for _, variant, exp_dir_name in best.values()}
+# NORCE ran some experiments at several CISM grid resolutions (2-16 km).
+# Each resolution is its own configuration (decision G2 of metadata review
+# 3, 2026-11-23), so every resolution's runs are kept.
 
 
 def _goelzer2025_download_labs():
@@ -772,26 +724,17 @@ def load_goelzer2025_gis():
     load_rahlves2025_gis() does, with no overlap/seam adjustment needed
     here (historical ends exactly at 2014, projection starts exactly at
     2015, see GOELZER2025_HIST_LAST_YEAR above).
-    Step 3: for NORCE specifically, drop every experiment directory that
-    _goelzer2025_norce_finest_exp_dirs() didn't select -- i.e. every
-    coarser-resolution duplicate of an experiment already kept at a finer
-    resolution (see that function's/GOELZER2025_NORCE_VARIANT_PATTERN's
-    module comment above).
-    Step 4: label each run's Group="Goelzer2025", Model=the group's ice
-    sheet model (GOELZER2025_LAB_ICE_MODEL -- NORCE's variant token is kept
-    in Exp, not Model, per the scope decision above), climate_model=GCM,
-    scenario=the mapped scenario label, protocol="PROTECT
-    (ISMIP6-extended)", and retreat_percentile=the archive's own p05-p95
-    token (analogous to how load_rahlves2025_gis() maps its own tiers onto
-    ocean_sensitivity).
+    Step 3: label each run Group="Goelzer2025-<lab>", Model=the archive
+    configuration directory (Table B1's model name), Exp=<gcm>_<scenario>_
+    <rcm>_<percentile>, with climate_model=GCM, scenario=the mapped scenario
+    label, regional_climate_model=RCM, and retreat_percentile=the archive's
+    own p05-p95 token.
     """
     extract_dir = _goelzer2025_download_labs()
 
     rows = []
-    exp_meta_rows = []
     for lab in GOELZER2025_LABS:
         lab_dir = os.path.join(extract_dir, lab)
-        finest_exp_dirs = _goelzer2025_norce_finest_exp_dirs(lab_dir) if lab == "NORCE" else None
         for variant in sorted(os.listdir(lab_dir)):
             variant_dir = os.path.join(lab_dir, variant)
             if not os.path.isdir(variant_dir):
@@ -809,8 +752,6 @@ def load_goelzer2025_gis():
             for exp_dir_name in sorted(os.listdir(variant_dir)):
                 if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
                     continue
-                if finest_exp_dirs is not None and (variant, exp_dir_name) not in finest_exp_dirs:
-                    continue  # coarser-resolution duplicate of another variant's run
                 parts = exp_dir_name.split("_")
                 if len(parts) != 4:
                     continue  # not a <gcm>_<scenario>_<rcm>_<percentile> experiment dir
@@ -828,22 +769,16 @@ def load_goelzer2025_gis():
                 years = np.concatenate([hist_years, proj_years])
                 mass_gt = np.concatenate([hist_gt, proj_gt])
 
-                exp_code = f"{lab}_{variant}_{exp_dir_name}"
-                n = len(years)
                 rows.append(pd.DataFrame({
                     "Year": years.astype(int), "Cumulative ice sheet mass change (Gt)": mass_gt,
-                    "Group": "Goelzer2025", "Model": GOELZER2025_LAB_ICE_MODEL[lab],
-                    "Exp": exp_code, "IS": "GIS",
+                    "Group": f"Goelzer2025-{lab}", "Model": variant,
+                    "Exp": exp_dir_name, "IS": "GIS",
+                    "climate_model": gcm, "scenario": GOELZER2025_SCENARIO_LABEL[scenario],
+                    "protocol": "PROTECT (ISMIP6-extended)", "regional_climate_model": rcm,
+                    "retreat_percentile": percentile,
                 }))
-                exp_meta_rows.append({
-                    "Exp": exp_code, "climate_model": gcm,
-                    "scenario": GOELZER2025_SCENARIO_LABEL[scenario],
-                    "protocol": "PROTECT (ISMIP6-extended)", "retreat_percentile": percentile,
-                })
 
-    df = pd.concat(rows, ignore_index=True)
-    exp_meta_df = pd.DataFrame(exp_meta_rows)
-    return df.merge(exp_meta_df, on="Exp", how="left")
+    return pd.concat(rows, ignore_index=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════

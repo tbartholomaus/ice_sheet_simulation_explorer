@@ -28,11 +28,12 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   date. "Emulations and syntheses" lists the Edwards et al. (2021) emulator results and the IPCC AR6 assessed
   projections, which aren't runs of an ice sheet model.
 - **Group by:** split every plot by study, ice sheet model, initialization, sliding law, stress balance,
-  resolution (finest grid), ocean forcing, ocean sensitivity, climate scenario or GCM. You can optionally pool
+  resolution (finest grid), ocean forcing, ocean sensitivity, climate scenario, GCM or regional climate model. You can optionally pool
   similar RCP and SSP scenarios into "composite" scenarios. The metadata behind these groupings is in
   `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
   description beside the encoded value (see `dash_app/metadata/README.md`). So far the two ISMIP6
-  ensembles have been reviewed against their papers (Seroussi et al. 2020; Goelzer et al. 2020) and the
+  ensembles and the PROTECT Greenland ensemble have been reviewed against their papers (Seroussi et al. 2020;
+  Goelzer et al. 2020; Goelzer et al. 2025) and the
   wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)" / "Not yet
   reviewed", until each is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -166,7 +167,8 @@ hard-coded anywhere else:
 [`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them, and the review
 reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and reasoning behind each
 encoding decision. So far the
-ISMIP6-Antarctica (`Seroussi2020_*.csv`) and ISMIP6-Greenland (`Goelzer2020_*.csv`) ensembles have been
+ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`) and PROTECT Greenland
+(`Goelzer2025_*.csv`) ensembles have been
 reviewed against their papers and the wider literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
 reviewed", until each is reviewed. If you find an encoding you disagree with, please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,

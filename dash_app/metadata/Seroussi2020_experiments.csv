@@ -4,25 +4,27 @@
 # the low, medium and high ocean sensitivity (marked *) are the 5th, 50th and 95th percentile values of
 # the "MeanAnt" gamma0 distribution (Jourdain et al., 2020). How each column is used by the app is in
 # experiment_columns.csv.
-Experiment,AOGCM,Scenario,Ocean forcing,Ocean sensitivity,Ice shelf fracture,Tier
-exp01,NorESM1-M,RCP8.5,Open,Medium,No,Tier 1 (Core)
-exp02,MIROC-ESM-CHEM,RCP8.5,Open,Medium,No,Tier 1 (Core)
-exp03,NorESM1-M,RCP2.6,Open,Medium,No,Tier 1 (Core)
-exp04,CCSM4,RCP8.5,Open,Medium,No,Tier 1 (Core)
-exp05,NorESM1-M,RCP8.5,Standard,Medium*,No,Tier 1 (Core)
-exp06,MIROC-ESM-CHEM,RCP8.5,Standard,Medium*,No,Tier 1 (Core)
-exp07,NorESM1-M,RCP2.6,Standard,Medium*,No,Tier 1 (Core)
-exp08,CCSM4,RCP8.5,Standard,Medium*,No,Tier 1 (Core)
-exp09,NorESM1-M,RCP8.5,Standard,High*,No,Tier 1 (Core)
-exp10,NorESM1-M,RCP8.5,Standard,Low*,No,Tier 1 (Core)
-exp11,CCSM4,RCP8.5,Open,Medium,Yes,Tier 1 (Core)
-exp12,CCSM4,RCP8.5,Standard,Medium*,Yes,Tier 1 (Core)
-exp13,NorESM1-M,RCP8.5,Standard,PIGL,No,Tier 1 (Core)
-expA1,HadGEM2-ES,RCP8.5,Open,Medium,No,Tier 2
-expA2,CSIRO-MK3,RCP8.5,Open,Medium,No,Tier 2
-expA3,IPSL-CM5A-MR,RCP8.5,Open,Medium,No,Tier 2
-expA4,IPSL-CM5A-MR,RCP2.6,Open,Medium,No,Tier 2
-expA5,HadGEM2-ES,RCP8.5,Standard,Medium*,No,Tier 2
-expA6,CSIRO-MK3,RCP8.5,Standard,Medium*,No,Tier 2
-expA7,IPSL-CM5A-MR,RCP8.5,Standard,Medium*,No,Tier 2
-expA8,IPSL-CM5A-MR,RCP2.6,Standard,Medium*,No,Tier 2
+# "Regional climate model" is not a Table 1 column: Seroussi et al. 2020 Sect. 2.2 states the atmospheric forcing
+# was derived from AOGCM output directly ("it was decided not to follow this approach ... but to use AOGCM outputs directly").
+Experiment,AOGCM,Scenario,Ocean forcing,Ocean sensitivity,Ice shelf fracture,Tier,Regional climate model
+exp01,NorESM1-M,RCP8.5,Open,Medium,No,Tier 1 (Core),None (AOGCM output used directly)
+exp02,MIROC-ESM-CHEM,RCP8.5,Open,Medium,No,Tier 1 (Core),None (AOGCM output used directly)
+exp03,NorESM1-M,RCP2.6,Open,Medium,No,Tier 1 (Core),None (AOGCM output used directly)
+exp04,CCSM4,RCP8.5,Open,Medium,No,Tier 1 (Core),None (AOGCM output used directly)
+exp05,NorESM1-M,RCP8.5,Standard,Medium*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp06,MIROC-ESM-CHEM,RCP8.5,Standard,Medium*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp07,NorESM1-M,RCP2.6,Standard,Medium*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp08,CCSM4,RCP8.5,Standard,Medium*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp09,NorESM1-M,RCP8.5,Standard,High*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp10,NorESM1-M,RCP8.5,Standard,Low*,No,Tier 1 (Core),None (AOGCM output used directly)
+exp11,CCSM4,RCP8.5,Open,Medium,Yes,Tier 1 (Core),None (AOGCM output used directly)
+exp12,CCSM4,RCP8.5,Standard,Medium*,Yes,Tier 1 (Core),None (AOGCM output used directly)
+exp13,NorESM1-M,RCP8.5,Standard,PIGL,No,Tier 1 (Core),None (AOGCM output used directly)
+expA1,HadGEM2-ES,RCP8.5,Open,Medium,No,Tier 2,None (AOGCM output used directly)
+expA2,CSIRO-MK3,RCP8.5,Open,Medium,No,Tier 2,None (AOGCM output used directly)
+expA3,IPSL-CM5A-MR,RCP8.5,Open,Medium,No,Tier 2,None (AOGCM output used directly)
+expA4,IPSL-CM5A-MR,RCP2.6,Open,Medium,No,Tier 2,None (AOGCM output used directly)
+expA5,HadGEM2-ES,RCP8.5,Standard,Medium*,No,Tier 2,None (AOGCM output used directly)
+expA6,CSIRO-MK3,RCP8.5,Standard,Medium*,No,Tier 2,None (AOGCM output used directly)
+expA7,IPSL-CM5A-MR,RCP8.5,Standard,Medium*,No,Tier 2,None (AOGCM output used directly)
+expA8,IPSL-CM5A-MR,RCP2.6,Standard,Medium*,No,Tier 2,None (AOGCM output used directly)

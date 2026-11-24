@@ -32,7 +32,8 @@ For each characteristic there is a group of columns:
 | `<field>_encoded` | The value the app and notebook use for grouping and the ANOVA. |
 | `<field>_note` | Ambiguities, disagreements between sources, and how they were resolved. |
 
-`<field>` is `ice_model`, `stress_balance`, `resolution`, `initialization` or `sliding_law`. Supporting
+`<field>` is `ice_model`, `stress_balance`, `resolution`, `initialization` or `sliding_law`. Experiment characteristics are `climate_model`, `scenario`, `regional_climate_model`,
+`ocean_forcing`, `ocean_sensitivity` and `ice_shelf_fracture`. Supporting
 columns: `stress_balance_code` and `initialization_code` (the source's own codes), `res_min_km` /
 `res_max_km` (the resolution bin is set from `res_min_km`), `initial_year`, `sliding_exponent`,
 `effective_pressure`, `sliding_law_confidence`, and the open/standard melt parameterizations.
@@ -46,8 +47,9 @@ use today, marked `(unreviewed)` or `Not yet reviewed` so they never pool with r
 
 Each reviewed study has a report in [`docs/metadata_review/`](../../docs/metadata_review/) giving the sources
 consulted, every discrepancy found, and the reasoning and date of each encoding decision:
-[`01_Seroussi2020_ISMIP6_AIS.md`](../../docs/metadata_review/01_Seroussi2020_ISMIP6_AIS.md) and
-[`02_Goelzer2020_ISMIP6_GIS.md`](../../docs/metadata_review/02_Goelzer2020_ISMIP6_GIS.md).
+[`01_Seroussi2020_ISMIP6_AIS.md`](../../docs/metadata_review/01_Seroussi2020_ISMIP6_AIS.md),
+[`02_Goelzer2020_ISMIP6_GIS.md`](../../docs/metadata_review/02_Goelzer2020_ISMIP6_GIS.md) and
+[`03_Goelzer2025_PROTECT_GIS.md`](../../docs/metadata_review/03_Goelzer2025_PROTECT_GIS.md).
 
 ## Checks
 

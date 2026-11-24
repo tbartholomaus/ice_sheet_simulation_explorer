@@ -43,7 +43,8 @@ STUDIES = {
 # Model characteristics, as run-table columns (the encoded value of each).
 CLASS_FIELDS = ["ice_model", "initialization", "sliding_law", "stress_balance", "resolution"]
 # Experiment characteristics the app groups by.
-EXP_FIELDS = ["climate_model", "scenario", "ocean_forcing", "ocean_sensitivity", "ice_shelf_fracture"]
+EXP_FIELDS = ["climate_model", "scenario", "regional_climate_model", "ocean_forcing", "ocean_sensitivity",
+              "ice_shelf_fracture"]
 
 
 def _read(name):
@@ -170,7 +171,8 @@ def run_meta(ice_sheet, group, model, exp):
     except KeyError:
         raise KeyError(f"No row for experiment {exp!r} ({ice_sheet}) in {m['study']}_experiments.csv") from None
     fill = m["stress_balance"] if m["review_status"] == "not applicable" else NOT_REVIEWED
-    e = {"ocean_forcing": fill, "ocean_sensitivity": fill, "ice_shelf_fracture": False, **e}
+    e = {"regional_climate_model": fill, "ocean_forcing": fill, "ocean_sensitivity": fill,
+         "ice_shelf_fracture": False, **e}
     if m.get("ocean_forcing_encoded"):
         e["ocean_forcing"] = m["ocean_forcing_encoded"]
     return m, e
