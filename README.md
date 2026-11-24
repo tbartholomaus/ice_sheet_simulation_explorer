@@ -27,8 +27,17 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   "Physics-based models" lists the ISMIP6 ensembles first, then the other ice sheet model studies by publication
   date. "Emulations and syntheses" lists the Edwards et al. (2021) emulator results and the IPCC AR6 assessed
   projections, which aren't runs of an ice sheet model.
-- **Group by:** split every plot by study, ice sheet model, initialization, sliding law, climate
-  scenario or GCM. You can optionally pool similar RCP and SSP scenarios into "composite" scenarios.
+- **Group by:** split every plot by study, ice sheet model, initialization, sliding law, stress balance,
+  resolution (finest grid), ocean forcing, ocean sensitivity, climate scenario, GCM or regional climate model. You can optionally pool
+  similar RCP and SSP scenarios into "composite" scenarios. The metadata behind these groupings is in
+  `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
+  description beside the encoded value (see `dash_app/metadata/README.md`). So far the two ISMIP6
+  ensembles, the PROTECT Greenland ensemble, DeConto & Pollard (2016), DeConto et al. (2021), Coulon et al.
+  (2024), Rahlves et al. (2025) and Aschwanden et al. (2019) have been reviewed against their papers (Seroussi et
+  al. 2020; Goelzer et al. 2020; Goelzer et al. 2025; DeConto and Pollard 2016; DeConto et al. 2021; Coulon et al.
+  2024; Rahlves et al. 2025; Aschwanden et al. 2019) and the
+  wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)" / "Not yet
+  reviewed", until each is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
 - **Observations:** IMBIE3 (through 2023) or IMBIE2 (through 2020).
 
@@ -42,9 +51,11 @@ It has four sections:
 4. **What drives bias?** Bias is a simulation's rate minus the observed rate. This section uses a weighted
    ANOVA to show how much of the spread in bias each modeling characteristic explains. It also shows the
    bias by category, and which characteristics are over-represented among the best-matching 10% of
-   simulations.
+   simulations. ISMIP6-Antarctica experiments with imposed ice-shelf collapse (exp11, exp12) are left out
+   of this section.
 
-Large ensembles are weighted so that each study counts about as much as one ISMIP6 modeling group. That
+Large ensembles are weighted so that each study counts about as much as one ISMIP6 model configuration
+(one group/model pair; each model version counts on its own). That
 keeps a 3,000-member emulator ensemble from swamping the dozen or so modeling groups behind each ISMIP6
 ensemble.
 
@@ -115,11 +126,11 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 |---|---|
 | Seroussi 2020 (ISMIP6 AIS) | Seroussi et al. (2020), *The Cryosphere* 14, 3033–3070, https://doi.org/10.5194/tc-14-3033-2020 |
 | Goelzer 2020 (ISMIP6 GIS) | Goelzer et al. (2020), *The Cryosphere* 14, 3071–3096, https://doi.org/10.5194/tc-14-3071-2020 |
-| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). Uncorrected runs, decadal values interpolated to annual |
+| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). The 29-member ensemble with DP16's ocean-temperature correction (the "(BC)" rows: +3 °C in the Amundsen and Bellingshausen seas), i.e. DP16 as published; decadal values interpolated to annual |
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
-| DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5) |
-| Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024 |
-| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025 |
+| DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5): the 109-member calibrated ensemble, whose members were selected partly by matching IMBIE's 1992–2017 Antarctic mass change |
+| Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024; runs from the Zenodo archive (https://doi.org/10.5281/zenodo.8398771): all 100 members, unweighted, 1950–2014 hindcast joined to the SSP5-8.5 projection |
+| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025; runs from the NIRD archive (https://doi.org/10.11582/2024.00128) at 4 km: the ERA5-init and ESM-init branches (two model configurations), each historical run joined to its projections; control runs not included |
 | Goelzer 2025 (PROTECT GIS) | Goelzer et al. (2025), *The Cryosphere* 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 |
 | Edwards 2021 (AIS Main, AIS Risk Averse, GIS) | Edwards et al. (2021), *Nature* 593, 74–82, https://doi.org/10.1038/s41586-021-03302-y; samples from https://github.com/tamsinedwards/emulandice |
 | IPCC AR6 (AIS, GIS) | Fox-Kemper et al. (2021), IPCC AR6 WG1 Chapter 9; data: Garner et al. (2021), IPCC AR6 Sea Level Projections, https://doi.org/10.5281/zenodo.5914710 (CC-BY-4.0). Medium-confidence (all five SSPs) and low-confidence (SSP1-2.6, 2-4.5, 5-8.5) projections; each "run" is one percentile path (1st–99th), decadal values interpolated to annual from the 2005 baseline |
@@ -137,11 +148,44 @@ et al. (2019) provides cumulative mass that its authors convert to sea level at 
 the choices made along the way. If you use results from this tool, please cite the original studies
 above.
 
+## Simulation metadata: please check it
+
+The comparisons in this tool are only as good as the metadata attached to each simulation: which ice sheet
+model, initialization, sliding law, stress balance, resolution, climate model, scenario and ocean forcing
+it used. Getting these right means reading each study closely and making judgment calls, and mistakes are
+easy to make. **Please review and double-check these encodings**, especially for any model or study you
+know well.
+
+All of it is in plain CSV files in [`dash_app/metadata/`](dash_app/metadata/), with no metadata
+hard-coded anywhere else:
+
+- `dash_app/metadata/<Study>_models.csv`: one row per model configuration. For each characteristic, the
+  source's own description (quoted where possible) and where it comes from sit beside the value the app
+  encodes, with notes on any ambiguity.
+- `dash_app/metadata/<Study>_experiments.csv`: one row per experiment, transcribed from the study.
+- `dash_app/metadata/encoding_rules.csv`: every allowed encoded value and the rule that assigns it.
+- `dash_app/metadata/experiment_columns.csv`: how each experiments column is used.
+
+[`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them, and the review
+reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and reasoning behind each
+encoding decision. So far the
+ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`), PROTECT Greenland
+(`Goelzer2025_*.csv`), DeConto & Pollard 2016 (`DeConto2016_*.csv`), DeConto et al. 2021
+(`DeConto2021_*.csv`), Coulon et al. 2024 (`Coulon2024_*.csv`), Rahlves et al. 2025 (`Rahlves2025_*.csv`) and
+Aschwanden et al. 2019 (`Aschwanden2019_*.csv`) ensembles have been
+reviewed against their papers and the wider literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
+reviewed", until each is reviewed. If you find an encoding you disagree with, please
+[open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,
+the row and your source.
+
 ## Repository layout
 
 ```
 dash_app/        the web app: app.py (layout + callbacks), data.py, analysis.py, figures.py,
                  user_data.py, assets/, and the bundled data/
+dash_app/metadata/  the simulation metadata: a models and an experiments CSV per study, plus the
+                 encoding rules (read by metadata.py, shared by the app and the notebook)
+docs/metadata_review/  one review report per reviewed study: sources, discrepancies, decisions
 exploring_fits/  the notebook and the ISMIP6 files it reads
 utilities/       data loaders shared by the notebook (and used to build dash_app/data/)
 ```
@@ -159,7 +203,8 @@ code or its results.
 
 ## Suggestions and corrections
 
-Suggestions for new features, additional datasets, and corrections of any kind are very welcome. Please
+Suggestions for new features, additional datasets, and corrections of any kind (including to the
+simulation metadata in `dash_app/metadata/`) are very welcome. Please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) or contact Tim
 Bartholomaus.
 

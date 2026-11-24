@@ -1,0 +1,101 @@
+# How each column of a <Study>_experiments.csv file is used. app_field "(key)" identifies the run,
+# "(hover)" is shown in hover text only, "(file)" is kept in the file for reference but not shown, any other value is the app field it fills. value_map translates
+# verbatim values into the encoded vocabulary (encoding_rules.csv). App fields a study doesn't map
+# (ocean_forcing, ocean_sensitivity, ice_shelf_fracture) read "Not yet reviewed" ("Not applicable (...)"
+# for emulators and assessments; ice_shelf_fracture False). A model row's ocean_forcing_encoded, where
+# filled in, overrides the experiment's ocean forcing (Goelzer2020: configurations run in the open framework).
+study,file_column,app_field,value_map,note
+Seroussi2020,Experiment,(key),,
+Seroussi2020,AOGCM,climate_model,CSIRO-MK3=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
+Seroussi2020,Scenario,scenario,,
+Seroussi2020,Ocean forcing,ocean_forcing,,
+Seroussi2020,Ocean sensitivity,ocean_sensitivity,Medium*=Medium; High*=High; Low*=Low,* marks the standard-framework MeanAnt gamma0 percentiles (Table 1 footnote)
+Seroussi2020,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis (decision 2026-11-23)
+Seroussi2020,Tier,(hover),,
+Seroussi2020,Regional climate model,regional_climate_model,,
+Goelzer2020,Exp ID,(key),,
+Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
+Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,
+Goelzer2020,Ocean sensitivity,ocean_sensitivity,,"By name: High = more retreat, the 75th-percentile retreat trajectory at 2100 of the ISMIP6 forcing (Slater et al. 2020), equivalent to kappa25 = -0.37 (Slater et al. 2019); Low = the 25th-percentile trajectory (kappa75)"
+Goelzer2020,Table 3 group,(hover),,
+Goelzer2020,Regional climate model,regional_climate_model,,
+DeConto2016,Experiment,(key),,
+DeConto2016,Scenario,scenario,RCP 2.6 (BC)=RCP2.6; RCP 4.5 (BC)=RCP4.5; RCP 8.5 (BC)=RCP8.5,"(BC): DP16's +3 °C ocean-temperature correction in the Amundsen and Bellingshausen seas (decision DP1, 2026-11-23)"
+DeConto2016,Climate models,climate_model,,"Ocean from CCSM4 RCP runs, atmosphere from GENESIS v3 equilibrium runs; kept distinct from runs forced by CCSM4 alone (decision DP4, 2026-11-23)"
+DeConto2016,Regional climate model,regional_climate_model,,
+DeConto2016,Ocean forcing,ocean_forcing,Own sub-ice-shelf melt parameterization (DP16 Methods) driven by CCSM4 ocean temperatures at 400 m=Open,"The group's own melt parameterization (decision DP3, 2026-11-23)"
+DeConto2016,Ocean sensitivity,ocean_sensitivity,OCFAC (multiplier on the default melt coefficient)=Study-specific (see experiment),"OCFAC isn't a percentile of an ISMIP6 parameter distribution (decision DP3, 2026-11-23)"
+DeConto2016,OCFAC,(hover),,
+DeConto2016,CREVLIQ,(hover),,
+DeConto2016,VCLIF (km/yr),(hover),,
+DeConto2016,Pliocene SL (m),(file),,The ensemble scoring values; kept out of the hover to keep it short
+DeConto2016,LIG SL (m),(file),,
+DeConto2016,Protocol,(hover),,
+Aschwanden2019,Experiment,(key),,
+Aschwanden2019,GCM,climate_model,,CMIP5 identifiers; code order confirmed by pism-gris lhs_ensemble.py
+Aschwanden2019,Scenario,scenario,,
+Aschwanden2019,Climate forcing,(hover),,
+Aschwanden2019,Regional climate model,regional_climate_model,"None: HIRHAM5 2000-2015 climatology, no downscaling=None (AOGCM output used directly)","Decision AS1, 2026-11-23"
+Aschwanden2019,Ocean forcing,ocean_forcing,Own submarine-melt scheme driven by air-temperature anomalies=Open,The group's own scheme (decision AS2)
+Aschwanden2019,Ocean sensitivity,ocean_sensitivity,"Own low, mid or high regimes (OCM, OCS)=Study-specific (see experiment)","Decision AS2, 2026-11-23"
+Aschwanden2019,OCM,(hover),,Present-day submarine melt regime
+Aschwanden2019,OCS,(hover),,Submarine melt response to warming
+Aschwanden2019,q,(hover),,Pseudo-plastic sliding exponent
+Aschwanden2019,PRS (%/K),(file),,Kept out of the hover to keep it short
+Aschwanden2019,FICE (mm/K/day),(file),,
+Aschwanden2019,FSNOW (mm/K/day),(file),,
+Aschwanden2019,RFR,(file),,
+Aschwanden2019,TCT,(file),,
+Aschwanden2019,VCM (MPa),(file),,
+Aschwanden2019,SIAE,(file),,
+Aschwanden2019,Protocol,(hover),,
+DeConto2021,Experiment,(key),,
+DeConto2021,Scenario,scenario,,Warming-level scenarios keep their own labels; RCP8.5 joins composite 8.5
+DeConto2021,Emissions pathway,(hover),,
+DeConto2021,Climate models,climate_model,,"Ocean from CCSM4 RCP runs, atmosphere from RegCM3 snapshots at fixed CO2; kept distinct from runs forced by CCSM4 alone (decision DC1, 2026-11-23)"
+DeConto2021,Regional climate model,regional_climate_model,,
+DeConto2021,Ocean forcing,ocean_forcing,Quadratic sub-ice melt (DC21 Methods) driven by CCSM4 ocean temperatures at 400 m=Open,The group's own melt parameterization (as decision DP3)
+DeConto2021,Ocean sensitivity,ocean_sensitivity,Single uniform melt coefficient calibrated by the group on a 625-member deglacial WAIS ensemble=Medium,"The group's own single calibration, encoded Medium as for ISMIP6 open-framework runs (decision DC2, 2026-11-23)"
+DeConto2021,CALVLIQ,(hover),,
+DeConto2021,VCLIFF (km/yr),(hover),,
+DeConto2021,Protocol,(hover),,"States the partial calibration to IMBIE (decision DC3, 2026-11-23)"
+Coulon2024,Experiment,(key),,
+Coulon2024,GCM,climate_model,,CMIP6 identifiers; the member's 2015+ forcing
+Coulon2024,Scenario,scenario,,
+Coulon2024,Hindcast forcing,(hover),,
+Coulon2024,Regional climate model,regional_climate_model,,As ISMIP6-AIS: GCM anomalies on a present-day climatology
+Coulon2024,Atmospheric climatology,(hover),,
+Coulon2024,Ocean climatology,(hover),,
+Coulon2024,Ocean forcing,ocean_forcing,"Group's choice among five melt schemes, sampled coefficients=Open","Decision C2, 2026-11-23"
+Coulon2024,Ocean sensitivity,ocean_sensitivity,"Effective ice-ocean heat flux, sampled per scheme (Table 1)=Study-specific (see experiment)","Decision C2, 2026-11-23"
+Coulon2024,Melt scheme,(hover),,
+Coulon2024,Melt coefficient,(hover),,
+Coulon2024,Lapse rate (°C/km),(file),,Surface-melt parameters; kept out of the hover to keep it short
+Coulon2024,Refreezing layer (m),(file),,
+Coulon2024,Kice (mm/PDD),(file),,
+Coulon2024,Ksnow (mm/PDD),(file),,
+Coulon2024,Protocol,(hover),,"Decision C5, 2026-11-23"
+Rahlves2025,Experiment,(key),,
+Rahlves2025,Initialization branch,(hover),,ERA5-init and ESM-init are separate model configurations (decision R1)
+Rahlves2025,ESM,climate_model,ACCESS1.3=ACCESS1-3; CNRM-CM6=CNRM-CM6-1; CNRM-ESM2=CNRM-ESM2-1; CESM2-CMIP6=CESM2; UKESM1-0-LL-CMIP6=UKESM1-0-LL; NorESM2=NorESM2-MM,"CMIP identifiers (D5), as Goelzer 2025; CESM2-Leo and UKESM1-0-LL-Robin kept distinct (G5)"
+Rahlves2025,Scenario,scenario,,
+Rahlves2025,Historical forcing,(hover),,
+Rahlves2025,Regional climate model,regional_climate_model,,
+Rahlves2025,Ocean forcing,ocean_forcing,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)=Standard",The ISMIP6 retreat parameterization
+Rahlves2025,Retreat sensitivity,ocean_sensitivity,low=Low; med=Medium; high=High,"By name: high = kappa 25th percentile (-0.37, more retreat), low = 75th (-0.06), as Slater et al. 2019; archive README high=25, low=75"
+Rahlves2025,Kappa percentile,(hover),,
+Edwards2021,Experiment,(key),,
+Edwards2021,climate_model,climate_model,,
+Edwards2021,scenario,scenario,,
+Edwards2021,protocol,(hover),,
+IPCCAR6,Experiment,(key),,
+IPCCAR6,climate_model,climate_model,,
+IPCCAR6,scenario,scenario,,
+IPCCAR6,protocol,(hover),,
+Edwards2021,Ice sheet,(key),,
+IPCCAR6,Ice sheet,(key),,
+Goelzer2025,Experiment,(key),,
+Goelzer2025,GCM,climate_model,ACCESS1.3=ACCESS1-3; CSIRO-Mk3.6.0=CSIRO-Mk3-6-0,"CMIP model identifiers (D5); CESM2-Leo and UKESM1-0-LL-Robin are pre-CMIP6 ensemble members, kept distinct (G5)"
+Goelzer2025,Scenario,scenario,rcp26=RCP2.6; rcp85=RCP8.5; ssp126=SSP1-2.6; ssp245=SSP2-4.5; ssp585=SSP5-8.5,
+Goelzer2025,RCM,regional_climate_model,,
+Goelzer2025,Retreat percentile,ocean_sensitivity,p05=Very high; p25=High; p50=Medium; p75=Low; p95=Very low,"Percentiles of the retreat parameter kappa; a lower percentile means more retreat: ""25th (high) and 75th (low)"", ""very high retreat sensitivity (5th percentile)"" (Goelzer et al. 2025 Sects. 2.2, 3; decision G3)"

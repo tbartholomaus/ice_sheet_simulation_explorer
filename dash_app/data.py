@@ -11,10 +11,13 @@ app from starting at all.
 """
 
 import os
+import textwrap
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
+
+import metadata as M
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
@@ -85,171 +88,14 @@ IMBIE = {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Experiment metadata look-up tables
-# Sources:
-#   GIS – Goelzer et al. (2020) The Cryosphere 14, 3071-3096
-#   AIS – Seroussi et al. (2020) The Cryosphere 14, 3033-3070
+# Simulation metadata lives in dash_app/metadata/ -- a <Study>_models.csv and
+# a <Study>_experiments.csv per study, plus encoding_rules.csv -- and is read
+# through metadata.py, which the notebook shares. ISMIP6-AIS (Seroussi et
+# al. 2020), ISMIP6-GIS (Goelzer et al. 2020) and PROTECT-GIS (Goelzer et al.
+# 2025) have been reviewed against
+# their papers and the wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)"
+# / "Not yet reviewed", until each study is reviewed.
 # ─────────────────────────────────────────────────────────────────────────────
-
-# GIS experiment descriptions (Goelzer et al. 2020, Table 1 & Appendix)
-gis_exp_meta = {
-    # "exp01":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp02":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    # "exp03":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp04":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Open",     "ocean_sensitivity": "Low"},
-    "exp05":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp06":  {"climate_model": "NorESM",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp07":  {"climate_model": "MIROC5",       "scenario": "RCP2.6", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp08":  {"climate_model": "HadGEM2-ES",   "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "exp09":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "exp10":  {"climate_model": "MIROC5",       "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Low"},
-    # "exp11":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Open",     "ocean_sensitivity": "Medium"},
-    # "exp12":  {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    # "exp13":  {"climate_model": "CESM2",        "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "High"},
-    "expa01": {"climate_model": "IPSL-CM5A-MR", "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa02": {"climate_model": "CSIRO-Mk3.6",  "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-    "expa03": {"climate_model": "ACCESS1.3",    "scenario": "RCP8.5", "protocol": "Standard", "ocean_sensitivity": "Medium"},
-}
-
-# AIS experiment descriptions (Seroussi et al. 2020, Table 1)
-ais_exp_meta = {
-    "exp01": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp02": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp03": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp04": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp05": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp06": {"climate_model": "MIROC-ESM-CHEM", "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp07": {"climate_model": "NorESM",         "scenario": "RCP2.6",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp08": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp09": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL medium"},
-    "exp10": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL high"},
-    "exp11": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Open",     "basal_melt_param": "Standard"},
-    "exp12": {"climate_model": "CCSM4",          "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "Standard"},
-    "exp13": {"climate_model": "NorESM",         "scenario": "RCP8.5",  "protocol": "Standard", "basal_melt_param": "PIGL very high"},
-    "expA1": {"climate_model": "HadGEM2-ES",     "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA2": {"climate_model": "CSIRO-MK3",      "scenario": "SSP5-8.5", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA3": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA4": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Open",     "basal_melt_param": "Standard"},
-    "expA5": {"climate_model": "HadGEM2-ES",     "scenario": "SSP5-8.5", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA6": {"climate_model": "CSIRO-MK3",      "scenario": "SSP5-8.5", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA7": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Standard", "basal_melt_param": "Standard"},
-    "expA8": {"climate_model": "IPSL-CM5A-MR",   "scenario": "SSP1-2.6", "protocol": "Standard", "basal_melt_param": "Standard"},
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Ice sheet model (Group + Model) metadata
-# Sources: Goelzer et al. 2020 Table A1; Seroussi et al. 2020 Table A1
-# ─────────────────────────────────────────────────────────────────────────────
-ism_meta = {
-    # Group          Model        ice_sheet_model  sliding_law                  initialization
-    ("AWI",      "ISSM1"):     {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("AWI",      "ISSM2"):     {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("DMI",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Budd)",    "initialization": "Spin-up"},
-    ("ILTS_PIK", "SICOPOLIS"): {"ice_model": "SICOPOLIS", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("IMAU",     "IMAUICE1"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("IMAU",     "IMAUICE2"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("JPL1",     "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Budd / Schoof",            "initialization": "Data assimilation"},
-    ("LSCE",     "GRISLI"):    {"ice_model": "GRISLI",    "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("MIROC",    "ICIES1"):    {"ice_model": "IcIES",     "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("MIROC",    "ICIES2"):    {"ice_model": "IcIES",     "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("NCAR",     "CISM"):      {"ice_model": "CISM",      "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("PIK",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("PIK",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("UAF",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    ("UAF",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    ("UCIJPL",   "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("ULB",      "FETISH1"):   {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("ULB",      "FETISH2"):   {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("UNN",      "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("VUW",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic (Coulomb)", "initialization": "Spin-up"},
-    # Tim edits to Greenland
-    ("BGC",      "BISICLES"):  {"ice_model": "BISICLES",  "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("MUN",      "GSM1"):      {"ice_model": "GSM",       "sliding_law": "Coulomb and Weertman",        "initialization": "Spin-up"},
-    ("MUN",      "GSM2"):      {"ice_model": "GSM",       "sliding_law": "Linear viscous and Weertman", "initialization": "Spin-up"},
-    ("VUB",      "GISM"):      {"ice_model": "GISM",      "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
-    # Goelzer et al. 2020 Table A1/A6/A7/A12 -- previously missing exact
-    # keys, silently mislabeled via get_ism_meta()'s substring fallback
-    # (e.g. JPL/ISSM was borrowing JPL1's unrelated AIS entry).
-    ("JPL",      "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("JPL",      "ISSMPALEO"): {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Spin-up"},
-    ("UCIJPL",   "ISSM1"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    ("UCIJPL",   "ISSM2"):     {"ice_model": "ISSM",      "sliding_law": "Linear viscous",              "initialization": "Data assimilation"},
-    # AIS additional groups
-    ("ARC",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("ARC",      "PISM2"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("AWI",      "PISM1"):     {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("DOE",      "MALI"):      {"ice_model": "MALI",      "sliding_law": "Coulomb",                  "initialization": "Data assimilation"},
-    ("GRL",      "PISM"):      {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",           "initialization": "Spin-up"},
-    ("GSFC",     "ISSM"):      {"ice_model": "ISSM",      "sliding_law": "Weertman",                 "initialization": "Data assimilation"},
-    ("IGE",      "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("ILTS",     "SICOPOLIS"): {"ice_model": "SICOPOLIS", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-    ("NEMO",     "fETISh"):    {"ice_model": "Kori-ULB/f.ETISh",   "sliding_law": "Weertman / Coulomb",       "initialization": "Data assimilation"},
-    ("PSU",      "PSU3D1"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
-    ("PSU",      "PSU3D2"):    {"ice_model": "PSU-ISM",   "sliding_law": "Coulomb / Weertman",       "initialization": "Spin-up"},
-    ("UTAS",     "ElmerIce"):  {"ice_model": "Elmer/Ice", "sliding_law": "Regularized Coulomb",      "initialization": "Data assimilation"},
-    ("VUB",      "AISMPALEO"): {"ice_model": "AISMPALEO", "sliding_law": "Weertman",                 "initialization": "Spin-up"},
-
-    # Non-ISMIP6 published simulations (see utilities/external_sources.py for
-    # provenance/derivation of each). "initialization" for Rahlves2025 covers
-    # both its ERA5- and ESM-forced branches with one description, since Model
-    # is "CISM" either way (unlike ISMIP6, this dict doesn't split them further).
-    ("Rahlves2025", "CISM"):     {"ice_model": "CISM",      "sliding_law": "Weertman",                    "initialization": "Spin-up"},
-    ("Coulon2024",  "Kori-ULB"): {"ice_model": "Kori-ULB/f.ETISh",  "sliding_law": "Weertman",                    "initialization": "Data assimilation"},
-    ("Aschwanden2019", "PISM"):  {"ice_model": "PISM",      "sliding_law": "Pseudo-plastic",              "initialization": "Spin-up"},
-
-    # Goelzer et al. (2025) PROTECT-Greenland ensemble (see
-    # utilities/external_sources.py for provenance/scope decisions) -- one
-    # entry per lab's ice sheet model (Group="Goelzer2025" throughout;
-    # NORCE's many internal CISM resolution/tuning variants are collapsed
-    # to Model="CISM", per the user's explicit choice), sliding
-    # law/initialization transcribed from the paper's own Table 1/Sect. 2.
-    ("Goelzer2025", "Elmer/Ice"): {"ice_model": "Elmer/Ice", "sliding_law": "Linear & Weertman (m=1/3)",   "initialization": "Inverse control method + 20-yr relaxation"},
-    ("Goelzer2025", "IMAU-ICE"):  {"ice_model": "IMAU-ICE",  "sliding_law": "Basal inversion (variable)",  "initialization": "Hybrid: basal inversion + paleo spin-up"},
-    ("Goelzer2025", "CISM"):      {"ice_model": "CISM",      "sliding_law": "Schoof (2005)",               "initialization": "Spin-up"},
-    ("Goelzer2025", "GISM"):      {"ice_model": "GISM",      "sliding_law": "Optimized coefficients (variable)", "initialization": "Iterative assimilation + 2-cycle spin-up"},
-
-    # Edwards et al. (2021) -- a Gaussian-process EMULATOR, not a physical
-    # ice-sheet model, so it has no sliding law/spin-up to report; labeled
-    # honestly rather than borrowed from an unrelated model (see
-    # utilities/external_sources.py for provenance/scope decisions).
-    ("Edwards2021", "emulandice"): {"ice_model": "emulandice",
-                                     "sliding_law": "Not applicable (statistical emulator)",
-                                     "initialization": "Not applicable (statistical emulator)"},
-
-    # DeConto & Pollard (2016) and DeConto et al. (2021), PSU3D-ICE: Weertman
-    # sliding and spin-up initialization, per the user (2026-10-09) -- the
-    # data files themselves report neither.
-    ("DeConto2016", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "Weertman",
-                                   "initialization": "Spin-up"},
-    ("DeConto2021", "PSU3D-ICE"): {"ice_model": "PSU3D-ICE", "sliding_law": "Weertman",
-                                   "initialization": "Spin-up"},
-
-    # IPCC AR6 (Fox-Kemper et al. 2021, FACTS): an assessment combining
-    # several methods (emulators, ISMIP6 fits, LARMIP-2, expert judgement),
-    # not one ice sheet model, so these are labelled honestly.
-    ("IPCCAR6", "FACTS"): {"ice_model": "IPCC AR6 assessment (FACTS)",
-                           "sliding_law": "Not applicable (assessment)",
-                           "initialization": "Not applicable (assessment)"},
-}
-
-
-def get_exp_meta(ice_sheet, exp):
-    """Return experiment metadata dict for the given ice sheet and experiment code."""
-    meta = ais_exp_meta if ice_sheet == "AIS" else gis_exp_meta
-    return meta.get(exp, {"climate_model": "Unknown", "scenario": "Unknown", "protocol": "Unknown"})
-
-
-def get_ism_meta(group, model):
-    """Return ice sheet model metadata; falls back gracefully if unknown."""
-    key = (group, model)
-    if key in ism_meta:
-        return ism_meta[key]
-    # Try case-insensitive partial match on group
-    for (g, m), v in ism_meta.items():
-        if g.upper() in group.upper() or group.upper() in g.upper():
-            return v
-    return {"ice_model": model, "sliding_law": "See paper", "initialization": "See paper"}
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Non-ISMIP6 published simulations -- toggleable overlays on the interactive
@@ -261,7 +107,7 @@ def get_ism_meta(group, model):
 # stays deployable by copying dash_app/ alone).
 # ─────────────────────────────────────────────────────────────────────────────
 
-_TEXT_COLS = ["IS", "Group", "Model", "Exp", "climate_model", "scenario", "protocol", "RCP",
+_TEXT_COLS = ["IS", "Group", "Model", "Exp", "climate_model", "scenario", "protocol", "RCP", "regional_climate_model",
               "ocean_sensitivity", "basal_melt_param", "retreat_percentile"]
 
 
@@ -273,12 +119,6 @@ def _read_csv(name):
     path = os.path.join(DATA_DIR, name)
     cols = pd.read_csv(path, nrows=0).columns
     return pd.read_csv(path, dtype={c: "category" for c in _TEXT_COLS if c in cols})
-
-
-def _exp_meta_from_df(df, extra_cols):
-    cols = ["Exp", "climate_model", "scenario", "protocol"] + extra_cols
-    unique = df[cols].drop_duplicates("Exp").set_index("Exp")
-    return unique.to_dict(orient="index")
 
 
 ismip6_ais = _read_csv("ismip6_ais.csv.gz")
@@ -304,11 +144,12 @@ def _load_deconto2016():
     CC BY-NC-ND licence allows sharing it unmodified, so the reshaping
     happens here at startup). Same transform as
     utilities/external_sources.py load_deconto2016_ais(), which documents
-    provenance: raw (uncorrected) RCP2.6/4.5/8.5 runs, AIS total, decadal mm
-    GMSL (zeroed at 2000) linearly interpolated to annual through 2100 and
-    converted to Gt (x -362.5)."""
+    provenance: the "(BC)" RCP2.6/4.5/8.5 runs, i.e. DP16 as published, with
+    its +3 degC ocean-temperature correction in the Amundsen and Bellingshausen
+    seas; AIS total; decadal mm GMSL (zeroed at 2000) linearly interpolated to
+    annual through 2100 and converted to Gt (x -362.5)."""
     raw = pd.read_csv(os.path.join(DATA_DIR, "eft2271-sup-0002-2017ef000663-ds01.tsv"), sep="\t")
-    scen = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}
+    scen = {"RCP 2.6 (BC)": "RCP2.6", "RCP 4.5 (BC)": "RCP4.5", "RCP 8.5 (BC)": "RCP8.5"}  # DP16 as published
     raw = raw[(raw["Ice Sheet"] == "AIS") & raw["Scenario"].isin(scen)]
     dec = np.array([int(c) for c in raw.columns if c.isdigit() and int(c) <= 2100])
     years = np.arange(dec.min(), dec.max() + 1)
@@ -319,11 +160,7 @@ def _load_deconto2016():
         out.append(pd.DataFrame({
             "Year": years, MASS_COL: np.interp(years, dec, v) / GT_TO_MM_SLE,  # mm GMSL -> Gt (loss negative)
             "Group": "DeConto2016", "Model": "PSU3D-ICE", "Exp": f"{sc.replace('.', '')}_m{int(r['Ensemble Member']):02d}",
-            "climate_model": "Not reported in Data Set S1", "scenario": sc,
-            "protocol": "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected",
-            "mici_params": (f"OCFAC {r['OCFAQ']:g}, CREVLIQ {r['CREVLIQ']:g}, VCLIF {r['VCLIF']:g} km/yr; "
-                            f"Pliocene {r['Pliocene SL (m)']:.1f} m, LIG {r['LIG SL (m)']:.1f} m"),
-        }))
+        }))  # each member's metadata: metadata/DeConto2016_experiments.csv
     return pd.concat(out, ignore_index=True)
 
 
@@ -331,17 +168,7 @@ deconto2016_ais = _load_deconto2016()
 deconto2021_ais = _read_csv("external_sources_deconto2021_ais.csv.gz")
 ar6_ais = _read_csv("external_sources_ar6_ais.csv.gz")
 ar6_gis = _read_csv("external_sources_ar6_gis.csv.gz")
-gis_exp_meta.update(_exp_meta_from_df(rahlves2025_gis, ["ocean_sensitivity"]))
-ais_exp_meta.update(_exp_meta_from_df(coulon2024_ais, ["basal_melt_param"]))
-gis_exp_meta.update(_exp_meta_from_df(aschwanden2022_gis, []))
-gis_exp_meta.update(_exp_meta_from_df(goelzer2025_gis, ["retreat_percentile"]))
-ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais, []))
-ais_exp_meta.update(_exp_meta_from_df(edwards2021_ais_risk, []))
-ais_exp_meta.update(_exp_meta_from_df(deconto2016_ais, ["mici_params"]))
-ais_exp_meta.update(_exp_meta_from_df(deconto2021_ais, ["mici_params"]))
-ais_exp_meta.update(_exp_meta_from_df(ar6_ais, []))
-gis_exp_meta.update(_exp_meta_from_df(ar6_gis, []))
-gis_exp_meta.update(_exp_meta_from_df(edwards2021_gis, []))
+
 
 # Colors (2026-10-09) were chosen to be clearly distinct for normal colour
 # vision (CIEDE2000 >= 20 between any two studies, including within each ice
@@ -394,17 +221,27 @@ assert SOURCE_LABELS[-len(EMULATION_SOURCES):] == [s for s in SOURCE_LABELS if s
 SOURCE_COLOR = {PUBLICATION_LABEL["AIS"]: ISMIP6_COLOR, PUBLICATION_LABEL["GIS"]: ISMIP6_COLOR,
                 **{s["label"]: s["color"] for s in EXTRA_SOURCES}}
 
-# (key, label) -- key is a run-table column; None = no grouping.
+
+# (key, label) -- key is a run-table column; None = no grouping. The model
+# characteristics hold the classes decided in the metadata review
+# (metadata.CATEGORY_ORDER lists each vocabulary).
 GROUP_DIMENSIONS = [
     (None, "All simulations"),
     ("publication", "Study"),
     ("initialization", "Initialization"),
     ("ice_model", "Ice sheet model"),
     ("sliding_law", "Sliding law"),
+    ("stress_balance", "Stress balance"),
+    ("resolution", "Resolution (finest grid)"),
+    ("ocean_forcing", "Ocean forcing"),
+    ("ocean_sensitivity", "Ocean sensitivity"),
     ("scenario", "Climate scenario"),
     ("climate_model", "GCM"),
+    ("regional_climate_model", "Regional climate model"),
 ]
-ANOVA_CHARACTERISTICS = ["ice_model", "sliding_law", "initialization", "scenario", "climate_model"]
+ANOVA_CHARACTERISTICS = ["ice_model", "sliding_law", "initialization", "stress_balance", "resolution",
+                         "ocean_forcing", "ocean_sensitivity", "scenario", "climate_model", "regional_climate_model"]
+CATEGORY_ORDER = M.CATEGORY_ORDER
 DIM_LABEL = {k: v for k, v in GROUP_DIMENSIONS if k}
 
 # "Combine RCPs and SSPs": each RCP pooled with the SSP of the same nominal
@@ -421,7 +258,8 @@ COMPOSITE_DIM = "scenario_composite"
 DIM_LABEL[COMPOSITE_DIM] = "Climate scenario (RCP/SSP composite)"
 
 _FIXED_COLORS = {
-    "initialization": {"Data assimilation": "#1a7f5e", "Spin-up": "#003466", "See paper": "#6a6a6a"},
+    "initialization": {"Spin-up / equilibrium": "#003466", "Hybrid (thickness-nudged)": "#b8860b",
+                       "Data assimilation (velocity inversion)": "#1a7f5e"},
     "scenario": {"RCP2.6": "#003466", "RCP4.5": "#b8860b", "RCP8.5": "#990002", "SSP1-2.6": "#1a7f5e",
                  "SSP2-4.5": "#8a6d3a", "SSP5-8.5": "#8b1a00", "SSP1-1.9": "#4daf4a", "SSP3-7.0": "#d95f02",
                  "NDC (current pledges)": "#7570b3", "Control": "#555555", "Unknown": "#888888"},
@@ -433,24 +271,54 @@ _FIXED_COLORS[COMPOSITE_DIM] = {
 }
 
 
-def _build_hover(group, model, exp, ice_sheet, ism_m, exp_m, publication):
-    extra = ""
-    if "basal_melt_param" in exp_m:
-        extra = f"<br>Basal melt param: {exp_m['basal_melt_param']}"
-    elif "ocean_sensitivity" in exp_m:
-        extra = f"<br>Ocean sensitivity: {exp_m['ocean_sensitivity']}"
-    elif "mici_params" in exp_m:
-        extra = f"<br>{exp_m['mici_params']}"
-    return (
-        f"<b>{group} / {model}</b> ({publication})<br>"
-        f"Experiment: {exp}<br>"
-        f"Ice model: {ism_m['ice_model']}<br>"
-        f"Sliding law: {ism_m['sliding_law']}<br>"
-        f"Initialization: {ism_m['initialization']}<br>"
-        f"Climate model: {exp_m['climate_model']}<br>"
-        f"Scenario: {exp_m['scenario']}<br>"
-        f"Protocol: {exp_m['protocol']}{extra}"
-    )
+def _km(row):
+    lo, hi = row.get("res_min_km", ""), row.get("res_max_km", "")
+    if not lo:
+        return ""
+    return f" ({lo} km)" if lo == hi else f" ({lo}–{hi} km)"
+
+
+def _build_hover(group, model, exp, ism_m, exp_m, publication):
+    code = lambda k: f" [{ism_m[k]}]" if ism_m.get(k) else ""  # noqa: E731 -- verbatim paper code
+    sliding = ism_m["sliding_law"]
+    if ism_m.get("sliding_exponent"):
+        sliding += f" ({ism_m['sliding_exponent']})"
+    lines = [
+        f"<b>{group} / {model}</b> ({publication})",
+        f"Experiment: {exp}",
+        f"Ice model: {ism_m['ice_model']}",
+        f"Initialization: {ism_m['initialization']}{code('initialization_code')}",
+        f"Sliding law: {sliding}",
+        f"Stress balance: {ism_m['stress_balance']}{code('stress_balance_code')}",
+        f"Resolution: {ism_m['resolution']}{_km(ism_m)}",
+        f"Climate model: {exp_m['climate_model']}",
+        f"Regional climate model: {exp_m['regional_climate_model']}",
+        f"Scenario: {exp_m['scenario']}",
+        f"Ocean forcing: {exp_m['ocean_forcing']}",
+        f"Ocean sensitivity: {exp_m['ocean_sensitivity']}",
+    ]
+    # Columns shown in hover only (experiment_columns.csv). Short values (e.g.
+    # ensemble parameters) share one line; longer ones get a line each.
+    short, long_ = [], []
+    for label, value in exp_m["extras"].items():
+        item = f"{label if len(label) == 1 else label[:1].upper() + label[1:]}: {value}"  # keep symbols like q
+        (short if len(str(value)) <= 8 else long_).append(item)
+    if short:
+        lines.append(" · ".join(short))
+    lines += long_
+    if exp_m["ice_shelf_fracture"]:
+        lines.append("<b>Ice-shelf collapse imposed: excluded from the bias analysis</b>")
+    if ism_m["review_status"] == "not yet reviewed":
+        lines.append("<i>Metadata not yet reviewed against the source paper</i>")
+    return "<br>".join(_wrap(line) for line in lines)
+
+
+def _wrap(line, width=60):
+    """Long plain hover lines broken onto indented continuation lines, so a
+    hover box stays narrow enough not to cover the plot."""
+    if len(line) <= width or "<" in line:
+        return line
+    return "<br>   ".join(textwrap.wrap(line, width))
 
 
 def _build_runs():
@@ -477,17 +345,16 @@ def _build_runs():
         years += np.split(yr, bounds)
         vals += np.split(mv, bounds)
         for ice_sheet, group, model, exp in key_rows:
-            ism_m = get_ism_meta(group, model)
-            exp_m = get_exp_meta(ice_sheet, exp)
+            # Exact lookups only: a run without a metadata row is an error,
+            # never a silent borrow from a similar-looking model.
+            ism_m, exp_m = M.run_meta(ice_sheet, group, model, exp)
             meta.append({
                 "ice_sheet": ice_sheet, "publication": publication,
                 "group": group, "model": model, "exp": exp,
-                "initialization": ism_m.get("initialization", "See paper"),
-                "ice_model": ism_m.get("ice_model", "See paper"),
-                "sliding_law": ism_m.get("sliding_law", "See paper"),
-                "scenario": exp_m.get("scenario", "Unknown"),
-                "climate_model": exp_m.get("climate_model", "Unknown"),
-                "hover": _build_hover(group, model, exp, ice_sheet, ism_m, exp_m, publication),
+                **{k: ism_m[k] for k in M.CLASS_FIELDS},
+                **{k: exp_m[k] for k in M.EXP_FIELDS},
+                "review_status": ism_m["review_status"],
+                "hover": _build_hover(group, model, exp, ism_m, exp_m, publication),
             })
     runs = pd.DataFrame(meta)
     grid = np.arange(1950, 2102)
@@ -535,6 +402,10 @@ del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, dec
 import gc  # noqa: E402
 gc.collect()
 IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()
+# Runs that enter the bias analysis (rate bias, low-bias shares, ANOVA).
+# Imposed ice-shelf-collapse experiments (ISMIP6-AIS exp11/exp12) are left
+# out there but still drawn everywhere else (decision 2026-11-23).
+BIAS_ELIGIBLE = ~RUNS["ice_shelf_fracture"].to_numpy(dtype=bool)
 
 
 def _color_maps():

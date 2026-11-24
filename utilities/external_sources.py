@@ -62,12 +62,16 @@ def _download(url, cache_name, min_expected_bytes=1):
 # the Greenland ice sheet", The Cryosphere 19, 1205,
 # https://doi.org/10.5194/tc-19-1205-2025.
 #
-# CISM (Weertman power-law sliding, inverse-calibrated basal friction),
-# ERA5-forced historical run (tracks IMBIE within observed uncertainty) and
-# ESM-forced runs, projected under SSP1-2.6/2-4.5/5-8.5 (RCP8.5 for the
-# CMIP5-forced member) to 2100/2101, at three ocean-sensitivity tiers
-# (Low/Medium/High, mapped onto the same `ocean_sensitivity` field ISMIP6's
-# own GIS experiments use).
+# CISM with DIVA stress balance and a Budd-type sliding law (tau_b depends on
+# effective pressure), basal friction nudged to the observed surface during a
+# 5000-yr spin-up. Two initialization branches, kept as two model
+# configurations (decision R1, docs/metadata_review/07_Rahlves2025_CISM_GIS.md):
+# ERA5-init (one ERA5-forced spin-up; 1960-2014 ERA5/MAR historical run;
+# projections forced by ESM anomalies) and ESM-init (one spin-up per ESM;
+# absolute ESM/MAR forcing throughout). Projections under SSP1-2.6/2-4.5/5-8.5
+# (RCP8.5 for CMIP5 ACCESS1.3) to 2100, at three retreat sensitivities
+# (Low/Medium/High = kappa 75th/50th/25th percentiles). Control runs (reference
+# climate held from 2015) are left out (decision R2).
 #
 # Archive: NIRD Research Data Archive, https://doi.org/10.11582/2024.00128
 # (767 GB total -- per-run `scalars.nc` files, the same domain-integrated-
@@ -90,6 +94,17 @@ ESM_SCENARIO_MAP = {
     "proj_ssp126": "SSP1-2.6", "proj_ssp245": "SSP2-4.5", "proj_ssp585": "SSP5-8.5",
 }
 ERA5_F_CODE_TO_SCENARIO = {"26": "SSP1-2.6", "45": "SSP2-4.5", "85": "SSP5-8.5"}
+# ERA5_init run codes, from the archive's 04 km ensemble README.txt ('GCM model from which forcing is used is
+# coded as 'm'': ["ACCESS1.3"]="06" ["CNRM-CM6"]="07" ["UKESM1-CM6"]="08" ["CESM2"]="09" ["CNRM-ESM2"]="10"
+# ["MPI-ESM1-2-HR"]="11" ["IPSL-CM6A-LR"]="12" ["NorESM2"]="13" ["CESM2-CMIP6"]="14" ["UKESM1-0-LL-CMIP6"]="15").
+# The codes follow Table A1's model order, so 08 and 09 are UKESM1-0-LL-Robin and CESM2-Leo; names here use
+# the ESM_init branch's directory names, so both branches name each model the same way.
+ERA5_M_CODE_TO_GCM = {
+    "06": "ACCESS1.3", "07": "CNRM-CM6", "08": "UKESM1-0-LL-Robin", "09": "CESM2-Leo", "10": "CNRM-ESM2",
+    "11": "MPI-ESM1-2-HR", "12": "IPSL-CM6A-LR", "13": "NorESM2", "14": "CESM2-CMIP6", "15": "UKESM1-0-LL-CMIP6",
+}
+CMIP5_GCMS = {"ACCESS1.3"}  # forced by RCP8.5, though the archive codes rcp85 and ssp585 alike as f85
+R_TIER_TO_KAPPA_PERCENTILE = {"Low": "75th", "Med": "50th", "High": "25th"}  # README: med=50, high=25, low=75
 
 
 def _rahlves2025_select_scalars_urls():
@@ -184,8 +199,10 @@ def _rahlves2025_parse_filename(cache_name):
         else:
             m = re.search(r"_m(\d+)_r(\d+)_f(\d+)_o(\d+)", runtype)
             m_code, _, f_code, _ = m.groups()
-            return {"init_group": "ERA5", "gcm": f"GCM-{m_code} (MAR-downscaled)", "r_tier": r_tier,
-                    "runtype": runtype, "scenario": ERA5_F_CODE_TO_SCENARIO[f_code], "is_hist": False}
+            gcm = ERA5_M_CODE_TO_GCM[m_code]
+            scenario = "RCP8.5" if gcm in CMIP5_GCMS and f_code == "85" else ERA5_F_CODE_TO_SCENARIO[f_code]
+            return {"init_group": "ERA5", "gcm": gcm, "r_tier": r_tier,
+                    "runtype": runtype, "scenario": scenario, "is_hist": False}
 
 
 def load_rahlves2025_gis():
@@ -222,6 +239,8 @@ def load_rahlves2025_gis():
     for name, m in meta_by_file.items():
         if m["is_hist"]:
             continue  # merged into each projection below, not its own standalone Exp
+        if m["scenario"] == "Control":
+            continue  # 1960-1989 reference climate held from 2015, not a projection (decision R2)
         key = (m["init_group"], m["r_tier"]) if m["init_group"] == "ERA5" else (m["init_group"], m["gcm"], m["r_tier"])
         hist_name = hist_by_key.get(key)
 
@@ -244,7 +263,7 @@ def load_rahlves2025_gis():
         exp_code = f"{m['init_group']}_{m['r_tier']}_{m['gcm']}_{m['scenario']}".replace(" ", "").replace("/", "-")
         rows.append(pd.DataFrame({
             "Year": years, "Cumulative ice sheet mass change (Gt)": mass_gt,
-            "Group": "Rahlves2025", "Model": "CISM", "Exp": exp_code, "IS": "GIS",
+            "Group": "Rahlves2025", "Model": f"CISM ({m['init_group']}-init)", "Exp": exp_code, "IS": "GIS",
         }))
         exp_meta_rows.append({
             "Exp": exp_code, "climate_model": m["gcm"], "scenario": m["scenario"],
@@ -289,6 +308,7 @@ MELT_PARAM_MAP = {
 }
 CLIMATE_MODEL_MAP = {1: "MRI-ESM2-0", 2: "UKESM1-0-LL", 3: "CESM2-WACCM", 4: "IPSL-CM6A-LR"}
 GT_PER_M_SLE = 362.5  # Gt per meter of sea-level-equivalent
+COULON2024_PROTOCOL_LABEL = "Unweighted 100-member Latin hypercube ensemble (prior)"
 SSP585_KEEP_THROUGH_YEAR = 2030  # trim the 2015-3014 continuation here; see _coulon2024_download_ssp585
 
 
@@ -388,6 +408,7 @@ def load_coulon2024_ais(keep_through_year=None):
     with h5py.File(hist_path, "r") as f:
         hist_time = np.array(f["time"]).squeeze()  # (65,) years 1950-2014
         hist_slc = np.array(f["SLC_ensemble"])  # (65, 100) meters SLE, cumulative from 1950
+        hist_net = -np.array(f["mbcomp_ensemble"])[:, 12, :].T / (1000 * GT_PER_M_SLE)  # (65, 100) m SLE/yr
 
     with h5py.File(ssp585_path, "r") as f:
         ssp_time = np.array(f["time"]).squeeze()  # years 2015-3014
@@ -400,7 +421,19 @@ def load_coulon2024_ais(keep_through_year=None):
         f"expected the SSP5-8.5 file to pick up the year after HIST_ENSEMBLE_DATA "
         f"ends, but HIST ends {hist_time[-1]} and SSP585 starts {ssp_time[0]}"
     )
-    ssp_slc = ssp_slc + hist_slc[-1, :]  # re-anchor each member onto its own HIST endpoint
+    # SLC_ensemble values are the state at the START of each year:
+    # SLC(t+1) - SLC(t) equals that year's net mass balance (mbcomp_ensemble
+    # component 13, "rate of HAF change"; r = 0.9999). Both files start at 0,
+    # so the historical file's last value (2014) is the state before 2014's
+    # change, and the SSP file's 2015 value (0) the state after it. Re-anchor
+    # each member on its 2014 value PLUS its own 2014 change: the 2014 net
+    # mass balance, scaled by the member's ratio of SLC step to net mass
+    # balance over 2004-2013 (median 1.03). Without it one year of mass
+    # change (median 130 Gt) was lost (decision C4,
+    # docs/metadata_review/06_Coulon2024_KoriULB_AIS.md).
+    steps = np.diff(hist_slc, axis=0)
+    ratio = np.median(steps[-10:] / hist_net[-11:-1], axis=0)
+    ssp_slc = ssp_slc + hist_slc[-1, :] + hist_net[-1, :] * ratio
 
     lhs_mat = scipy.io.loadmat(lhs_path)
     lhval = np.array(lhs_mat["LHval"])
@@ -424,7 +457,7 @@ def load_coulon2024_ais(keep_through_year=None):
         exp_meta_rows.append({
             "Exp": exp_code,
             "climate_model": CLIMATE_MODEL_MAP.get(int(round(climate_model_col[member])), "Unknown"),
-            "scenario": "SSP5-8.5", "protocol": "Not applicable",
+            "scenario": "SSP5-8.5", "protocol": COULON2024_PROTOCOL_LABEL,
             "basal_melt_param": MELT_PARAM_MAP.get(int(round(melt_param_col[member])), "Unknown"),
         })
 
@@ -438,13 +471,21 @@ def load_coulon2024_ais(keep_through_year=None):
 # Greenland Ice Sheet", Geophysical Research Letters 49, e2022GL099058,
 # https://doi.org/10.1029/2022GL099058.
 #
-# PISM, forced by a temperature-index SMB model driven by RCP-scenario
-# warming. The paper trains a PyTorch neural-network emulator on ~1000 true
-# PISM runs, then draws large ensembles from it both before ("les", the
-# prior -- what's loaded here, per an explicit user request to use the
-# uncalibrated ensemble rather than the Bayesian-calibrated posterior) and
-# after ("mc") jointly conditioning on observed surface speed and observed
-# cumulative mass loss.
+# What the runs are (checked in docs/metadata_review/08_Aschwanden2019_PISM_GIS.md):
+# the "les" file loaded here is the large ensemble of Aschwanden et al. (2019),
+# "Contribution of the Greenland Ice Sheet to sea level over the next
+# millennium", Science Advances 5, eaav9396 -- REAL PISM runs (hybrid
+# SIA+SSA, 1.8 km, temperature-index SMB on a HIRHAM5 climatology shifted by
+# a Greenland-mean CMIP5 temperature anomaly), 500 Latin-hypercube members
+# per RCP, 2008-3007, republished in this archive zeroed at 2008. The
+# archive's metadata: the scalar files are "prepared with the Parallel Ice
+# Sheet Model (PISM) ... for both the ensemble using the Prior and the
+# Posterior (calibrated) parameter distribution". Aschwanden & Brinkerhoff's
+# neural-network emulator (trained on ~1000 surface-speed runs) only
+# calibrates the parameters; the posterior "mc" file holds PISM runs of
+# posterior samples and is NOT used here (the user chose the uncalibrated
+# ensemble). Checked: the file's 16th-84th percentiles reproduce A19 Table 1
+# (e.g. 2100: 6-19, 8-23, 14-34 cm vs 5-19, 8-23, 14-33 cm).
 #
 # Archive: Aschwanden & Brinkerhoff (2022), Arctic Data Center,
 # https://doi.org/10.18739/A2KW57K4R -- a plain Apache directory listing
@@ -481,14 +522,10 @@ ASCHWANDEN2022_KEEP_THROUGH_YEAR = 2100  # trim the 2008-3007 file to the paper'
 # "We select the four GCMs that extend to year 2300: GISS-E2-H, GISS-E2-R,
 # IPSL-CM5A-LR, and MPI-ESM-LR. We select the four GCM projections with
 # equal probability" (Table 1 lists the GCM parameter's distribution as
-# "uniform (1-4)"). The PDF does NOT explicitly tabulate which numeric code
-# is which GCM -- this order (matching the prose listing order, 0-indexed
-# instead of the paper's 1-4) is our own inference, not a stated mapping.
-# It's corroborated by lhs_samples_gcm.csv's GCM column taking exactly the
-# values {0,1,2,3} with an EXACTLY even 125/125/125/125 split across 500
-# rows, matching "select with equal probability" -- but if this specific
-# code-to-name ORDER is ever contradicted by another source, treat this
-# dict, not the underlying data, as what's wrong.
+# "uniform (1-4)"). The code-to-name order below is the one the authors' own
+# run script uses to pick each member's forcing file: pism/pism-gris,
+# stability/lhs_ensemble.py, gcm_dict = {0.0: "GISS-E2-H", 1.0: "GISS-E2-R",
+# 2.0: "IPSL-CM5A-LR", 3.0: "MPI-ESM-LR"} (confirmed 2026-11-23).
 ASCHWANDEN2022_GCM_CODE_MAP = {0: "GISS-E2-H", 1: "GISS-E2-R", 2: "IPSL-CM5A-LR", 3: "MPI-ESM-LR"}
 
 
@@ -518,15 +555,16 @@ def _aschwanden2022_download_lhs_gcm():
 
 def load_aschwanden2022_gis():
     """
-    Loads Aschwanden & Brinkerhoff (2022)'s Greenland/PISM uncalibrated
-    prior ensemble as a dataframe shaped like ismip6_gis: Year, Cumulative
-    ice sheet mass change (Gt), Group, Model, Exp, IS -- plus
+    Loads Aschwanden et al. (2019)'s Greenland/PISM large ensemble (real
+    PISM runs, uncalibrated), as archived with Aschwanden & Brinkerhoff
+    (2022), as a dataframe shaped like ismip6_gis: Year, Cumulative ice
+    sheet mass change (Gt), Group, Model, Exp, IS -- plus
     climate_model/scenario/protocol columns for classification.
 
     Step 1 (above): download aschwanden_et_al_2019_les_2008_norm.csv.gz.
-    Step 1b (above): download lhs_samples_gcm.csv, the companion 2019
-    millennium-study LHS parameter table that this ensemble's "Experiment"
-    ids are drawn from, for per-member climate_model classification.
+    Step 1b (above): download lhs_samples_gcm.csv, the 2019 study's own LHS
+    parameter table (the ids in the "Experiment" column are its rows), for
+    per-member climate_model classification.
     Step 2: read the `Mass (Gt)` column directly (already the exact
     cumulative-mass-change quantity this module's other loaders have to
     derive via unit conversion) for each (Experiment, RCP) realization,
@@ -537,8 +575,8 @@ def load_aschwanden2022_gis():
     `climate_model` from lhs_samples_gcm.csv's GCM column (joined on
     Experiment == id, decoded via ASCHWANDEN2022_GCM_CODE_MAP), and mark
     `protocol` as "Uncalibrated (prior ensemble)" -- distinguishing it from
-    the archive's separate Bayesian-calibrated "mc" (posterior) ensemble,
-    which this loader does NOT use.
+    the archive's separate calibrated "mc" (posterior) ensemble, PISM runs
+    of posterior parameter samples, which this loader does NOT use.
 
     Zero-referenced at 2008 rather than at a common absolute ice-sheet mass
     -- like every other source in this module, only rate differences over a
@@ -607,13 +645,13 @@ def load_aschwanden2022_gis():
 #   forcing, overshoot, and other idealized post-2100 continuations), which
 #   would otherwise roughly triple the row count and mix incompatible time
 #   horizons into one "rate over a selected window" comparison.
-# - NORCE's ~50 archive "model" directories (e.g. CISM04-MAR39-p50,
-#   CISM16oc-MAR312-p95) are all the SAME CISM ice sheet model at different
-#   grid resolutions/tuning variants, not distinct models -- collapsed to
-#   Model="CISM" (GOELZER2025_LAB_ICE_MODEL below) so ice_model comparisons
-#   (e.g. the misfit ANOVA) treat them as one model, as the paper's own "4
-#   ice sheet models" framing does. The resolution/tuning token is kept in
-#   Exp instead, so individual runs stay distinguishable.
+# - Every archive "model" directory is its own model configuration (the
+#   paper's Table B1 "Model" column: ElmerIce2/3, IMAUICE1-8, the NORCE
+#   CISM variants, GISMHOMv1/GISMSIAv1), which differ in sliding law,
+#   resolution, stress balance, spin-up forcing or retreat sensitivity.
+#   Group="Goelzer2025-<lab>", Model=<configuration>, Exp=<gcm>_<scenario>_
+#   <rcm>_<percentile>; each configuration's metadata is in
+#   dash_app/metadata/Goelzer2025_models.csv (metadata review 3, 2026-11-23).
 # - Raw values used -- NOT the ctrl-proj-subtracted correction
 #   ismip6_gis_to_csv() applies to the main ISMIP6 ensemble (per Goelzer's
 #   own stated preference for how ISMIP6 numbers specifically should be
@@ -630,7 +668,7 @@ GOELZER2025_LABS = ["IGE", "IMAU", "NORCE", "VUB"]
 # variants -- see module comment above), VUB runs GISM. Naming matches the
 # `ice_model` strings ism_meta already uses elsewhere in this project (e.g.
 # VUB's ISMIP6-GIS entry also reports ice_model "GISM").
-GOELZER2025_LAB_ICE_MODEL = {"IGE": "Elmer/Ice", "IMAU": "IMAU-ICE", "NORCE": "CISM", "VUB": "GISM"}
+GOELZER2025_LAB_ICE_MODEL = {"IGE": "Elmer/Ice", "IMAU": "IMAU-ICE", "NORCE": "CISM", "VUB": "GISM"}  # code base per lab
 
 # An experiment directory name is <gcm>_<scenario>_<rcm>_<percentile> (4
 # underscore-separated tokens; GCM/RCM names themselves may contain hyphens
@@ -666,57 +704,9 @@ GOELZER2025_SCENARIO_LABEL = {
 GOELZER2025_HIST_LAST_YEAR = 2014
 GOELZER2025_PROJ_FIRST_YEAR = 2015
 
-# NORCE ran the same underlying (GCM, scenario, RCM, retreat-percentile)
-# experiment at up to 4 CISM grid resolutions (02/04/08/16 km) as an
-# explicit resolution-sensitivity study -- of NORCE's 764 main-ensemble
-# experiment directories (across all its resolution/tuning-variant
-# subfolders), only 249 are actually distinct experiments; the rest are
-# coarser-resolution reruns of one of those 249 (confirmed by matching each
-# variant folder's own (gcm, scenario, rcm, percentile) experiment
-# directories against its same-tuning-suffix siblings at other
-# resolutions -- e.g. CISM04-MAR312-p25/CISM08-MAR312-p25/CISM16-MAR312-p25
-# all contain the identical 16 (gcm, scenario) experiments). Per explicit
-# user request (2026-08-03): keep ONLY the finest (smallest km) resolution
-# run for each distinct experiment, dropping every coarser duplicate, in
-# the notebook/app/analysis alike.
-#
-# The suffix group below (c/e/x/oc/t/tc, e.g. CISM16oc) is a distinct
-# calibration/tuning approach, NOT a resolution, so it's kept as part of
-# the dedup key -- the plain and "c"-calibrated CISM configs for the same
-# (gcm, scenario, rcm, percentile) both survive as separate entries, each
-# independently deduplicated down to its own finest resolution. A given
-# experiment isn't necessarily run at every resolution (21 of the 249 exist
-# at only one resolution to begin with) -- those pass through unchanged,
-# since there's no coarser duplicate of them to drop.
-GOELZER2025_NORCE_VARIANT_PATTERN = re.compile(r"^CISM(\d+)([a-z]*)-")
-
-
-def _goelzer2025_norce_finest_exp_dirs(lab_dir):
-    """For NORCE only: returns the set of (variant, exp_dir_name) pairs
-    that survive resolution deduplication -- see module comment above for
-    why. Every other lab has no resolution variants (its "model"
-    directories are the model itself, e.g. "IMAUICE1"), so the main loop
-    below only calls this for lab == "NORCE"."""
-    best = {}  # (suffix, gcm, scenario, rcm, pct) -> (resolution, variant, exp_dir_name)
-    for variant in sorted(os.listdir(lab_dir)):
-        variant_dir = os.path.join(lab_dir, variant)
-        if not os.path.isdir(variant_dir):
-            continue
-        resolution, suffix = GOELZER2025_NORCE_VARIANT_PATTERN.match(variant).groups()
-        resolution = int(resolution)
-        for exp_dir_name in sorted(os.listdir(variant_dir)):
-            if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
-                continue
-            parts = exp_dir_name.split("_")
-            if len(parts) != 4:
-                continue
-            gcm, scenario, rcm, percentile = parts
-            if scenario not in GOELZER2025_MAIN_SCENARIOS:
-                continue
-            key = (suffix, gcm, scenario, rcm, percentile)
-            if key not in best or resolution < best[key][0]:
-                best[key] = (resolution, variant, exp_dir_name)
-    return {(variant, exp_dir_name) for _, variant, exp_dir_name in best.values()}
+# NORCE ran some experiments at several CISM grid resolutions (2-16 km).
+# Each resolution is its own configuration (decision G2 of metadata review
+# 3, 2026-11-23), so every resolution's runs are kept.
 
 
 def _goelzer2025_download_labs():
@@ -772,26 +762,17 @@ def load_goelzer2025_gis():
     load_rahlves2025_gis() does, with no overlap/seam adjustment needed
     here (historical ends exactly at 2014, projection starts exactly at
     2015, see GOELZER2025_HIST_LAST_YEAR above).
-    Step 3: for NORCE specifically, drop every experiment directory that
-    _goelzer2025_norce_finest_exp_dirs() didn't select -- i.e. every
-    coarser-resolution duplicate of an experiment already kept at a finer
-    resolution (see that function's/GOELZER2025_NORCE_VARIANT_PATTERN's
-    module comment above).
-    Step 4: label each run's Group="Goelzer2025", Model=the group's ice
-    sheet model (GOELZER2025_LAB_ICE_MODEL -- NORCE's variant token is kept
-    in Exp, not Model, per the scope decision above), climate_model=GCM,
-    scenario=the mapped scenario label, protocol="PROTECT
-    (ISMIP6-extended)", and retreat_percentile=the archive's own p05-p95
-    token (analogous to how load_rahlves2025_gis() maps its own tiers onto
-    ocean_sensitivity).
+    Step 3: label each run Group="Goelzer2025-<lab>", Model=the archive
+    configuration directory (Table B1's model name), Exp=<gcm>_<scenario>_
+    <rcm>_<percentile>, with climate_model=GCM, scenario=the mapped scenario
+    label, regional_climate_model=RCM, and retreat_percentile=the archive's
+    own p05-p95 token.
     """
     extract_dir = _goelzer2025_download_labs()
 
     rows = []
-    exp_meta_rows = []
     for lab in GOELZER2025_LABS:
         lab_dir = os.path.join(extract_dir, lab)
-        finest_exp_dirs = _goelzer2025_norce_finest_exp_dirs(lab_dir) if lab == "NORCE" else None
         for variant in sorted(os.listdir(lab_dir)):
             variant_dir = os.path.join(lab_dir, variant)
             if not os.path.isdir(variant_dir):
@@ -809,8 +790,6 @@ def load_goelzer2025_gis():
             for exp_dir_name in sorted(os.listdir(variant_dir)):
                 if exp_dir_name == "historical" or exp_dir_name.startswith("ctrl"):
                     continue
-                if finest_exp_dirs is not None and (variant, exp_dir_name) not in finest_exp_dirs:
-                    continue  # coarser-resolution duplicate of another variant's run
                 parts = exp_dir_name.split("_")
                 if len(parts) != 4:
                     continue  # not a <gcm>_<scenario>_<rcm>_<percentile> experiment dir
@@ -828,22 +807,16 @@ def load_goelzer2025_gis():
                 years = np.concatenate([hist_years, proj_years])
                 mass_gt = np.concatenate([hist_gt, proj_gt])
 
-                exp_code = f"{lab}_{variant}_{exp_dir_name}"
-                n = len(years)
                 rows.append(pd.DataFrame({
                     "Year": years.astype(int), "Cumulative ice sheet mass change (Gt)": mass_gt,
-                    "Group": "Goelzer2025", "Model": GOELZER2025_LAB_ICE_MODEL[lab],
-                    "Exp": exp_code, "IS": "GIS",
+                    "Group": f"Goelzer2025-{lab}", "Model": variant,
+                    "Exp": exp_dir_name, "IS": "GIS",
+                    "climate_model": gcm, "scenario": GOELZER2025_SCENARIO_LABEL[scenario],
+                    "protocol": "PROTECT (ISMIP6-extended)", "regional_climate_model": rcm,
+                    "retreat_percentile": percentile,
                 }))
-                exp_meta_rows.append({
-                    "Exp": exp_code, "climate_model": gcm,
-                    "scenario": GOELZER2025_SCENARIO_LABEL[scenario],
-                    "protocol": "PROTECT (ISMIP6-extended)", "retreat_percentile": percentile,
-                })
 
-    df = pd.concat(rows, ignore_index=True)
-    exp_meta_df = pd.DataFrame(exp_meta_rows)
-    return df.merge(exp_meta_df, on="Exp", how="left")
+    return pd.concat(rows, ignore_index=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -1081,22 +1054,29 @@ def load_edwards2021_gis(n_samples=None, keep_through_year=None):
 # columns OCFAQ (sic; OCFAC), CREVLIQ, VCLIF, Pliocene/LIG sea level (m),
 # then contribution to GMSL in mm at 2000, 2010, ..., 2300, zeroed at 2000.
 # 29 members: the DP16 runs passing the Pliocene (5-15 m) and LIG targets.
-# Scenarios come raw ("RCP 8.5") and with Kopp et al.'s ocean-temperature
-# bias correction ("RCP 8.5 (BC)"). Checked: WAIS + EAIS == AIS exactly, and
-# the raw 2050 values reproduce Kopp et al.'s text (RCP8.5 median -3 cm,
-# range -9 to +12 cm; RCP2.6 median -2 cm, range -10 to +6 cm).
+# Scenarios come uncorrected ("RCP 8.5") and with DP16's own ocean-temperature
+# bias correction ("RCP 8.5 (BC)"): +3 degC added to the CCSM4 ocean
+# temperatures in the Amundsen and Bellingshausen seas (DP16 Methods). The
+# (BC) runs are DP16 as published; the uncorrected ones are the sensitivity
+# case of Kopp et al.'s Supporting Information S1. Checked: WAIS + EAIS == AIS
+# exactly; the uncorrected 2050 values reproduce Kopp et al.'s "Without this
+# correction" numbers (RCP8.5 median -3 cm, range -9 to +12 cm; RCP2.6 median
+# -2 cm, range -10 to +6 cm), and the (BC) RCP8.5 2050 median (+5 cm)
+# reproduces their DP16 value.
 #
-# Per user decisions (2026-10-08): raw (uncorrected) runs only, AIS total
-# only, linearly interpolated from the decadal values to annual so the
-# source works with any averaging window. ND licence: dash_app bundles the
-# original file unmodified and converts it at startup (dash_app/data.py
+# Per user decisions: the (BC) runs only (2026-11-23, decision DP1 of
+# docs/metadata_review/04_DeConto2016_PSU3D_AIS.md), AIS total only, linearly
+# interpolated from the decadal values to annual so the source works with any
+# averaging window (2026-10-08). ND licence: dash_app bundles the original
+# file unmodified and converts it at startup (dash_app/data.py
 # _load_deconto2016) instead of shipping a reformatted derivative.
 # ═════════════════════════════════════════════════════════════════════════
 
 DECONTO2016_FILENAME = "eft2271-sup-0002-2017ef000663-ds01.tsv"
-DECONTO2016_SCENARIOS = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}  # raw only
-DECONTO2016_PROTOCOL_LABEL = "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected"
-DECONTO2016_CLIMATE_MODEL_LABEL = "Not reported in Data Set S1"
+DECONTO2016_SCENARIOS = {"RCP 2.6 (BC)": "RCP2.6", "RCP 4.5 (BC)": "RCP4.5", "RCP 8.5 (BC)": "RCP8.5"}  # DP16 as published
+DECONTO2016_PROTOCOL_LABEL = ("DP16 alternative calibration (29 of 64 members pass Pliocene 5-15 m and LIG targets); "
+                              "CCSM4 ocean +3 degC in the Amundsen and Bellingshausen seas")
+DECONTO2016_CLIMATE_MODEL_LABEL = "CCSM4 (ocean); GENESIS v3 (atmosphere)"  # dash_app/metadata/DeConto2016_experiments.csv
 
 
 def load_deconto2016_ais(path=None, keep_through_year=2100):
@@ -1147,11 +1127,14 @@ def load_deconto2016_ais(path=None, keep_through_year=2100):
 # "RCP8.5 sea level equiv. (m)" -- each with Year (annual, 2000-2300) and one
 # column per run: Antarctic contribution to sea level in METRES, zeroed at
 # 2000. The same 109 runs appear in every sheet, named param_<a>_<b> with
-# a = 15..195 (step 15) and b = 2..13. Read here as CREVLIQ (hydrofracturing)
-# and CLIFVMAX (maximum cliff-failure rate): the same Run85_<CREVLIQ>_<CLIFVMAX>
-# convention as Gilford & DeConto's PSU3D-ICE ensembles (Zenodo 3478486,
-# whose record names those two parameters). Checked: the +3 ºC median rate in
-# 2090-2100 is 0.41 cm/yr, vs. the abstract's "about 0.5 cm per year by 2100".
+# a = CALVLIQ (hydrofracturing, 15..195 m-1 yr2, step 15) and b = VCLIFF
+# (maximum ice-cliff calving rate, 2..13 km/yr), the paper's names. Checked
+# (docs/metadata_review/05_DeConto2021_PSU3D_AIS.md): the parameter means and
+# medians (107.1, 7.65; 105, 7) are Extended Data Table 1's calibrated values
+# (107, 7.7; 105, 7), and every sheet's 2100 median and 17-83% range
+# reproduce Table 1 (+1.5 °C 0.08 (0.06-0.10) m ... RCP8.5 0.34 (0.20-0.53)).
+# The 109 are the calibrated ensemble: 196 runs scored on IMBIE 1992-2017
+# dM/dt, LIG and Pliocene targets.
 #
 # Licence: the article is not open access (Crossref lists only Springer
 # Nature's text-and-data-mining terms, no Creative Commons licence).
@@ -1165,8 +1148,8 @@ DECONTO2021_SOURCE_DATA_URL = (
     "https://static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03427-0/"
     "MediaObjects/41586_2021_3427_MOESM2_ESM.xlsx"
 )
-DECONTO2021_PROTOCOL_LABEL = "Figure 1 source data (calibrated ensemble)"
-DECONTO2021_CLIMATE_MODEL_LABEL = "Not reported in source data"
+DECONTO2021_PROTOCOL_LABEL = "Figure 1 source data (calibrated ensemble, 109 of 196 members)"
+DECONTO2021_CLIMATE_MODEL_LABEL = "CCSM4 (ocean); RegCM3 CO2 snapshots (atmosphere)"  # decision DC1
 
 
 def _deconto2021_scenario(sheet_name):
@@ -1180,8 +1163,8 @@ def load_deconto2021_ais(keep_through_year=2100):
     source data (see the section comment above) as a dataframe shaped like
     the other loaders: Year (annual), Cumulative ice sheet mass change (Gt;
     m SLE x -362,500, so ice loss is negative), Group, Model, Exp, IS, plus
-    climate_model/scenario/protocol and `mici_params` (the run's CREVLIQ and
-    CLIFVMAX). 109 runs x 4 warming scenarios = 436 Exps."""
+    climate_model/scenario/protocol and `mici_params` (the run's CALVLIQ and
+    VCLIFF). 109 runs x 4 warming scenarios = 436 Exps."""
     path = _download(DECONTO2021_SOURCE_DATA_URL, "deconto2021_fig1_source_data.xlsx", min_expected_bytes=500_000)
     rows, meta = [], []
     for sheet, d in pd.read_excel(path, sheet_name=None).items():
@@ -1198,7 +1181,7 @@ def load_deconto2021_ais(keep_through_year=2100):
             }))
             meta.append({"Exp": exp, "climate_model": DECONTO2021_CLIMATE_MODEL_LABEL, "scenario": scen,
                          "protocol": DECONTO2021_PROTOCOL_LABEL,
-                         "mici_params": f"CREVLIQ {crev}, CLIFVMAX {clif} (run {col})"})
+                         "mici_params": f"CALVLIQ {crev}, VCLIFF {clif} km/yr (run {col})"})
     return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
 
 

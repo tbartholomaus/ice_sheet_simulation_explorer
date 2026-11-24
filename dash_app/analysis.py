@@ -12,13 +12,15 @@ import scipy.stats
 from scipy.stats import linregress
 
 from data import (
-    CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, RUN_ID, RUN_VALS, RUN_YEARS, RUNS, SOURCE_LABELS,
-    YEAR_GRID, proj_start,
+    CATEGORY_ORDER, CUM, DEFAULT_OBS, ICE_SHEET_AREA_M2, IMBIE, IS_ISMIP6, RUN_ID, RUN_VALS, RUN_YEARS, RUNS,
+    SOURCE_LABELS, YEAR_GRID, proj_start,
 )
 
 _ICE = RUNS["ice_sheet"].to_numpy()
 _PUB = RUNS["publication"].to_numpy()
 _GROUP = RUNS["group"].to_numpy()
+# One id per model configuration: every (group, model) is independent.
+_CONFIG = (RUNS["group"].astype(str) + "/" + RUNS["model"].astype(str)).to_numpy()
 
 
 def stacked_rates(lo, hi, run_id, years, vals, n_runs):
@@ -71,14 +73,15 @@ def checked_mask(checked):
 def run_weights(valid):
     """Weight per run (0 where not valid). ISMIP6 runs count 1 each; every
     run of another study counts typical_model_n / n_study, so a whole study
-    weighs about as much as one typical ISMIP6 institution -- the same rule
-    the original app's KDEs used. Without ISMIP6 in a panel, everything is 1."""
+    weighs about as much as one typical ISMIP6 model configuration. A
+    configuration is one (group, model) pair -- every model version counts
+    on its own. Without ISMIP6 in a panel, everything is 1."""
     w = np.zeros(len(RUNS))
     for ice_sheet in ("AIS", "GIS"):
         m = valid & (_ICE == ice_sheet)
         ism = m & IS_ISMIP6
         n_ism = ism.sum()
-        typical = max(1.0, n_ism / max(1, len(set(_GROUP[ism])))) if n_ism else None
+        typical = max(1.0, n_ism / max(1, len(set(_CONFIG[ism])))) if n_ism else None
         w[ism] = 1.0
         for pub in set(_PUB[m & ~IS_ISMIP6]):
             sel = m & (_PUB == pub)
@@ -124,8 +127,13 @@ def category_masks(valid, ice_sheet, dim):
     col = RUNS[dim].to_numpy()
     cats = set(col[m])
     # Studies in their display order (ISMIP6, then by date, emulators last);
-    # every other characteristic alphabetically.
-    order = [c for c in SOURCE_LABELS if c in cats] if dim == "publication" else sorted(cats)
+    # reviewed class vocabularies in their natural order (CATEGORY_ORDER);
+    # anything else alphabetically.
+    if dim == "publication":
+        order = [c for c in SOURCE_LABELS if c in cats]
+    else:
+        known = [c for c in CATEGORY_ORDER.get(dim, []) if c in cats]
+        order = known + sorted(c for c in cats if c not in known)
     return [(c, m & (col == c)) for c in order]
 
 

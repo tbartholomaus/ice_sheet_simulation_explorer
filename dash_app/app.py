@@ -33,7 +33,7 @@ import analysis as A  # noqa: E402
 import figures as F  # noqa: E402
 import user_data as U  # noqa: E402
 from data import (  # noqa: E402
-    ANOVA_CHARACTERISTICS, COMPOSITE_DIM, DEFAULT_OBS, EMULATION_SOURCES, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
+    ANOVA_CHARACTERISTICS, BIAS_ELIGIBLE, COMPOSITE_DIM, DEFAULT_OBS, EMULATION_SOURCES, ICE_SHEET_AREA_M2, DIM_LABEL, GROUP_DIMENSIONS, OBS_PRODUCTS, RUNS, SOURCE_COLOR, SOURCE_DEFAULT_CHECKED,
     SOURCE_LABELS,
 )
 
@@ -41,6 +41,16 @@ YEAR_MIN, MIN_YEAR_SPAN = 2000, 5
 YEAR_MAX = max(p["last_year"] for p in OBS_PRODUCTS.values())  # 2023, IMBIE3's last full year
 YEAR_DEFAULT = [2015, 2023]
 LOW_BIAS_FRAC = 0.10
+# Where a reviewer can check how each study's simulations are encoded: one
+# models and one experiments CSV per study, plus a review report per study.
+REPO_URL = "https://github.com/tbartholomaus/ice_sheet_simulation_explorer"
+METADATA_URL = f"{REPO_URL}/tree/main/dash_app/metadata"
+REVIEWS_URL = f"{REPO_URL}/tree/main/docs/metadata_review"
+
+
+def _metadata_link(text="dash_app/metadata/"):
+    return html.A(text, href=METADATA_URL, target="_blank")
+
 _ICE = RUNS["ice_sheet"].to_numpy()
 
 
@@ -149,15 +159,23 @@ sidebar = html.Aside(className="sidebar", children=[
         html.P(["Observations: ", *[x for k, p in OBS_PRODUCTS.items() for x in (
             f"{'; ' if k != next(iter(OBS_PRODUCTS)) else ''}{p['label']}, ",
             html.A(p["citation"], href=p["url"], target="_blank"))], "."]),
-        html.P("Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and other published ensembles. "
-               "Large ensembles are weighted so each study counts about as much as one ISMIP6 institution."),
+        html.P(["Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and ",
+                html.A("other published ensembles", href=f"{REPO_URL}#data", target="_blank"),
+                ". Large ensembles are weighted so each study counts about as much as one ISMIP6 model "
+                "configuration."]),
+        html.P(["How every simulation is encoded (ice sheet model, initialization, sliding law, stress balance, "
+                "resolution, climate model, scenario, ocean forcing and sensitivity) is in ",
+                _metadata_link(), ": for each study, ", html.Code("<Study>_models.csv"), " and ",
+                html.Code("<Study>_experiments.csv"), " give each source's own description beside the encoded "
+                "value, and ", html.A("docs/metadata_review/", href=REVIEWS_URL, target="_blank"),
+                " explains each study's encoding decisions. Corrections are welcome."]),
     ]),
 ])
 
 main = html.Main(className="content", children=[
     html.Header(className="page-header", children=[
         html.Div(className="header-actions", children=[
-            html.Button("✉ Email me the link", id="email-open", className="about-button", n_clicks=0,
+            html.Button("✉ Email me this website", id="email-open", className="about-button", n_clicks=0,
                         title="Send yourself a link to this app"),
             html.Button("ⓘ About this app", id="intro-open", className="about-button", n_clicks=0,
                         title="Show the introduction to this app again"),
@@ -219,9 +237,11 @@ main = html.Main(className="content", children=[
                  html.Label("Group by", htmlFor="bias-groupby", className="group-picker-label"),
                  dcc.Dropdown(id="bias-groupby", clearable=False, searchable=False, value="all",
                               options=GROUP_OPTIONS, className="group-picker-dropdown"),
-                 html.Span("Choose which modeling characteristic to break the bias down by (or click a row "
-                           "in the table). This is the same setting as Group by in the sidebar, so it also "
-                           "regroups the plots above.", className="group-picker-hint"),
+                 html.Span(["Choose which modeling characteristic to break the bias down by (or click a row "
+                            "in the table). This is the same setting as Group by in the sidebar, so it also "
+                            "regroups the plots above. How each simulation is assigned to a category is "
+                            "documented in ", _metadata_link("its study's metadata files"), "."],
+                           className="group-picker-hint"),
              ]),
              html.Div(className="two-col", children=[
                  html.Div([html.H3(id="bias-box-title"), html.Div(id="bias-box-note", className="note"),
@@ -235,9 +255,7 @@ main = html.Main(className="content", children=[
     html.Footer(className="page-footer", children=[
         html.P("This web app was developed by Tim Bartholomaus at the University of Idaho, using claude ai."),
         html.P(["You can explore the source code for the app and an accompanying jupyter notebook at ",
-                html.A("https://github.com/tbartholomaus/ice_sheet_simulation_explorer",
-                       href="https://github.com/tbartholomaus/ice_sheet_simulation_explorer", target="_blank"),
-                "."]),
+                html.A(REPO_URL, href=REPO_URL, target="_blank"), "."]),
     ]),
 ])
 
@@ -364,7 +382,7 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
     ]),
 ])
 
-# "Email me the link": builds a mailto: link that opens the visitor's own email
+# "Email me this website": builds a mailto: link that opens the visitor's own email
 # app with a message to themselves holding this page's URL. Nothing is sent or
 # stored by the server; the callbacks run in the browser (see bottom of file).
 email_modal = html.Div(id="email-modal", className="modal-backdrop", style={"display": "none"}, children=[
@@ -388,7 +406,7 @@ email_modal = html.Div(id="email-modal", className="modal-backdrop", style={"dis
 
 
 def _intro_item(term, text):
-    return html.Li([html.B(term), " — ", text])
+    return html.Li([html.B(term), " — ", *(text if isinstance(text, list) else [text])])  # Dash children must be flat
 
 
 # Overview shown over the app when it opens; "About this app" (top right)
@@ -399,7 +417,7 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
         html.Div("Ice Sheet Simulation Explorer", className="brand-top"),
         html.H2("Learning from ice sheet simulations", id="intro-title"),
         # Shown only on phone-width screens (CSS .mobile-only); "Click here" swaps
-        # this box for the "Email me the link" box.
+        # this box for the "Email me this website" box.
         html.P(className="mobile-only mobile-notice", children=[
             "This app works best on a full-size computer screen. ",
             html.Button("Click here", id="intro-email", className="link-button", n_clicks=0),
@@ -461,9 +479,11 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
                         "include studies of both physics-based ice sheet models and, for comparison, emulations "
                         "and syntheses. You can also add your own ensemble of simulations."),
             _intro_item("Group by",
-                        "split every plot by published study or by a modeling decision (ice sheet model, "
-                        "initialization, sliding law, climate scenario or climate model). Optionally pool similar "
-                        "RCP and SSP scenarios."),
+                        ["split every plot by published study or by a modeling decision (ice sheet model, "
+                         "initialization, sliding law, stress balance, resolution, ocean forcing and sensitivity, "
+                         "climate scenario, climate model or regional climate model). Optionally pool similar "
+                         "RCP and SSP scenarios. How each simulation is encoded is documented, study by study, "
+                         "in the ", _metadata_link("metadata files"), "."]),
             _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
             _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
             _intro_item("Display", "show or hide each group's median."),
@@ -495,6 +515,17 @@ def _site_root():
 @server.route("/robots.txt")
 def _robots():
     return flask.Response(f"User-agent: *\nAllow: /\n\nSitemap: {_site_root()}/sitemap.xml\n", mimetype="text/plain")
+
+
+# Google Search Console ownership check: the file Google issued, kept in
+# dash_app/ exactly as downloaded and served byte-for-byte at the site root.
+GOOGLE_VERIFICATION_FILE = "googlebe363ad6171eca24.html"
+
+
+@server.route(f"/{GOOGLE_VERIFICATION_FILE}")
+def _google_site_verification():
+    return flask.send_from_directory(os.path.dirname(os.path.abspath(__file__)), GOOGLE_VERIFICATION_FILE,
+                                     mimetype="text/html")
 
 
 @server.route("/sitemap.xml")
@@ -597,9 +628,9 @@ def _match_readout(valid, matched, bounds, users, users_matched, units, obs, lo,
         lines.append(html.Div([html.B(f"{name}: "), f"observed {fmt.format(r_obs)} {rate_label}; kept "
                                f"{fmt.format(b_lo)} to {fmt.format(b_hi)}: ", html.B(f"{n_kept} of {n_all}"),
                                " simulations."]))
-    lines.append(html.Div(f"Rates over {lo}–{hi} against {OBS_PRODUCTS[obs]['label']}, within ±{tol_pct}%. "
-                          "Faint outlined boxes: all selected simulations; solid boxes: those that match.",
-                          className="muted"))
+    lines.append(html.Div([html.B("Faint outlined boxes:"), " all selected simulations; ", html.B("solid boxes:"),
+                           f" those that match. Rates over {lo}–{hi} against {OBS_PRODUCTS[obs]['label']}, "
+                           f"within ±{tol_pct}%."], className="muted"))
     return lines
 
 
@@ -660,6 +691,10 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     valid = A.checked_mask(sources or []) & np.isfinite(A.run_rates(lo, hi))
     both = scope == "both"
     mask = valid & (np.isin(_ICE, ["AIS", "GIS"]) if both else _ICE == scope)
+    # Imposed ice-shelf-collapse runs (ISMIP6-AIS exp11/exp12) are left out of
+    # the bias analysis; they're still drawn in every other section.
+    n_collapse = int((mask & ~BIAS_ELIGIBLE).sum())
+    mask &= BIAS_ELIGIBLE
     chars = [COMPOSITE_DIM if collapse and c == "scenario" else c for c in ANOVA_CHARACTERISTICS]
     if both:
         # Only categories present for BOTH ice sheets can be compared; anything
@@ -693,6 +728,8 @@ def _bias(years, sources, groupby, units, scope, obs, collapse, user):
     if np.isfinite(combined["r2"]):
         summary.append(f" Together the modeling characteristics explain {100 * combined['r2']:.0f}%.")
     summary.append(f" Based on {int(mask.sum())} simulations, {lo}–{hi}, against {OBS_PRODUCTS[obs]['label']}.")
+    if n_collapse:
+        summary.append(f" {n_collapse} runs with imposed ice-shelf collapse are left out.")
 
     dim, note = _dim(groupby, bool(collapse)), ""
     if dim is None or dim not in one_way_chars:
@@ -862,7 +899,7 @@ app.clientside_callback(
     Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
 
 
-# ── email me the link (all in the browser) ────────────────────────────────
+# ── email me this website (all in the browser) ────────────────────────────────
 
 app.clientside_callback(
     """

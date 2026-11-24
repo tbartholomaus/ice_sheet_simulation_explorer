@@ -1,0 +1,11 @@
+# Model configurations of Edwards et al. (2021), Projected land ice contributions to twenty-first-century sea level rise,
+# Nature 593, 74-82, https://doi.org/10.1038/s41586-021-03302-y. Gaussian-process emulator (emulandice),
+# not an ice sheet model; Main projections and the risk-averse Antarctic sensitivity test (S11_RISK,
+# experiment ids prefixed RISK_).
+# NOT YET REVIEWED: the *_encoded values are the encodings the app and notebook use today, logged as
+# they are; the *_described and *_source columns will be filled in when this study is reviewed.
+# review_status "not applicable" marks emulators and assessments, which have no ice sheet model physics.
+# The encoding rules are in encoding_rules.csv.
+Ice sheet,Group,Model,review_status,ice_model_described,ice_model_encoded,stress_balance_code,stress_balance_described,stress_balance_source,stress_balance_encoded,resolution_described,resolution_source,res_min_km,res_max_km,resolution_encoded,resolution_note,initialization_code,initial_year,initialization_described,initialization_source,initialization_encoded,initialization_note,sliding_law_described,sliding_law_source,sliding_law_encoded,sliding_exponent,effective_pressure,sliding_law_confidence,sliding_law_note,open_melt_parameterization,standard_melt_parameterization
+AIS,Edwards2021,emulandice,not applicable,,emulandice,,,,Not applicable (statistical emulator),,,,,Not applicable (statistical emulator),,,,,,Not applicable (statistical emulator),,,,Not applicable (statistical emulator),,,,,,
+GIS,Edwards2021,emulandice,not applicable,,emulandice,,,,Not applicable (statistical emulator),,,,,Not applicable (statistical emulator),,,,,,Not applicable (statistical emulator),,,,Not applicable (statistical emulator),,,,,,
