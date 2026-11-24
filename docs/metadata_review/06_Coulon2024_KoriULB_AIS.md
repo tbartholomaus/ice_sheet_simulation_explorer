@@ -134,6 +134,7 @@ What each decision weighed:
   - The 100 members share one model version but start from two initial states, one per atmospheric climatology (MAR or RACMO). The model-level classes are the same for both.
   - **Option A:** one row, as for the DeConto parametric ensembles. Coulon then weighs as one ISMIP6 configuration.
   - **Option B:** two rows ("Kori-ULB (MAR)" and "Kori-ULB (RACMO)"), which doubles Coulon's weight.
+  - **Correction (2026-11-24):** the weight statements above were wrong. In the app (`analysis.run_weights`), a non-ISMIP6 study as a whole weighs as one typical ISMIP6 configuration, however many configuration rows it has. Either option leaves Coulon's weight unchanged; the choice affects only how its runs group by model metadata.
   - Recommendation: **A**.
 - **C4. Fix the 2014 gap.**
   - Restore each member's 2014 change when joining the files. Use the archive's net mass balance for 2014 (`mbcomp_ensemble` component 13), scaled by the member's own ratio of SLC step to net mass balance over 2004–2013 (median 1.03).

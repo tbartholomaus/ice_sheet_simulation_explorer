@@ -18,7 +18,7 @@ Lines starting with `#` are comments (citations and notes); spreadsheet programs
 | `experiment_columns.csv` | For each study, which experiments column fills which app field, and how verbatim values translate to encoded ones (e.g. `Medium*` → `Medium`). |
 | `encoding_rules.csv` | Every allowed encoded value of each field, in display order, with its meaning and the rule that assigns it. |
 
-Studies: `Seroussi2020` (ISMIP6 Antarctica), `Goelzer2020` (ISMIP6 Greenland), `DeConto2016`,
+Studies: `Seroussi2020` (ISMIP6 Antarctica), `Goelzer2020` (ISMIP6 Greenland), `Seroussi2024` (ISMIP6 Antarctica 2300), `Payne2021` (ISMIP6 CMIP6-forced), `DeConto2016`, `Golledge2019`,
 `Aschwanden2019`, `DeConto2021`, `Coulon2024`, `Rahlves2025`, `Goelzer2025`, `Edwards2021`, `IPCCAR6`.
 
 ## Reading a models file
@@ -68,8 +68,12 @@ consulted, every discrepancy found, and the reasoning and date of each encoding 
 [`04_DeConto2016_PSU3D_AIS.md`](../../docs/metadata_review/04_DeConto2016_PSU3D_AIS.md),
 [`05_DeConto2021_PSU3D_AIS.md`](../../docs/metadata_review/05_DeConto2021_PSU3D_AIS.md),
 [`06_Coulon2024_KoriULB_AIS.md`](../../docs/metadata_review/06_Coulon2024_KoriULB_AIS.md),
-[`07_Rahlves2025_CISM_GIS.md`](../../docs/metadata_review/07_Rahlves2025_CISM_GIS.md) and
-[`08_Aschwanden2019_PISM_GIS.md`](../../docs/metadata_review/08_Aschwanden2019_PISM_GIS.md).
+[`07_Rahlves2025_CISM_GIS.md`](../../docs/metadata_review/07_Rahlves2025_CISM_GIS.md),
+[`08_Aschwanden2019_PISM_GIS.md`](../../docs/metadata_review/08_Aschwanden2019_PISM_GIS.md),
+[`09_Seroussi2024_ISMIP6_AIS2300.md`](../../docs/metadata_review/09_Seroussi2024_ISMIP6_AIS2300.md),
+[`10_Payne2021_ISMIP6_CMIP6.md`](../../docs/metadata_review/10_Payne2021_ISMIP6_CMIP6.md) and
+[`11_Golledge2019_PISM.md`](../../docs/metadata_review/11_Golledge2019_PISM.md).
+Seroussi 2024, Payne 2021 and Golledge 2019 were added and reviewed after the two reviews described above, in the same detailed, skeptical way.
 
 ## Checks
 

@@ -1,0 +1,30 @@
+# Experiments of Payne et al. (2021), https://doi.org/10.1029/2020GL091741. Numbering (Sect. 3): "(a) The CNRM-CM6-1
+# model run with scenario SSP585 ..., (b) CNRM-CM6-1 with SSP126 ..., and SSP585 with (c) UKESM1-0-LL, (d) CESM2,
+# (e) CNRM-ESM2-1". Archive experiments: AIS expB1-5 open framework, expB6-10 standard (Table 1; VUB, standard 1-3
+# only, has exactly expB6-8); GIS expb01-05 standard, expb06-10 open (Table 2). Ocean sensitivity: Payne doesn't vary
+# it; the CMIP6 runs use ISMIP6's medium (median) settings. Regional climate model: AIS forcing uses ESM output
+# directly; for GIS, "SMB was derived by forcing the MAR regional climate model of Greenland (Fettweis et al., 2013)
+# with CMIP6-derived boundary conditions", and ISMIP6's MAR forcing was version 3.9 (Goelzer et al. 2025: "Forcing
+# with MAR version 3.9 was produced for ISMIP6"). No ice-shelf collapse. Reviewed 2026-11-24
+# (docs/metadata_review/10_Payne2021_ISMIP6_CMIP6.md).
+Ice sheet,Experiment,ESM,Scenario,Framework,Ocean sensitivity,Regional climate model,Ice shelf fracture
+AIS,expB1,CNRM-CM6-1,SSP585,Open,Medium,None (AOGCM output used directly),No
+AIS,expB2,CNRM-CM6-1,SSP126,Open,Medium,None (AOGCM output used directly),No
+AIS,expB3,UKESM1-0-LL,SSP585,Open,Medium,None (AOGCM output used directly),No
+AIS,expB4,CESM2,SSP585,Open,Medium,None (AOGCM output used directly),No
+AIS,expB5,CNRM-ESM2-1,SSP585,Open,Medium,None (AOGCM output used directly),No
+AIS,expB6,CNRM-CM6-1,SSP585,Standard,Medium,None (AOGCM output used directly),No
+AIS,expB7,CNRM-CM6-1,SSP126,Standard,Medium,None (AOGCM output used directly),No
+AIS,expB8,UKESM1-0-LL,SSP585,Standard,Medium,None (AOGCM output used directly),No
+AIS,expB9,CESM2,SSP585,Standard,Medium,None (AOGCM output used directly),No
+AIS,expB10,CNRM-ESM2-1,SSP585,Standard,Medium,None (AOGCM output used directly),No
+GIS,expb01,CNRM-CM6-1,SSP585,Standard,Medium,MARv3.9,No
+GIS,expb02,CNRM-CM6-1,SSP126,Standard,Medium,MARv3.9,No
+GIS,expb03,UKESM1-0-LL,SSP585,Standard,Medium,MARv3.9,No
+GIS,expb04,CESM2,SSP585,Standard,Medium,MARv3.9,No
+GIS,expb05,CNRM-ESM2-1,SSP585,Standard,Medium,MARv3.9,No
+GIS,expb06,CNRM-CM6-1,SSP585,Open,Medium,MARv3.9,No
+GIS,expb07,CNRM-CM6-1,SSP126,Open,Medium,MARv3.9,No
+GIS,expb08,UKESM1-0-LL,SSP585,Open,Medium,MARv3.9,No
+GIS,expb09,CESM2,SSP585,Open,Medium,MARv3.9,No
+GIS,expb10,CNRM-ESM2-1,SSP585,Open,Medium,MARv3.9,No

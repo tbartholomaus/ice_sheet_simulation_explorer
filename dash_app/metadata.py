@@ -35,8 +35,8 @@ UNREVIEWED_SUFFIX = " (unreviewed)"
 # The studies, in the order their files are read, with the ice sheet of
 # single-ice-sheet studies (the others have an "Ice sheet" column).
 STUDIES = {
-    "Seroussi2020": "AIS", "Goelzer2020": "GIS", "DeConto2016": "AIS", "Aschwanden2019": "GIS",
-    "DeConto2021": "AIS", "Coulon2024": "AIS", "Rahlves2025": "GIS", "Goelzer2025": "GIS",
+    "Seroussi2020": "AIS", "Goelzer2020": "GIS", "Seroussi2024": "AIS", "DeConto2016": "AIS", "Golledge2019": None, "Aschwanden2019": "GIS",
+    "DeConto2021": "AIS", "Payne2021": None, "Coulon2024": "AIS", "Rahlves2025": "GIS", "Goelzer2025": "GIS",
     "Edwards2021": None, "IPCCAR6": None,
 }
 
@@ -92,10 +92,13 @@ def _load_models():
                 _check_encoded(f, row[f], row["review_status"], where)
             if row["review_status"] == "reviewed" and row["resolution"] != resolution_bin(row["res_min_km"]):
                 raise ValueError(f"{where}: resolution_encoded doesn't match res_min_km")
-            # Optional per-configuration ocean forcing (e.g. ISMIP6-GIS runs made in
-            # the open framework); it overrides the experiment's value in run_meta.
-            if row.get("ocean_forcing_encoded") and row["ocean_forcing_encoded"] not in VOCAB["ocean_forcing"]:
-                raise ValueError(f"{where}: ocean_forcing_encoded = {row['ocean_forcing_encoded']!r} isn't in encoding_rules.csv")
+            # Optional per-configuration ocean forcing and sensitivity (e.g. ISMIP6-GIS
+            # runs made in the open framework; ISMIP6 Antarctica 2300, where each group
+            # chose its melt scheme and calibration); they override the experiment's
+            # values in run_meta.
+            for f in ("ocean_forcing", "ocean_sensitivity"):
+                if row.get(f"{f}_encoded") and row[f"{f}_encoded"] not in VOCAB[f]:
+                    raise ValueError(f"{where}: {f}_encoded = {row[f + '_encoded']!r} isn't in encoding_rules.csv")
             key = (row["ice_sheet"], row["Group"], row["Model"])
             if key in out:
                 raise ValueError(f"{where}: duplicate model key {key}")
@@ -173,8 +176,9 @@ def run_meta(ice_sheet, group, model, exp):
     fill = m["stress_balance"] if m["review_status"] == "not applicable" else NOT_REVIEWED
     e = {"regional_climate_model": fill, "ocean_forcing": fill, "ocean_sensitivity": fill,
          "ice_shelf_fracture": False, **e}
-    if m.get("ocean_forcing_encoded"):
-        e["ocean_forcing"] = m["ocean_forcing_encoded"]
+    for f in ("ocean_forcing", "ocean_sensitivity"):
+        if m.get(f"{f}_encoded"):
+            e[f] = m[f"{f}_encoded"]
     return m, e
 
 
