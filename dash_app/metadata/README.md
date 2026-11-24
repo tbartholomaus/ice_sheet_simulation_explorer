@@ -43,6 +43,21 @@ have no ice sheet model physics). For studies not yet reviewed, the `*_encoded` 
 use today, marked `(unreviewed)` or `Not yet reviewed` so they never pool with reviewed values; their
 `*_described` columns are filled in when the study is reviewed.
 
+## How the metadata was reviewed
+
+The metadata of each ice sheet model study has been reviewed twice:
+
+1. **A first, more cursory review**, carried out with an earlier version of a Claude model.
+2. **A second, detailed review in late November 2026**, carried out with Claude Opus 5.5. For this review the AI was
+   prompted to be very skeptical and to dig deep into the supporting literature, to increase confidence in its
+   encoding decisions. It was also asked to present to Tim Bartholomaus every place where there was any question
+   about how a simulation's metadata should be encoded. Each of those questions was decided by Tim, and the
+   decision is recorded in the study's review report.
+
+The review reports below are the result of this November 2026 review. The Edwards et al. (2021) emulator and
+the IPCC AR6 assessment have no ice sheet model physics to classify, so their metadata is marked "Not
+applicable".
+
 ## Review reports
 
 Each reviewed study has a report in [`docs/metadata_review/`](../../docs/metadata_review/) giving the sources
