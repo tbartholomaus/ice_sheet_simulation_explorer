@@ -127,6 +127,7 @@ The user chose the recommended option of each decision.
   - Ocean forcing is **Open**.
   - Ocean sensitivity is a new value, **Study-specific (see experiment)**, added to `encoding_rules.csv` after PIGL.
   - The hover shows each run's OCFAC, CREVLIQ, VCLIF, Pliocene and LIG values.
+- **Later change (user request, 2026-11-23):** the Protocol line, which named the 29-member calibration and the +3 °C ocean correction, is kept in `DeConto2016_experiments.csv` but no longer shown in the hover.
 - **DP4 → A:** climate_model is **CCSM4 (ocean); GENESIS v3 (atmosphere)**, and regional_climate_model is **RegCM3**.
 
 **Data note:** member 1 has a LIG value of 3.53 m in Data Set S1, just under the 3.6 m lower target. The member is kept as Kopp et al. 2017 give it; a rounded comparison may explain it.

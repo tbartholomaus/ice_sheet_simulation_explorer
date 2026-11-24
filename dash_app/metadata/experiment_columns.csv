@@ -30,7 +30,7 @@ DeConto2016,CREVLIQ,(hover),,
 DeConto2016,VCLIF (km/yr),(hover),,
 DeConto2016,Pliocene SL (m),(file),,The ensemble scoring values; kept out of the hover to keep it short
 DeConto2016,LIG SL (m),(file),,
-DeConto2016,Protocol,(hover),,
+DeConto2016,Protocol,(file),,"Kept in the file, not shown in the hover (user request, 2026-11-23)"
 Aschwanden2019,Experiment,(key),,
 Aschwanden2019,GCM,climate_model,,CMIP5 identifiers; code order confirmed by pism-gris lhs_ensemble.py
 Aschwanden2019,Scenario,scenario,,
@@ -58,7 +58,7 @@ DeConto2021,Ocean forcing,ocean_forcing,Quadratic sub-ice melt (DC21 Methods) dr
 DeConto2021,Ocean sensitivity,ocean_sensitivity,Single uniform melt coefficient calibrated by the group on a 625-member deglacial WAIS ensemble=Medium,"The group's own single calibration, encoded Medium as for ISMIP6 open-framework runs (decision DC2, 2026-11-23)"
 DeConto2021,CALVLIQ,(hover),,
 DeConto2021,VCLIFF (km/yr),(hover),,
-DeConto2021,Protocol,(hover),,"States the partial calibration to IMBIE (decision DC3, 2026-11-23)"
+DeConto2021,Protocol,(file),,"States the partial calibration to IMBIE (decision DC3); kept in the file, not shown in the hover (user request, 2026-11-23)"
 Coulon2024,Experiment,(key),,
 Coulon2024,GCM,climate_model,,CMIP6 identifiers; the member's 2015+ forcing
 Coulon2024,Scenario,scenario,,

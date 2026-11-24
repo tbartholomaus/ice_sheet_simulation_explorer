@@ -125,7 +125,7 @@
 The user chose **Option A** for each decision.
 - **DC1:** climate_model is **CCSM4 (ocean); RegCM3 CO2 snapshots (atmosphere)**. The loader (`utilities/external_sources.py`) writes the same label, and the bundled `external_sources_deconto2021_ais.csv.gz` was regenerated with it; its mass values are unchanged.
 - **DC2:** ocean_sensitivity is **Medium**. `encoding_rules.csv` now names DC21 under Medium.
-- **DC3:** DC21 stays in the bias analysis. Every run's hover states that members were selected partly by matching IMBIE 1992–2017.
+- **DC3:** DC21 stays in the bias analysis. The experiments file's Protocol column states that members were selected partly by matching IMBIE 1992–2017. (At first this was also shown in every run's hover; at the user's request, 2026-11-23, the Protocol line was removed from the hover and kept in the file only.)
 
 The hover also gives each run's CALVLIQ, VCLIFF (renamed from "CREVLIQ, CLIFVMAX") and emissions pathway. The metadata is in `dash_app/metadata/DeConto2021_models.csv` and `DeConto2021_experiments.csv`.
 

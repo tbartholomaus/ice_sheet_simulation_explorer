@@ -381,7 +381,10 @@ def test_deconto2021_model_and_forcing():
     assert set(DC21["regional_climate_model"]) == {"RegCM3"}
     assert set(DC21["ocean_forcing"]) == {"Open"} and set(DC21["ocean_sensitivity"]) == {"Medium"}
     assert not DC21["ice_shelf_fracture"].any() and BIAS_ELIGIBLE[DC21.index].all()  # decision DC3: kept
-    assert all("matching IMBIE" in h.replace("<br>   ", " ") for h in DC21["hover"])
+    # The protocol (incl. the partial IMBIE calibration) is documented in the file, not the hover
+    e = pd.read_csv(os.path.join(M.META_DIR, "DeConto2021_experiments.csv"), comment="#", dtype=str)
+    assert e["Protocol"].str.contains("matching IMBIE").all()
+    assert not any("Protocol:" in h for h in pd.concat([DC21["hover"], RUNS.loc[RUNS["group"] == "DeConto2016", "hover"]]))
 
 
 def test_hover_lines_stay_narrow():
