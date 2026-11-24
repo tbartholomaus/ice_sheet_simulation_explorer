@@ -35,8 +35,8 @@ UNREVIEWED_SUFFIX = " (unreviewed)"
 # The studies, in the order their files are read, with the ice sheet of
 # single-ice-sheet studies (the others have an "Ice sheet" column).
 STUDIES = {
-    "Seroussi2020": "AIS", "Goelzer2020": "GIS", "Seroussi2024": "AIS", "DeConto2016": "AIS", "Aschwanden2019": "GIS",
-    "DeConto2021": "AIS", "Coulon2024": "AIS", "Rahlves2025": "GIS", "Goelzer2025": "GIS",
+    "Seroussi2020": "AIS", "Goelzer2020": "GIS", "Seroussi2024": "AIS", "DeConto2016": "AIS", "Golledge2019": None, "Aschwanden2019": "GIS",
+    "DeConto2021": "AIS", "Payne2021": None, "Coulon2024": "AIS", "Rahlves2025": "GIS", "Goelzer2025": "GIS",
     "Edwards2021": None, "IPCCAR6": None,
 }
 

@@ -1,0 +1,16 @@
+# Experiments of Golledge et al. (2019), https://doi.org/10.1038/s41586-019-0889-9: the 8 Figure 2 series on OSF
+# (sl_cont_<AIS|GIS>-<45|85>-<2100|MWA-cdo>-bc.txt). Forcing: "the CMIP5 multi-model mean climate and ocean fields" for
+# RCP 4.5 and 8.5, 1860-2100; "MWA" runs add "Sub-surface ocean temperature, surface air temperature, and precipitation
+# anomalies arising as a consequence of this meltwater addition" from LOVECLIM. No regional climate model (CMIP5 fields
+# on a RACMO2.3 climatology). Ocean: the group's own melt factor, inverted once from target melt rates (Open; a single
+# group calibration, Medium). The published series are control-subtracted; the app restores the control (see
+# utilities/external_sources.py). Reviewed 2026-11-24 (docs/metadata_review/11_Golledge2019_PISM.md).
+Ice sheet,Experiment,Climate forcing,Scenario,Meltwater feedback,Regional climate model,Ocean forcing,Ocean sensitivity,Ice shelf fracture
+AIS,RCP45,CMIP5 multi-model mean,RCP4.5,No,None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+AIS,RCP45_MWA,CMIP5 multi-model mean,RCP4.5,Yes (LOVECLIM meltwater anomalies),None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+AIS,RCP85,CMIP5 multi-model mean,RCP8.5,No,None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+AIS,RCP85_MWA,CMIP5 multi-model mean,RCP8.5,Yes (LOVECLIM meltwater anomalies),None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+GIS,RCP45,CMIP5 multi-model mean,RCP4.5,No,None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+GIS,RCP45_MWA,CMIP5 multi-model mean,RCP4.5,Yes (LOVECLIM meltwater anomalies),None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+GIS,RCP85,CMIP5 multi-model mean,RCP8.5,No,None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No
+GIS,RCP85_MWA,CMIP5 multi-model mean,RCP8.5,Yes (LOVECLIM meltwater anomalies),None (AOGCM output used directly),Own melt-factor parameterization,Single inverted melt factor,No

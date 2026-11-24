@@ -1186,6 +1186,212 @@ def load_deconto2021_ais(keep_through_year=2100):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Golledge, Keller, Gomez, Naughten, Bernales, Trusel & Edwards (2019),
+# "Global environmental consequences of twenty-first-century ice-sheet melt",
+# Nature 566, 65-72, https://doi.org/10.1038/s41586-019-0889-9 (PISM 0.7.3,
+# Antarctica at 5 km and Greenland at 2.5 km, forced 1860-2100 by the CMIP5
+# multi-model mean, with and without LOVECLIM meltwater feedback).
+#
+# Source: the author's Open Science Framework project https://osf.io/3edxf/
+# ("Ice sheet model outputs as described in Golledge et al., 2019"; no
+# licence stated -- see docs/metadata_review/11_Golledge2019_PISM.md):
+# - G19_Fig2-data.zip: sl_cont_<AIS|GIS>-<45|85>-<2100|MWA-cdo>-bc.txt, the
+#   Figure 2 series, sea-level contribution in m every 5 years 2000-2100,
+#   "bias-corrected using a control run" (control subtracted). "2100" =
+#   standard forcing, "MWA" = with meltwater feedback (RCP8.5 MWA reaches
+#   0.140 + 0.112 = 0.25 m in 2100, the paper's "up to 25 cm").
+# - AIS-CTRL.nc, GIS-CTRL.nc: the control runs, 31 snapshots every 5 years
+#   1950-2100 of thk, topg, mask.
+# Per user decision (2026-11-24) the control is added back, as for the app's
+# ISMIP6 runs: the control's ice mass above flotation is computed from each
+# snapshot (grounded cells, H - max(0,-topg) x 1028/910 > 0, x dx dy x 910
+# kg/m3, PISM 0.7's default densities) and its change since 2000 added to
+# each series (m SLE x -362.5 Gt/mm). Totals check: 56.8 m SLE (AIS) and
+# 7.0 m (GIS) in 2000. The controls drift: AIS gains ~9.6 mm SLE per decade,
+# GIS loses ~1.4 mm per decade, so restoring them changes 2015-2023 rates a
+# lot. Then linearly interpolated from 5-yearly to annual, as for DP16.
+# ═════════════════════════════════════════════════════════════════════════
+
+GOLLEDGE2019_FILES = {"fig2": "https://osf.io/download/g2df3/", "AIS": "https://osf.io/download/kgscv/",
+                      "GIS": "https://osf.io/download/2e5y8/"}
+GOLLEDGE2019_RHO_ICE, GOLLEDGE2019_RHO_SW = 910.0, 1028.0
+
+
+def _golledge2019_control_vaf(path):
+    """(years, ice mass above flotation in Gt) of one control file's snapshots."""
+    ds = xr.open_dataset(path, decode_times=False)
+    years = np.round(ds.time.values / (365 * 86400)).astype(int)  # seconds since 1-1-1, 365_day
+    area = float(ds.x[1] - ds.x[0]) * float(ds.y[1] - ds.y[0])
+    out = []
+    for k in range(len(years)):
+        H, b, m = ds.thk[k].values.astype(float), ds.topg[k].values.astype(float), ds.mask[k].values
+        haf = H - np.maximum(0.0, -b) * GOLLEDGE2019_RHO_SW / GOLLEDGE2019_RHO_ICE
+        out.append(np.sum(np.where((m == 2) & (haf > 0), haf, 0.0)) * area * GOLLEDGE2019_RHO_ICE / 1e12)
+    ds.close()
+    return years, np.array(out)
+
+
+def load_golledge2019(keep_through_year=2100):
+    """Golledge et al. (2019)'s 8 runs (AIS/GIS x RCP4.5/8.5 x with/without
+    meltwater feedback) with the control added back (see above), annual
+    2000-2100, zeroed at 2000: Year, Cumulative ice sheet mass change (Gt),
+    Group "Golledge2019", Model "PISM", Exp, IS."""
+    import zipfile, io
+    fig2 = _download(GOLLEDGE2019_FILES["fig2"], "golledge2019_G19_Fig2-data.zip", min_expected_bytes=1000)
+    ctrl = {ice: _golledge2019_control_vaf(_download(GOLLEDGE2019_FILES[ice], f"golledge2019_{ice}-CTRL.nc",
+                                                     min_expected_bytes=100_000_000)) for ice in ("AIS", "GIS")}
+    rows = []
+    with zipfile.ZipFile(fig2) as z:
+        for n in sorted(z.namelist()):
+            m = re.match(r"sl_cont_(AIS|GIS)-(45|85)-(2100|MWA-cdo)-bc\.txt$", os.path.basename(n))
+            if not m:
+                continue
+            ice, rcp, kind = m.groups()
+            arr = np.loadtxt(io.StringIO(z.read(n).decode()))
+            yrs, slc = arr[:, 0].astype(int), arr[:, 1]  # m SLE, + = loss, control subtracted
+            cy, cm = ctrl[ice]
+            dctrl = np.array([cm[list(cy).index(y)] for y in yrs]) - cm[list(cy).index(2000)]
+            mass = -slc * 1000 * GT_PER_M_SLE + dctrl  # Gt, control restored
+            years = np.arange(yrs.min(), min(yrs.max(), keep_through_year) + 1)
+            exp = f"RCP{rcp}" + ("_MWA" if kind.startswith("MWA") else "")
+            rows.append(pd.DataFrame({
+                "Year": years, "Cumulative ice sheet mass change (Gt)": np.interp(years, yrs, mass),
+                "Group": "Golledge2019", "Model": "PISM", "Exp": exp, "IS": ice,
+            }))
+    return pd.concat(rows, ignore_index=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Payne, Nowicki, Abe-Ouchi et al. (2021), "Future sea level change under
+# Coupled Model Intercomparison Project phase 5 and phase 6 scenarios from
+# the Greenland and Antarctic ice sheets", GRL 48, e2020GL091741,
+# https://doi.org/10.1029/2020GL091741: ISMIP6 runs forced by CMIP6 ESMs,
+# by the same model configurations as Seroussi et al. (2020) and Goelzer et
+# al. (2020).
+#
+# Source: https://doi.org/10.5281/zenodo.4498331 (CC BY 4.0),
+# CMIP5_CMIP6_Scalars_Paper.zip:
+#   AIS/Ice/computed_limnsw_minus_ctrl_proj_AIS_<group>_<model>_expB<n>.nc  (Gt)
+#   GrIS/Ice/scalars_mm_cr_GIS_<group>_<model>_expb<nn>.nc (ivaf x rhoi; "cr" =
+#   control removed, per the ISMIP6-Greenland archive README)
+# Both are published with each configuration's control run subtracted. The
+# app's other ISMIP6 runs are raw, so (user decision, 2026-11-24) the control
+# is added back from the ISMIP6 2100 archives the app already uses, and each
+# run is joined to that configuration's historical run, exactly as
+# data_loader.ismip6_ais_to_csv / ismip6_gis_to_csv build Seroussi 2020 and
+# Goelzer 2020 (rebased to 0 at 2015):
+#   AIS: raw = Payne + ctrl_proj_<std|open> ivaf x rhoi (ComputedScalarsPaper,
+#        zenodo 3940766); in that archive raw - minus_ctrl == ctrl exactly.
+#   GIS: raw = Payne cr + (ctrl_proj - ctrl_proj[0]) (v7_CMIP5_pub, zenodo 3939037).
+# Experiments (Payne Sect. 3): 1 CNRM-CM6-1 SSP5-8.5, 2 CNRM-CM6-1 SSP1-2.6,
+# 3 UKESM1-0-LL, 4 CESM2, 5 CNRM-ESM2-1 (SSP5-8.5). AIS expB1-5 are the open
+# framework and expB6-10 standard (Table 1; VUB, standard 1-3 only, has
+# exactly B6-B8); GIS expb01-05 standard and expb06-10 open (Table 2).
+# Configuration names: the archive keeps four pre-publication names, mapped
+# to the published ones by the ISMIP6-Greenland analysis code's own
+# imod -> papmod table (github.com/ismip/ismip6-gris-analysis, define_set.m)
+# and, for Antarctica, Seroussi 2020's single SICOPOLIS configuration.
+# ═════════════════════════════════════════════════════════════════════════
+
+PAYNE2021_URL = "https://zenodo.org/api/records/4498331/files/CMIP5_CMIP6_Scalars_Paper.zip/content"
+PAYNE2021_EXPS = {1: ("CNRM-CM6-1", "SSP5-8.5"), 2: ("CNRM-CM6-1", "SSP1-2.6"), 3: ("UKESM1-0-LL", "SSP5-8.5"),
+                  4: ("CESM2", "SSP5-8.5"), 5: ("CNRM-ESM2-1", "SSP5-8.5")}
+PAYNE2021_AIS_CONFIGS = {  # archive <group>_<model> -> (group, model) in Seroussi 2020's archive
+    "AWI_PISM1": ("AWI", "PISM1"), "ILTS_PIK_SICOPOLIS1": ("ILTS_PIK", "SICOPOLIS"), "JPL1_ISSM": ("JPL1", "ISSM"),
+    "LSCE_GRISLI": ("LSCE", "GRISLI"), "NCAR_CISM": ("NCAR", "CISM"), "UCIJPL_ISSM": ("UCIJPL", "ISSM"),
+    "VUB_AISMPALEO": ("VUB", "AISMPALEO"),
+}
+PAYNE2021_GIS_CONFIGS = {  # archive <group>_<model> -> (group, model) in Goelzer 2020's v7_CMIP5_pub
+    "AWI_ISSM1": ("AWI", "ISSM1"), "AWI_ISSM2": ("AWI", "ISSM2"), "AWI_ISSM3": ("AWI", "ISSM3"),
+    "BGC_BISICLES": ("BGC", "BISICLES"), "GSFC_ISSM": ("GSFC", "ISSM"),
+    "ILTS_PIK_SICOPOLIS2": ("ILTS_PIK", "SICOPOLIS1"), "ILTS_PIK_SICOPOLIS3": ("ILTS_PIK", "SICOPOLIS2"),
+    "IMAU_IMAUICE2": ("IMAU", "IMAUICE2"), "JPL_ISSM": ("JPL", "ISSM"), "JPL_ISSMPALEO": ("JPL", "ISSMPALEO"),
+    "LSCE_GRISLI2": ("LSCE", "GRISLI"), "NCAR_CISM": ("NCAR", "CISM"), "UAF_PISM1": ("UAF", "PISM1"),
+    "UAF_PISM2": ("UAF", "PISM2"), "UCIJPL_ISSM1": ("UCIJPL", "ISSM1"), "VUB_GISMHOMv1": ("VUB", "GISM"),
+}
+
+
+def _payne2021_nc(path, var):
+    """(values, rhoi or None, time) from one netCDF file, read without
+    fill-value masking (some of these files declare conflicting fill values)."""
+    ds = xr.open_dataset(path, decode_times=False, mask_and_scale=False)
+    v = ds[var].values.astype(float)
+    rhoi = float(ds["rhoi"].values.ravel()[0]) if "rhoi" in ds else None
+    t = ds["time"].values.astype(float)
+    ds.close()
+    return v, rhoi, t
+
+
+def load_payne2021(ice_sheet, ais_archive=None, gis_archive=None):
+    """Payne et al. (2021)'s ISMIP6 CMIP6-forced runs for one ice sheet
+    ("AIS" or "GIS"), raw (control added back) and joined to each
+    configuration's historical run, rebased to 0 at 2015; shaped like the
+    other loaders (Year, Cumulative ice sheet mass change (Gt), Group
+    "Payne2021-<lab>", Model = published configuration name, Exp, IS).
+    ais_archive / gis_archive: the unpacked ISMIP6 2100 archives
+    (ComputedScalarsPaper, v7_CMIP5_pub) at the repository root by default."""
+    import zipfile, tempfile, glob
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ais_archive = ais_archive or os.path.join(root, "ComputedScalarsPaper")
+    gis_archive = gis_archive or os.path.join(root, "v7_CMIP5_pub")
+    path = _download(PAYNE2021_URL, "payne2021_CMIP5_CMIP6_Scalars_Paper.zip", min_expected_bytes=1_000_000)
+    rows = []
+    with zipfile.ZipFile(path) as z, tempfile.TemporaryDirectory() as tmp:
+        sub = "AIS/Ice/" if ice_sheet == "AIS" else "GrIS/Ice/"
+        names = [n for n in z.namelist() if sub in n and n.endswith(".nc") and "__MACOSX" not in n]
+        for n in sorted(names):
+            z.extract(n, tmp)
+            f = os.path.join(tmp, n)
+            if ice_sheet == "AIS":
+                m = re.match(r".*computed_limnsw_minus_ctrl_proj_AIS_(.+)_expB(\d+)\.nc$", n)
+                key, num = m.group(1), int(m.group(2))
+                group, model = PAYNE2021_AIS_CONFIGS[key]
+                fw = "open" if num <= 5 else "std"
+                cdir = os.path.join(ais_archive, group, model)
+                ctrl, rhoi, tc = _payne2021_nc(os.path.join(cdir, f"ctrl_proj_{fw}", f"computed_ivaf_AIS_{group}_{model}_ctrl_proj_{fw}.nc"), "ivaf")
+                payne, _, t_proj = _payne2021_nc(f, "limnsw_total_antarctica")  # Gt, minus ctrl
+                assert np.array_equal(t_proj, tc), (n, t_proj[[0, -1]], tc[[0, -1]])  # same years, state at start of year
+                proj = payne + ctrl * rhoi / 1e12  # raw mass above flotation, Gt
+                hp = os.path.join(cdir, f"hist_{fw}", f"computed_ivaf_AIS_{group}_{model}_hist_{fw}.nc")
+                if os.path.exists(hp):
+                    hv, _, th = _payne2021_nc(hp, "ivaf")
+                    t, mass = np.r_[th, t_proj], np.r_[hv * rhoi / 1e12, proj]
+                else:
+                    t, mass = t_proj, proj
+                at0 = np.flatnonzero(t == 2015)
+                mass = mass - (mass[at0[0]] if at0.size else mass[0])
+                exp = f"expB{num}"
+            else:
+                m = re.match(r".*scalars_mm_cr_GIS_(.+)_expb(\d+)\.nc$", n)
+                key, num = m.group(1), int(m.group(2))
+                group, model = PAYNE2021_GIS_CONFIGS[key]
+                fw = "standard" if num <= 5 else "open"
+                ivaf, rhoi, tp = _payne2021_nc(f, "ivaf")
+                cr = ivaf * rhoi / 1e12
+                cf = glob.glob(os.path.join(gis_archive, group, model, "ctrl_proj_05", f"scalars_mm_GIS_{group}_{model}_ctrl_proj.nc"))[0]
+                civ, crho, tcf = _payne2021_nc(cf, "ivaf")
+                # Same annual steps and start; day counts can differ by calendar (UAF_PISM1)
+                assert len(tp) == len(tcf) and tp[0] == tcf[0], (n, tp[[0, -1]], tcf[[0, -1]])
+                ctrl = civ * crho / 1e12
+                proj = cr + (ctrl - ctrl[0])  # as data_loader.ismip6_gis_to_csv with remove_ctrl=False
+                hf = glob.glob(os.path.join(gis_archive, group, model, "historical_05", f"scalars_mm_GIS_{group}_{model}_historical.nc"))[0]
+                hiv, hrho, _ = _payne2021_nc(hf, "ivaf")
+                hist = hiv * hrho / 1e12
+                hist = hist[:-1] - hist[-1]  # its last entry is the projection's first
+                t = np.r_[np.arange(2014 - len(hist) + 1, 2015), np.arange(2015, 2015 + len(proj))].astype(float)
+                mass = np.r_[hist, proj]
+                mass = mass - np.interp(2015, t, mass)
+                exp = f"expb{num:02d}"
+            gcm, scen = PAYNE2021_EXPS[(num - 1) % 5 + 1]
+            rows.append(pd.DataFrame({
+                "Year": t, "Cumulative ice sheet mass change (Gt)": mass, "Group": f"Payne2021-{group}",
+                "Model": model, "Exp": exp, "IS": ice_sheet, "climate_model": gcm, "scenario": scen,
+                "protocol": f"{'open' if fw == 'open' else 'standard'} framework",
+            }))
+    return pd.concat(rows, ignore_index=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # Seroussi, Pelle, Lipscomb et al. (2024), "Evolution of the Antarctic Ice
 # Sheet over the next three centuries from an ISMIP6 model ensemble",
 # Earth's Future 12, e2024EF004561, https://doi.org/10.1029/2024EF004561

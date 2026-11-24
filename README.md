@@ -33,7 +33,7 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
   description beside the encoded value (see `dash_app/metadata/README.md`). Every ice sheet model study has
   been reviewed against its paper and the wider literature (Seroussi et al. 2020 and 2024; Goelzer et al. 2020
-  and 2025; DeConto and Pollard 2016; DeConto et al. 2021; Coulon et al. 2024; Rahlves et al. 2025; Aschwanden et
+  and 2025; Payne et al. 2021; Golledge et al. 2019; DeConto and Pollard 2016; DeConto et al. 2021; Coulon et al. 2024; Rahlves et al. 2025; Aschwanden et
   al. 2019). The Edwards et al. (2021) emulator and the IPCC AR6 assessment have no ice sheet model physics to
   classify, so they are marked "Not applicable".
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -125,8 +125,10 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 | Seroussi 2020 (ISMIP6 AIS) | Seroussi et al. (2020), *The Cryosphere* 14, 3033–3070, https://doi.org/10.5194/tc-14-3033-2020 |
 | Goelzer 2020 (ISMIP6 GIS) | Goelzer et al. (2020), *The Cryosphere* 14, 3071–3096, https://doi.org/10.5194/tc-14-3071-2020 |
 | DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). The 29-member ensemble with DP16's ocean-temperature correction (the "(BC)" rows: +3 °C in the Amundsen and Bellingshausen seas), i.e. DP16 as published; decadal values interpolated to annual |
+| Golledge 2019 (AIS / GIS) | Golledge et al. (2019), *Nature* 566, 65–72, https://doi.org/10.1038/s41586-019-0889-9; the author's OSF project https://osf.io/3edxf/ (no licence stated): the 8 Figure 2 series (RCP4.5/8.5, with and without meltwater feedback), published control-subtracted, with the control's mass above flotation (from the OSF control runs) added back; 5-yearly values interpolated to annual |
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
 | DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5): the 109-member calibrated ensemble, whose members were selected partly by matching IMBIE's 1992–2017 Antarctic mass change |
+| Payne 2021 (ISMIP6 AIS / GIS, CMIP6) | Payne et al. (2021), *GRL* 48, e2020GL091741, https://doi.org/10.1029/2020GL091741; ISMIP6 runs forced by CMIP6 ESMs from https://doi.org/10.5281/zenodo.4498331 (CC BY 4.0), published control-subtracted; each configuration's control run (from the Seroussi 2020 and Goelzer 2020 archives) is added back and its historical run joined, as for the other ISMIP6 runs; weighted like ISMIP6 |
 | Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024; runs from the Zenodo archive (https://doi.org/10.5281/zenodo.8398771): all 100 members, unweighted, 1950–2014 hindcast joined to the SSP5-8.5 projection |
 | Seroussi 2024 (ISMIP6 AIS 2300) | Seroussi et al. (2024), *Earth's Future* 12, e2024EF004561, https://doi.org/10.1029/2024EF004561; ISMIP6 Antarctica 2300 scalars from https://doi.org/10.5281/zenodo.10528582 (CC BY 4.0), 2015–2100 with each model's historical run; 43 model configurations, weighted like the other ISMIP6 ensembles |
 | Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025; runs from the NIRD archive (https://doi.org/10.11582/2024.00128) at 4 km: the ERA5-init and ESM-init branches (two model configurations), each historical run joined to its projections; control runs not included |
@@ -169,7 +171,7 @@ hard-coded anywhere else:
 reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and reasoning behind each
 encoding decision. Every ice sheet model study's files have been reviewed against its paper and the wider
 literature: ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`), ISMIP6
-Antarctica 2300 (`Seroussi2024_*.csv`), PROTECT Greenland (`Goelzer2025_*.csv`), DeConto & Pollard 2016
+Antarctica 2300 (`Seroussi2024_*.csv`), ISMIP6 CMIP6-forced runs (`Payne2021_*.csv`), Golledge et al. 2019 (`Golledge2019_*.csv`), PROTECT Greenland (`Goelzer2025_*.csv`), DeConto & Pollard 2016
 (`DeConto2016_*.csv`), DeConto et al. 2021 (`DeConto2021_*.csv`), Coulon et al. 2024 (`Coulon2024_*.csv`),
 Rahlves et al. 2025 (`Rahlves2025_*.csv`) and Aschwanden et al. 2019 (`Aschwanden2019_*.csv`). If you find an encoding you disagree with, please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,

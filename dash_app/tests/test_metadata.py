@@ -535,3 +535,79 @@ def test_seroussi2024_is_weighted_as_ismip6():
     assert np.allclose(w[S24.index], 1.0)
     typical = (188 + 329) / (16 + 43)
     assert np.isclose(w[(RUNS["publication"] == "Coulon 2024").to_numpy()].sum(), typical)
+
+
+# ── Payne et al. 2021, ISMIP6 CMIP6-forced runs (review 10) ──────────────
+
+P21A = RUNS[RUNS["publication"] == "Payne 2021 (ISMIP6 AIS, CMIP6)"]
+P21G = RUNS[RUNS["publication"] == "Payne 2021 (ISMIP6 GIS, CMIP6)"]
+
+
+def test_payne2021_runs_match_tables_1_and_2():
+    assert len(P21A) == 43 and P21A[["group", "model"]].drop_duplicates().shape[0] == 7
+    assert len(P21G) == 69 and P21G[["group", "model"]].drop_duplicates().shape[0] == 16
+    # AIS expB1-5 open, B6-10 standard; GIS expb01-05 standard, b06-10 open
+    num = P21A["exp"].str.replace("expB", "").astype(int)
+    assert (P21A["ocean_forcing"] == np.where(num <= 5, "Open", "Standard")).all()
+    numg = P21G["exp"].str.replace("expb", "").astype(int)
+    assert (P21G["ocean_forcing"] == np.where(numg <= 5, "Standard", "Open")).all()
+    assert set(P21A["climate_model"]) == set(P21G["climate_model"]) == {"CNRM-CM6-1", "UKESM1-0-LL", "CESM2", "CNRM-ESM2-1"}
+    assert set(P21G["regional_climate_model"]) == {"MARv3.9"}
+
+
+def test_payne2021_reuses_the_2020_configurations():
+    """Same model classes as the reviewed Seroussi 2020 / Goelzer 2020 rows,
+    including the renamed archive configurations."""
+    for ice, src_pub, runs in (("AIS", PUBLICATION_LABEL["AIS"], P21A), ("GIS", PUBLICATION_LABEL["GIS"], P21G)):
+        for g, mdl in runs[["group", "model"]].drop_duplicates().itertuples(index=False):
+            p = M.model_meta(ice, g, mdl); o = M.model_meta(ice, g.replace("Payne2021-", ""), mdl)
+            assert all(p[f] == o[f] for f in M.CLASS_FIELDS), (g, mdl)
+    assert {"SICOPOLIS1", "SICOPOLIS2", "GRISLI", "GISM"} <= set(P21G["model"])
+
+
+def test_payne2021_controls_restored_and_weighted_as_ismip6():
+    d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", "external_sources_payne2021.csv.gz"))
+    at2015 = d[d["Year"] == 2015]["Cumulative ice sheet mass change (Gt)"]
+    assert np.allclose(at2015, 0)  # rebased at 2015, like the app's ISMIP6 runs
+    assert d.groupby(["IS", "Group", "Model", "Exp"])["Year"].min().min() < 2000  # historical runs joined
+    valid = RUNS["publication"].isin(["Payne 2021 (ISMIP6 AIS, CMIP6)", "Payne 2021 (ISMIP6 GIS, CMIP6)"]).to_numpy()
+    assert np.allclose(A.run_weights(valid)[valid], 1.0)
+
+
+# ── Golledge et al. 2019 (review 11) ─────────────────────────────────────
+
+G19 = RUNS[RUNS["group"] == "Golledge2019"]
+
+
+def test_golledge2019_runs_and_encodings():
+    assert len(G19) == 8 and set(G19["ice_sheet"]) == {"AIS", "GIS"}
+    assert set(G19["exp"]) == {"RCP45", "RCP45_MWA", "RCP85", "RCP85_MWA"}
+    for ice in ("AIS", "GIS"):
+        m = M.model_meta(ice, "Golledge2019", "PISM")
+        assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+            "Shallow", "Coulomb-limited", "Hybrid (thickness-nudged)", "≤5 km")
+    assert set(G19["ocean_forcing"]) == {"Open"} and set(G19["ocean_sensitivity"]) == {"Medium"}
+
+
+def test_golledge2019_control_restored():
+    """The published Figure 2 series are control-subtracted; the bundled runs
+    add the control's change in mass above flotation since 2000 back."""
+    import zipfile, io
+    d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", "external_sources_golledge2019.csv.gz"))
+    assert (d.groupby(["IS", "Exp"])["Year"].agg(["min", "max"]) == [2000, 2100]).all().all()
+    # As published, two series start a hair off zero in 2000 (-0.39 and -0.15 mm SLE); the app zeroes at the window start
+    at2000 = d[d["Year"] == 2000]["Cumulative ice sheet mass change (Gt)"]
+    assert (at2000.abs() < 0.5 * 362.5).all()
+    # restored minus published = the control's drift, the same for every run of an ice sheet
+    z = zipfile.ZipFile(os.path.join(os.path.dirname(os.path.dirname(M.META_DIR)), "utilities",
+                                     "external_sources_cache", "golledge2019_G19_Fig2-data.zip"))
+    drift = {}
+    for n in z.namelist():
+        ice = "AIS" if "AIS" in n else "GIS"
+        exp = ("RCP45" if "-45-" in n else "RCP85") + ("_MWA" if "MWA" in n else "")
+        a = np.loadtxt(io.StringIO(z.read(n).decode()))
+        pub = dict(zip(a[:, 0].astype(int), -a[:, 1] * 362500))
+        run = d[(d["IS"] == ice) & (d["Exp"] == exp)].set_index("Year")["Cumulative ice sheet mass change (Gt)"]
+        drift.setdefault(ice, []).append(run[2100] - pub[2100])
+    for ice, v in drift.items():
+        assert np.ptp(v) < 1e-6 and abs(v[0]) > 1000, (ice, v)  # identical, and not negligible

@@ -20,6 +20,23 @@ Seroussi2024,Forcing,(hover),,"Forcing after 2100: GCM to 2300, or repeated 2080
 Seroussi2024,Ice shelf collapse,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis
 Seroussi2024,Tier,(file),,
 Seroussi2024,Regional climate model,regional_climate_model,,
+Payne2021,Ice sheet,(key),,
+Payne2021,Experiment,(key),,
+Payne2021,ESM,climate_model,,CMIP6 identifiers
+Payne2021,Scenario,scenario,SSP585=SSP5-8.5; SSP126=SSP1-2.6,
+Payne2021,Framework,ocean_forcing,,ISMIP6 open / standard framework (Payne Tables 1-2)
+Payne2021,Ocean sensitivity,ocean_sensitivity,,"Medium: ISMIP6's median settings, not varied by Payne"
+Payne2021,Regional climate model,regional_climate_model,,
+Payne2021,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,
+Golledge2019,Ice sheet,(key),,
+Golledge2019,Experiment,(key),,
+Golledge2019,Climate forcing,climate_model,,One forcing for all runs; not a single CMIP model
+Golledge2019,Scenario,scenario,,
+Golledge2019,Meltwater feedback,(hover),,
+Golledge2019,Regional climate model,regional_climate_model,,
+Golledge2019,Ocean forcing,ocean_forcing,Own melt-factor parameterization=Open,The group's own melt parameterization
+Golledge2019,Ocean sensitivity,ocean_sensitivity,Single inverted melt factor=Medium,"The group's own single calibration, as DeConto 2021 (DC2)"
+Golledge2019,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,
 Goelzer2020,Exp ID,(key),,
 Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
 Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,
