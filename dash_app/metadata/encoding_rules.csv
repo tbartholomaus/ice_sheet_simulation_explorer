@@ -1,7 +1,7 @@
 # Vocabulary of encoded values used by the app and notebook, and the rule that assigns each one.
 # For each field the rows are in display order. Sliding laws are assigned by a cascade: the first step
 # that applies wins (1 Coulomb-limited, 2 Budd, 3 Linear, 4 Power law). Decisions are documented in
-# docs/metadata_review/ (01_Seroussi2020_ISMIP6_AIS.md, 02_Goelzer2020_ISMIP6_GIS.md).
+# docs/metadata_review/ (one report per reviewed study, 01_Seroussi2020_ISMIP6_AIS.md onward).
 field,encoded_value,meaning,assigned_when,decided
 initialization,Spin-up / equilibrium,The model is run to a (quasi-)steady or paleo spun-up state without nudging its thickness or surface elevation toward observations or tuning parameters to present-day velocity.,"Seroussi et al. 2020 codes SP and Eq; Goelzer et al. 2020 codes SP and CYC, alone or with NDm (nudging to the ice mask only).",2026-11-23
 initialization,Hybrid (thickness-nudged),"Spin-up in which the ice thickness or surface elevation is nudged toward observations: by adjusting basal friction, melt or SMB, by flux correction, or by resetting thickness to observed values.","Seroussi et al. 2020 codes SP+ and DA*; Goelzer et al. 2020 codes DAs, DAi and NDs; any spin-up nudged to observed thickness or surface elevation (decision 2026-11-23).",2026-11-23
@@ -24,6 +24,7 @@ ocean_sensitivity,Medium,"Median calibration: AIS, 50th percentile of MeanAnt ga
 ocean_sensitivity,High,"High end of the ocean-sensitivity parameter: AIS, 95th percentile of MeanAnt gamma0; GIS, 75th percentile of kappa.",Seroussi et al. 2020 Table 1 = High*; Goelzer et al. 2020 Table 1 = High; Goelzer et al. 2025 retreat percentile p75.,2026-11-23
 ocean_sensitivity,Very high,"95th percentile of the retreat parameter kappa (GIS, Goelzer et al. 2025).",Goelzer et al. 2025 retreat percentile p95 (decision G3).,2026-11-23
 ocean_sensitivity,PIGL,gamma0 calibrated to Pine Island Glacier melt rates.,Table 1 'Ocean sensitivity' = PIGL.,2026-11-23
+ocean_sensitivity,Study-specific (see experiment),"The study's own ocean-sensitivity parameter, which isn't a percentile of the ISMIP6 gamma0 or kappa distributions; its value for each run is shown with the experiment.","Studies outside ISMIP6 and PROTECT with their own melt coefficient (DeConto and Pollard 2016 OCFAC, decision DP3).",2026-11-23
 (any),Not yet reviewed,A field this study's metadata hasn't been reviewed for yet.,Used for every new field of a study whose review_status is 'not yet reviewed'.,
 (any),<label> (unreviewed),An encoding carried over unchanged from before the review; kept distinct from the reviewed vocabulary so the two never pool.,Used for initialization and sliding law of studies not yet reviewed.,
 (any),Not applicable (statistical emulator),Edwards et al. 2021 emulandice: no ice sheet model physics to classify.,review_status 'not applicable'.,

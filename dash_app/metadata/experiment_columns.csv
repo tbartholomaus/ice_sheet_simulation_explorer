@@ -20,9 +20,17 @@ Goelzer2020,Ocean sensitivity,ocean_sensitivity,,Low/Medium/High = 25th/50th/75t
 Goelzer2020,Table 3 group,(hover),,
 Goelzer2020,Regional climate model,regional_climate_model,,
 DeConto2016,Experiment,(key),,
-DeConto2016,climate_model,climate_model,,
-DeConto2016,scenario,scenario,,
-DeConto2016,protocol,(hover),,
+DeConto2016,Scenario,scenario,RCP 2.6 (BC)=RCP2.6; RCP 4.5 (BC)=RCP4.5; RCP 8.5 (BC)=RCP8.5,"(BC): DP16's +3 °C ocean-temperature correction in the Amundsen and Bellingshausen seas (decision DP1, 2026-11-23)"
+DeConto2016,Climate models,climate_model,,"Ocean from CCSM4 RCP runs, atmosphere from GENESIS v3 equilibrium runs; kept distinct from runs forced by CCSM4 alone (decision DP4, 2026-11-23)"
+DeConto2016,Regional climate model,regional_climate_model,,
+DeConto2016,Ocean forcing,ocean_forcing,Own sub-ice-shelf melt parameterization (DP16 Methods) driven by CCSM4 ocean temperatures at 400 m=Open,"The group's own melt parameterization (decision DP3, 2026-11-23)"
+DeConto2016,Ocean sensitivity,ocean_sensitivity,OCFAC (multiplier on the default melt coefficient)=Study-specific (see experiment),"OCFAC isn't a percentile of an ISMIP6 parameter distribution (decision DP3, 2026-11-23)"
+DeConto2016,OCFAC,(hover),,
+DeConto2016,CREVLIQ,(hover),,
+DeConto2016,VCLIF (km/yr),(hover),,
+DeConto2016,Pliocene SL (m),(hover),,
+DeConto2016,LIG SL (m),(hover),,
+DeConto2016,Protocol,(hover),,
 Aschwanden2019,Experiment,(key),,
 Aschwanden2019,climate_model,climate_model,,
 Aschwanden2019,scenario,scenario,,
@@ -49,7 +57,6 @@ IPCCAR6,scenario,scenario,,
 IPCCAR6,protocol,(hover),,
 Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity tier; not yet reviewed
 Coulon2024,basal_melt_param,(hover),,
-DeConto2016,mici_params,(hover),,
 DeConto2021,mici_params,(hover),,
 Edwards2021,Ice sheet,(key),,
 IPCCAR6,Ice sheet,(key),,

@@ -299,3 +299,35 @@ def test_goelzer2025_forcing_fields():
 def test_regional_climate_model_for_ismip6():
     assert set(AIS["regional_climate_model"]) == {"None (AOGCM output used directly)"}
     assert set(GIS["regional_climate_model"]) == {"MARv3.9"}
+
+
+# ── DeConto & Pollard 2016 (review 04) ───────────────────────────────────
+
+DP16 = RUNS[RUNS["group"] == "DeConto2016"]
+
+
+def test_deconto2016_runs_are_dp16_as_published():
+    """The "(BC)" rows of Kopp et al. (2017) Data Set S1: DP16's +3 degC ocean
+    correction in the Amundsen and Bellingshausen seas (decision DP1). Their
+    RCP8.5 2050 median, +52 mm, is Kopp et al.'s "about +5 cm under DP16"; the
+    uncorrected rows give -28 mm."""
+    import data as D
+    df = D._load_deconto2016()
+    at = df[(df["Year"] == 2050) & df["Exp"].str.startswith("RCP85_")]
+    mm = at[D.MASS_COL] * D.GT_TO_MM_SLE
+    assert len(at) == 29 and round(float(np.median(mm))) == 52
+    assert len(DP16) == 87 and set(DP16["scenario"]) == {"RCP2.6", "RCP4.5", "RCP8.5"}
+
+
+def test_deconto2016_model_and_forcing():
+    assert (DP16["review_status"] == "reviewed").all()
+    m = M.model_meta("AIS", "DeConto2016", "PSU3D-ICE")
+    assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+        "Shallow", "Power law (Weertman)", "Hybrid (thickness-nudged)", ">5–10 km")
+    assert set(DP16["climate_model"]) == {"CCSM4 (ocean); GENESIS v3 (atmosphere)"}
+    assert set(DP16["regional_climate_model"]) == {"RegCM3"}
+    assert set(DP16["ocean_forcing"]) == {"Open"}
+    assert set(DP16["ocean_sensitivity"]) == {"Study-specific (see experiment)"}
+    assert not DP16["ice_shelf_fracture"].any()
+    e = M.EXP_META[("DeConto2016", "AIS", "RCP26_m23")]
+    assert e["extras"]["OCFAC"] == "10" and e["extras"]["VCLIF (km/yr)"] == "0"

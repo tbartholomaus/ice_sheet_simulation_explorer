@@ -143,11 +143,12 @@ def _load_deconto2016():
     CC BY-NC-ND licence allows sharing it unmodified, so the reshaping
     happens here at startup). Same transform as
     utilities/external_sources.py load_deconto2016_ais(), which documents
-    provenance: raw (uncorrected) RCP2.6/4.5/8.5 runs, AIS total, decadal mm
-    GMSL (zeroed at 2000) linearly interpolated to annual through 2100 and
-    converted to Gt (x -362.5)."""
+    provenance: the "(BC)" RCP2.6/4.5/8.5 runs, i.e. DP16 as published, with
+    its +3 degC ocean-temperature correction in the Amundsen and Bellingshausen
+    seas; AIS total; decadal mm GMSL (zeroed at 2000) linearly interpolated to
+    annual through 2100 and converted to Gt (x -362.5)."""
     raw = pd.read_csv(os.path.join(DATA_DIR, "eft2271-sup-0002-2017ef000663-ds01.tsv"), sep="\t")
-    scen = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}
+    scen = {"RCP 2.6 (BC)": "RCP2.6", "RCP 4.5 (BC)": "RCP4.5", "RCP 8.5 (BC)": "RCP8.5"}  # DP16 as published
     raw = raw[(raw["Ice Sheet"] == "AIS") & raw["Scenario"].isin(scen)]
     dec = np.array([int(c) for c in raw.columns if c.isdigit() and int(c) <= 2100])
     years = np.arange(dec.min(), dec.max() + 1)

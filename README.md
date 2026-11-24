@@ -32,8 +32,8 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   similar RCP and SSP scenarios into "composite" scenarios. The metadata behind these groupings is in
   `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
   description beside the encoded value (see `dash_app/metadata/README.md`). So far the two ISMIP6
-  ensembles and the PROTECT Greenland ensemble have been reviewed against their papers (Seroussi et al. 2020;
-  Goelzer et al. 2020; Goelzer et al. 2025) and the
+  ensembles, the PROTECT Greenland ensemble and DeConto & Pollard (2016) have been reviewed against their
+  papers (Seroussi et al. 2020; Goelzer et al. 2020; Goelzer et al. 2025; DeConto and Pollard 2016) and the
   wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)" / "Not yet
   reviewed", until each is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -124,7 +124,7 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 |---|---|
 | Seroussi 2020 (ISMIP6 AIS) | Seroussi et al. (2020), *The Cryosphere* 14, 3033–3070, https://doi.org/10.5194/tc-14-3033-2020 |
 | Goelzer 2020 (ISMIP6 GIS) | Goelzer et al. (2020), *The Cryosphere* 14, 3071–3096, https://doi.org/10.5194/tc-14-3071-2020 |
-| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). Uncorrected runs, decadal values interpolated to annual |
+| DeConto & Pollard 2016 | DeConto & Pollard (2016), *Nature* 531, 591–597, https://doi.org/10.1038/nature17145; time series from Data Set S1 of Kopp et al. (2017), *Earth's Future* 5, 1217–1233, https://doi.org/10.1002/2017EF000663 (CC BY-NC-ND 4.0; bundled unmodified). The 29-member ensemble with DP16's ocean-temperature correction (the "(BC)" rows: +3 °C in the Amundsen and Bellingshausen seas), i.e. DP16 as published; decadal values interpolated to annual |
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
 | DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5) |
 | Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024 |
@@ -167,8 +167,8 @@ hard-coded anywhere else:
 [`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them, and the review
 reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and reasoning behind each
 encoding decision. So far the
-ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`) and PROTECT Greenland
-(`Goelzer2025_*.csv`) ensembles have been
+ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`), PROTECT Greenland
+(`Goelzer2025_*.csv`) and DeConto & Pollard 2016 (`DeConto2016_*.csv`) ensembles have been
 reviewed against their papers and the wider literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
 reviewed", until each is reviewed. If you find an encoding you disagree with, please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,

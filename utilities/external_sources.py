@@ -1016,22 +1016,29 @@ def load_edwards2021_gis(n_samples=None, keep_through_year=None):
 # columns OCFAQ (sic; OCFAC), CREVLIQ, VCLIF, Pliocene/LIG sea level (m),
 # then contribution to GMSL in mm at 2000, 2010, ..., 2300, zeroed at 2000.
 # 29 members: the DP16 runs passing the Pliocene (5-15 m) and LIG targets.
-# Scenarios come raw ("RCP 8.5") and with Kopp et al.'s ocean-temperature
-# bias correction ("RCP 8.5 (BC)"). Checked: WAIS + EAIS == AIS exactly, and
-# the raw 2050 values reproduce Kopp et al.'s text (RCP8.5 median -3 cm,
-# range -9 to +12 cm; RCP2.6 median -2 cm, range -10 to +6 cm).
+# Scenarios come uncorrected ("RCP 8.5") and with DP16's own ocean-temperature
+# bias correction ("RCP 8.5 (BC)"): +3 degC added to the CCSM4 ocean
+# temperatures in the Amundsen and Bellingshausen seas (DP16 Methods). The
+# (BC) runs are DP16 as published; the uncorrected ones are the sensitivity
+# case of Kopp et al.'s Supporting Information S1. Checked: WAIS + EAIS == AIS
+# exactly; the uncorrected 2050 values reproduce Kopp et al.'s "Without this
+# correction" numbers (RCP8.5 median -3 cm, range -9 to +12 cm; RCP2.6 median
+# -2 cm, range -10 to +6 cm), and the (BC) RCP8.5 2050 median (+5 cm)
+# reproduces their DP16 value.
 #
-# Per user decisions (2026-10-08): raw (uncorrected) runs only, AIS total
-# only, linearly interpolated from the decadal values to annual so the
-# source works with any averaging window. ND licence: dash_app bundles the
-# original file unmodified and converts it at startup (dash_app/data.py
+# Per user decisions: the (BC) runs only (2026-11-23, decision DP1 of
+# docs/metadata_review/04_DeConto2016_PSU3D_AIS.md), AIS total only, linearly
+# interpolated from the decadal values to annual so the source works with any
+# averaging window (2026-10-08). ND licence: dash_app bundles the original
+# file unmodified and converts it at startup (dash_app/data.py
 # _load_deconto2016) instead of shipping a reformatted derivative.
 # ═════════════════════════════════════════════════════════════════════════
 
 DECONTO2016_FILENAME = "eft2271-sup-0002-2017ef000663-ds01.tsv"
-DECONTO2016_SCENARIOS = {"RCP 2.6": "RCP2.6", "RCP 4.5": "RCP4.5", "RCP 8.5": "RCP8.5"}  # raw only
-DECONTO2016_PROTOCOL_LABEL = "DP16 members passing Pliocene (5-15 m) and LIG tests; uncorrected"
-DECONTO2016_CLIMATE_MODEL_LABEL = "Not reported in Data Set S1"
+DECONTO2016_SCENARIOS = {"RCP 2.6 (BC)": "RCP2.6", "RCP 4.5 (BC)": "RCP4.5", "RCP 8.5 (BC)": "RCP8.5"}  # DP16 as published
+DECONTO2016_PROTOCOL_LABEL = ("DP16 alternative calibration (29 of 64 members pass Pliocene 5-15 m and LIG targets); "
+                              "CCSM4 ocean +3 degC in the Amundsen and Bellingshausen seas")
+DECONTO2016_CLIMATE_MODEL_LABEL = "CCSM4 (ocean); GENESIS v3 (atmosphere)"  # dash_app/metadata/DeConto2016_experiments.csv
 
 
 def load_deconto2016_ais(path=None, keep_through_year=2100):
