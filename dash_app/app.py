@@ -159,8 +159,10 @@ sidebar = html.Aside(className="sidebar", children=[
         html.P(["Observations: ", *[x for k, p in OBS_PRODUCTS.items() for x in (
             f"{'; ' if k != next(iter(OBS_PRODUCTS)) else ''}{p['label']}, ",
             html.A(p["citation"], href=p["url"], target="_blank"))], "."]),
-        html.P("Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and other published ensembles. "
-               "Large ensembles are weighted so each study counts about as much as one ISMIP6 model configuration."),
+        html.P(["Simulations: ISMIP6 (Seroussi et al. 2020; Goelzer et al. 2020) and ",
+                html.A("other published ensembles", href=f"{REPO_URL}#data", target="_blank"),
+                ". Large ensembles are weighted so each study counts about as much as one ISMIP6 model "
+                "configuration."]),
     ]),
 ])
 

@@ -289,6 +289,7 @@ MELT_PARAM_MAP = {
 }
 CLIMATE_MODEL_MAP = {1: "MRI-ESM2-0", 2: "UKESM1-0-LL", 3: "CESM2-WACCM", 4: "IPSL-CM6A-LR"}
 GT_PER_M_SLE = 362.5  # Gt per meter of sea-level-equivalent
+COULON2024_PROTOCOL_LABEL = "Unweighted 100-member Latin hypercube ensemble (prior)"
 SSP585_KEEP_THROUGH_YEAR = 2030  # trim the 2015-3014 continuation here; see _coulon2024_download_ssp585
 
 
@@ -388,6 +389,7 @@ def load_coulon2024_ais(keep_through_year=None):
     with h5py.File(hist_path, "r") as f:
         hist_time = np.array(f["time"]).squeeze()  # (65,) years 1950-2014
         hist_slc = np.array(f["SLC_ensemble"])  # (65, 100) meters SLE, cumulative from 1950
+        hist_net = -np.array(f["mbcomp_ensemble"])[:, 12, :].T / (1000 * GT_PER_M_SLE)  # (65, 100) m SLE/yr
 
     with h5py.File(ssp585_path, "r") as f:
         ssp_time = np.array(f["time"]).squeeze()  # years 2015-3014
@@ -400,7 +402,19 @@ def load_coulon2024_ais(keep_through_year=None):
         f"expected the SSP5-8.5 file to pick up the year after HIST_ENSEMBLE_DATA "
         f"ends, but HIST ends {hist_time[-1]} and SSP585 starts {ssp_time[0]}"
     )
-    ssp_slc = ssp_slc + hist_slc[-1, :]  # re-anchor each member onto its own HIST endpoint
+    # SLC_ensemble values are the state at the START of each year:
+    # SLC(t+1) - SLC(t) equals that year's net mass balance (mbcomp_ensemble
+    # component 13, "rate of HAF change"; r = 0.9999). Both files start at 0,
+    # so the historical file's last value (2014) is the state before 2014's
+    # change, and the SSP file's 2015 value (0) the state after it. Re-anchor
+    # each member on its 2014 value PLUS its own 2014 change: the 2014 net
+    # mass balance, scaled by the member's ratio of SLC step to net mass
+    # balance over 2004-2013 (median 1.03). Without it one year of mass
+    # change (median 130 Gt) was lost (decision C4,
+    # docs/metadata_review/06_Coulon2024_KoriULB_AIS.md).
+    steps = np.diff(hist_slc, axis=0)
+    ratio = np.median(steps[-10:] / hist_net[-11:-1], axis=0)
+    ssp_slc = ssp_slc + hist_slc[-1, :] + hist_net[-1, :] * ratio
 
     lhs_mat = scipy.io.loadmat(lhs_path)
     lhval = np.array(lhs_mat["LHval"])
@@ -424,7 +438,7 @@ def load_coulon2024_ais(keep_through_year=None):
         exp_meta_rows.append({
             "Exp": exp_code,
             "climate_model": CLIMATE_MODEL_MAP.get(int(round(climate_model_col[member])), "Unknown"),
-            "scenario": "SSP5-8.5", "protocol": "Not applicable",
+            "scenario": "SSP5-8.5", "protocol": COULON2024_PROTOCOL_LABEL,
             "basal_melt_param": MELT_PARAM_MAP.get(int(round(melt_param_col[member])), "Unknown"),
         })
 

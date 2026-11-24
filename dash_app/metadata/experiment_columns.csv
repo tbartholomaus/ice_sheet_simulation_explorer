@@ -46,9 +46,21 @@ DeConto2021,CALVLIQ,(hover),,
 DeConto2021,VCLIFF (km/yr),(hover),,
 DeConto2021,Protocol,(hover),,"States the partial calibration to IMBIE (decision DC3, 2026-11-23)"
 Coulon2024,Experiment,(key),,
-Coulon2024,climate_model,climate_model,,
-Coulon2024,scenario,scenario,,
-Coulon2024,protocol,(hover),,
+Coulon2024,GCM,climate_model,,CMIP6 identifiers; the member's 2015+ forcing
+Coulon2024,Scenario,scenario,,
+Coulon2024,Hindcast forcing,(hover),,
+Coulon2024,Regional climate model,regional_climate_model,,As ISMIP6-AIS: GCM anomalies on a present-day climatology
+Coulon2024,Atmospheric climatology,(hover),,
+Coulon2024,Ocean climatology,(hover),,
+Coulon2024,Ocean forcing,ocean_forcing,"Group's choice among five melt schemes, sampled coefficients=Open","Decision C2, 2026-11-23"
+Coulon2024,Ocean sensitivity,ocean_sensitivity,"Effective ice-ocean heat flux, sampled per scheme (Table 1)=Study-specific (see experiment)","Decision C2, 2026-11-23"
+Coulon2024,Melt scheme,(hover),,
+Coulon2024,Melt coefficient,(hover),,
+Coulon2024,Lapse rate (°C/km),(file),,Surface-melt parameters; kept out of the hover to keep it short
+Coulon2024,Refreezing layer (m),(file),,
+Coulon2024,Kice (mm/PDD),(file),,
+Coulon2024,Ksnow (mm/PDD),(file),,
+Coulon2024,Protocol,(hover),,"Decision C5, 2026-11-23"
 Rahlves2025,Experiment,(key),,
 Rahlves2025,climate_model,climate_model,,
 Rahlves2025,scenario,scenario,,
@@ -62,7 +74,6 @@ IPCCAR6,climate_model,climate_model,,
 IPCCAR6,scenario,scenario,,
 IPCCAR6,protocol,(hover),,
 Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity tier; not yet reviewed
-Coulon2024,basal_melt_param,(hover),,
 Edwards2021,Ice sheet,(key),,
 IPCCAR6,Ice sheet,(key),,
 Goelzer2025,Experiment,(key),,

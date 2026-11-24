@@ -349,8 +349,8 @@ This isn't strictly metadata, but it depends on the new fields:
 | PIK | PISM1 | PISM | Hybrid | Shallow | 8 | 8 | >5–10 | SP | 1850 | Spin-up | Pseudo-plastic (Mohr–Coulomb till) | PICO | N/A |
 | PIK | PISM2 | PISM | Hybrid | Shallow | 8 | 8 | >5–10 | SP | 2015 | Spin-up | Pseudo-plastic (Mohr–Coulomb till) | PICO | N/A |
 | UCIJPL | ISSM | ISSM | HO | Higher-order | 3 | 50 | ≤5 | DA | 2007 | DA (velocity) | Not stated | PICOP | Nonlocal |
-| ULB | fETISh_16km | f.ETISh (Kori-ULB) | Hybrid | Shallow | 16 | 16 | >10–20 | DA\* | 2005 | Hybrid | Power law (coefficient 2) | Plume | Nonlocal |
-| ULB | fETISh_32km | f.ETISh (Kori-ULB) | Hybrid | Shallow | 32 | 32 | >20 | DA\* | 2005 | Hybrid | Power law (coefficient 2) | Plume | Nonlocal |
+| ULB | fETISh_16km | Kori-ULB/f.ETISh | Hybrid | Shallow | 16 | 16 | >10–20 | DA\* | 2005 | Hybrid | Power law (coefficient 2) | Plume | Nonlocal |
+| ULB | fETISh_32km | Kori-ULB/f.ETISh | Hybrid | Shallow | 32 | 32 | >20 | DA\* | 2005 | Hybrid | Power law (coefficient 2) | Plume | Nonlocal |
 | UTAS | ElmerIce | Elmer/Ice | Stokes | Higher-order | 4 | 40 | ≤5 | DA | 2015 | DA (velocity) | Linear | N/A | Local |
 | VUB | AISMPALEO | AISMPALEO | SIA+SSA | Shallow | 20 | 20 | >10–20 | SP | 2000 | Spin-up | Weertman (∝ 1/height above buoyancy) | N/A | Nonlocal anom. |
 | VUW | PISM | PISM | Hybrid | Shallow | 16 | 16 | >10–20 | SP | 2015 | Spin-up | Not stated | Lin | N/A |

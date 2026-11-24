@@ -383,3 +383,31 @@ def test_hover_lines_stay_narrow():
     """Long hover lines are wrapped so the hover box doesn't cover the plot."""
     longest = max(len(line) for h in RUNS["hover"] for line in h.split("<br>") if "<" not in line)
     assert longest <= 60
+
+
+# ── Coulon et al. 2024 (review 06) ───────────────────────────────────────
+
+C24 = RUNS[RUNS["group"] == "Coulon2024"]
+
+
+def test_coulon2024_model_and_forcing():
+    assert len(C24) == 100 and (C24["review_status"] == "reviewed").all()
+    m = M.model_meta("AIS", "Coulon2024", "Kori-ULB")
+    assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+        "Shallow", "Power law (Weertman)", "Hybrid (thickness-nudged)", ">10–20 km")
+    # one code base with Seroussi 2020's ULB rows (decision C1)
+    assert m["ice_model"] == M.model_meta("AIS", "ULB", "fETISh_16km")["ice_model"]
+    assert set(C24["climate_model"]) == {"MRI-ESM2-0", "UKESM1-0-LL", "CESM2-WACCM", "IPSL-CM6A-LR"}
+    assert set(C24["ocean_forcing"]) == {"Open"}
+    assert set(C24["ocean_sensitivity"]) == {"Study-specific (see experiment)"}
+    assert set(C24["regional_climate_model"]) == {"None (AOGCM output used directly)"}
+    assert not C24["ice_shelf_fracture"].any()
+
+
+def test_coulon2024_keeps_the_2014_mass_change():
+    """Each member's 2014->2015 change is its 2014 net mass balance from the
+    archive, not zero (decision C4)."""
+    d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", "external_sources_coulon2024_ais.csv.gz"))
+    wide = d.pivot(index="Year", columns="Exp", values="Cumulative ice sheet mass change (Gt)")
+    step = wide.loc[2015] - wide.loc[2014]
+    assert (step != 0).all() and -200 < step.median() < -60
