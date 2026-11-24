@@ -3,9 +3,9 @@
 # that applies wins (1 Coulomb-limited, 2 Budd, 3 Linear, 4 Power law). Decisions are documented in
 # metadata_review/01_Seroussi2020_ISMIP6_AIS.md (ismip6_check_261123 review folder).
 field,encoded_value,meaning,assigned_when,decided
-initialization,Spin-up / equilibrium,The model is run to a (quasi-)steady or paleo spun-up state without tuning parameters to match present-day thickness or velocity.,Seroussi et al. 2020 Table 3 codes SP (spin-up) and Eq (equilibrium state).,2026-11-23
-initialization,Hybrid (thickness-nudged),Spin-up in which basal friction (and sometimes melt) is iteratively adjusted so the ice thickness approaches observations (Pollard and DeConto 2012a family).,Codes SP+ (spin-up with ice-thickness targets) and DA* (data assimilation of geometry only).,2026-11-23
-initialization,Data assimilation (velocity inversion),"Basal friction (and often viscosity) inferred by inverting observed surface velocities, with or without a short relaxation.",Codes DA and DA+ (with relaxation).,2026-11-23
+initialization,Spin-up / equilibrium,The model is run to a (quasi-)steady or paleo spun-up state without nudging its thickness or surface elevation toward observations or tuning parameters to present-day velocity.,"Seroussi et al. 2020 codes SP and Eq; Goelzer et al. 2020 codes SP and CYC, alone or with NDm (nudging to the ice mask only).",2026-11-23
+initialization,Hybrid (thickness-nudged),"Spin-up in which the ice thickness or surface elevation is nudged toward observations: by adjusting basal friction, melt or SMB, by flux correction, or by resetting thickness to observed values.","Seroussi et al. 2020 codes SP+ and DA*; Goelzer et al. 2020 codes DAs, DAi and NDs; any spin-up nudged to observed thickness or surface elevation (decision 2026-11-23).",2026-11-23
+initialization,Data assimilation (velocity inversion),"Basal friction (and often viscosity) inferred by inverting observed surface velocities, with or without a relaxation.",Seroussi et al. 2020 codes DA and DA+; Goelzer et al. 2020 code DAv.,2026-11-23
 sliding_law,Linear,"Basal stress proportional to sliding speed, with no effective-pressure dependence during the run.","Cascade step 3: not Coulomb-limited, no effective-pressure dependence, exponent m = 1.",2026-11-23
 sliding_law,Power law (Weertman),"Nonlinear power law in sliding speed (m > 1), with no effective-pressure dependence.",Cascade step 4: none of steps 1-3 applies.,2026-11-23
 sliding_law,Budd,"Friction depends on effective pressure or height above flotation (any velocity exponent), without a Coulomb/yield-stress cap.","Cascade step 2: not Coulomb-limited, and friction depends on effective pressure N or height above buoyancy.",2026-11-23
@@ -16,13 +16,14 @@ resolution,≤5 km,Finest horizontal grid resolution (res_min_km) of 5 km or les
 resolution,>5–10 km,Finest resolution above 5 and up to 10 km.,Bin of res_min_km.,2026-11-23
 resolution,>10–20 km,Finest resolution above 10 and up to 20 km.,Bin of res_min_km.,2026-11-23
 resolution,>20 km,Finest resolution above 20 km.,Bin of res_min_km.,2026-11-23
-ocean_forcing,Open,Sub-shelf melt from each group's own parameterization (ISMIP6 'open' framework).,Seroussi et al. 2020 Table 1 'Ocean forcing' = Open.,2026-11-23
-ocean_forcing,Standard,Sub-shelf melt from the ISMIP6 standard quadratic parameterization (Jourdain et al. 2020).,Table 1 'Ocean forcing' = Standard.,2026-11-23
-ocean_sensitivity,Low,5th percentile of the MeanAnt gamma0 distribution.,Table 1 'Ocean sensitivity' = Low*.,2026-11-23
-ocean_sensitivity,Medium,"Median calibration: 50th percentile of MeanAnt gamma0 (standard), or the group's own calibration (open).",Table 1 'Ocean sensitivity' = Medium* or Medium.,2026-11-23
-ocean_sensitivity,High,95th percentile of the MeanAnt gamma0 distribution.,Table 1 'Ocean sensitivity' = High*.,2026-11-23
+ocean_forcing,Open,"Ocean forcing from each group's own approach (ISMIP6 'open' framework): AIS, the group's own sub-shelf melt parameterization; GIS, the group's own frontal melt or calving approach instead of the retreat parameterization.","Seroussi et al. 2020 Table 1 'Ocean forcing' = Open; Goelzer et al. 2020 Table 3 footnote 1 ('Open format not using the retreat parameterization'), set per configuration.",2026-11-23
+ocean_forcing,Standard,"ISMIP6 standard ocean forcing: AIS, the quadratic sub-shelf melt parameterization (Jourdain et al. 2020); GIS, the tidewater-glacier retreat parameterization (Slater et al. 2019, 2020).",Seroussi et al. 2020 Table 1 'Ocean forcing' = Standard; Goelzer et al. 2020 experiments exp05-expa03 unless run in open format.,2026-11-23
+ocean_sensitivity,Low,"Low end of the ocean-sensitivity parameter: AIS, 5th percentile of the MeanAnt gamma0 distribution; GIS, 25th percentile of the retreat parameter kappa.",Seroussi et al. 2020 Table 1 = Low*; Goelzer et al. 2020 Table 1 = Low.,2026-11-23
+ocean_sensitivity,Medium,"Median calibration: AIS, 50th percentile of MeanAnt gamma0 (standard) or the group's own calibration (open); GIS, median of kappa.",Seroussi et al. 2020 Table 1 = Medium* or Medium; Goelzer et al. 2020 Table 1 = Medium.,2026-11-23
+ocean_sensitivity,High,"High end of the ocean-sensitivity parameter: AIS, 95th percentile of MeanAnt gamma0; GIS, 75th percentile of kappa.",Seroussi et al. 2020 Table 1 = High*; Goelzer et al. 2020 Table 1 = High.,2026-11-23
 ocean_sensitivity,PIGL,gamma0 calibrated to Pine Island Glacier melt rates.,Table 1 'Ocean sensitivity' = PIGL.,2026-11-23
 (any),Not yet reviewed,A field this study's metadata hasn't been reviewed for yet.,Used for every new field of a study whose review_status is 'not yet reviewed'.,
 (any),<label> (unreviewed),An encoding carried over unchanged from before the review; kept distinct from the reviewed vocabulary so the two never pool.,Used for initialization and sliding law of studies not yet reviewed.,
 (any),Not applicable (statistical emulator),Edwards et al. 2021 emulandice: no ice sheet model physics to classify.,review_status 'not applicable'.,
 (any),Not applicable (assessment),IPCC AR6 assessed projections: no ice sheet model physics to classify.,review_status 'not applicable'.,
+(any),CMIP model identifier,"Climate models are encoded with their official CMIP5/CMIP6 model identifiers (e.g. NorESM1-M, CSIRO-Mk3-6-0, ACCESS1-3), whatever the paper's spelling; the verbatim spelling stays in the experiments file.",Value maps in experiment_columns.csv (decision D5); applied to each study as it is reviewed.,2026-11-23

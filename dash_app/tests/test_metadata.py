@@ -19,10 +19,11 @@ import metadata as M
 from data import BIAS_ELIGIBLE, PUBLICATION_LABEL, RUNS
 
 AIS = RUNS[RUNS["publication"] == PUBLICATION_LABEL["AIS"]]
+GIS = RUNS[RUNS["publication"] == PUBLICATION_LABEL["GIS"]]
 
 
-def _by_config(col):
-    return AIS.groupby(["group", "model"])[col].first().to_dict()
+def _by_config(col, runs=None):
+    return (AIS if runs is None else runs).groupby(["group", "model"])[col].first().to_dict()
 
 
 # ── structure ─────────────────────────────────────────────────────────────
@@ -43,8 +44,10 @@ def test_ais_and_gis_rows_are_independent():
     # These (group, model) pairs exist for both ice sheets; their rows must differ.
     for group, model in [("IMAU", "IMAUICE1"), ("IMAU", "IMAUICE2"), ("LSCE", "GRISLI"), ("NCAR", "CISM"), ("VUW", "PISM")]:
         a, g = M.model_meta("AIS", group, model), M.model_meta("GIS", group, model)
-        assert a is not g
-        assert a["review_status"].startswith("reviewed") and g["review_status"] == "not yet reviewed"
+        assert a is not g and a["study"] == "Seroussi2020" and g["study"] == "Goelzer2020"
+    # e.g. IMAU-ICE: plastic Mohr-Coulomb (SIA+SSA) for AIS, Weertman (SIA-only) for GIS
+    assert M.model_meta("AIS", "IMAU", "IMAUICE1")["sliding_law"] == "Coulomb-limited"
+    assert M.model_meta("GIS", "IMAU", "IMAUICE1")["sliding_law"] == "Power law (Weertman)"
 
 
 def test_all_188_ais_runs_are_present():
@@ -89,9 +92,10 @@ def test_initialization_classes():
     init = _by_config("initialization")
     spin, hyb, da = "Spin-up / equilibrium", "Hybrid (thickness-nudged)", "Data assimilation (velocity inversion)"
     for k in [("AWI", "PISM1"), ("IMAU", "IMAUICE1"), ("IMAU", "IMAUICE2"), ("PIK", "PISM1"), ("PIK", "PISM2"),
-              ("VUB", "AISMPALEO"), ("VUW", "PISM")]:
+              ("VUB", "AISMPALEO")]:
         assert init[k] == spin, k
-    for k in [("ILTS_PIK", "SICOPOLIS"), ("LSCE", "GRISLI"), ("NCAR", "CISM"), ("ULB", "fETISh_16km"), ("ULB", "fETISh_32km")]:
+    for k in [("ILTS_PIK", "SICOPOLIS"), ("LSCE", "GRISLI"), ("NCAR", "CISM"), ("ULB", "fETISh_16km"), ("ULB", "fETISh_32km"),
+              ("VUW", "PISM")]:
         assert init[k] == hyb, k
     for k in [("DOE", "MALI"), ("JPL1", "ISSM"), ("UCIJPL", "ISSM"), ("UTAS", "ElmerIce")]:
         assert init[k] == da, k
@@ -129,11 +133,11 @@ def test_resolution_bin_edges_belong_to_lower_bin(r, expect):
 # ── unreviewed sources are labelled, never pooled with reviewed classes ───
 
 def test_unreviewed_labels_are_marked():
-    gis = RUNS[RUNS["publication"] == PUBLICATION_LABEL["GIS"]]
-    assert gis["initialization"].str.endswith(M.UNREVIEWED_SUFFIX).all()
-    assert (gis["stress_balance"] == M.NOT_REVIEWED).all()
+    unrev = RUNS[RUNS["publication"] == "Rahlves 2025"]
+    assert unrev["initialization"].str.endswith(M.UNREVIEWED_SUFFIX).all()
+    assert (unrev["stress_balance"] == M.NOT_REVIEWED).all()
     reviewed = set().union(*M.CATEGORY_ORDER.values())
-    assert not (set(gis["initialization"]) | set(gis["sliding_law"])) & reviewed
+    assert not (set(unrev["initialization"]) | set(unrev["sliding_law"])) & reviewed
 
 
 # ── weighting: every (group, model) configuration counts on its own ───────
@@ -201,3 +205,53 @@ def test_bias_plots_order_resolution_finest_first():
     rows, _ = A.low_bias_enrichment(b[valid], w[valid], RUNS["resolution"].to_numpy()[valid])
     bars = F.enrichment_figure(rows, "resolution", 0.10)
     assert list(bars.data[0].y) == M.CATEGORY_ORDER["resolution"][::-1]  # drawn bottom-up
+
+
+# ── ISMIP6-GIS (Goelzer et al. 2020), reviewed 2026-11-23 ─────────────────
+
+def test_all_165_gis_runs_are_present():
+    assert len(GIS) == 165
+    assert GIS[["group", "model"]].drop_duplicates().shape[0] == 21
+
+
+def test_goelzer_experiments_are_verbatim_table_1():
+    e = pd.read_csv(os.path.join(M.META_DIR, "Goelzer2020_experiments.csv"), comment="#", dtype=str)
+    assert list(e.columns) == ["Exp ID", "GCM", "RCP", "Ocean sensitivity", "Table 3 group"]
+    assert e.set_index("Exp ID").loc["exp06", "GCM"] == "NorESM-M"  # verbatim; encoded NorESM1-M
+
+
+def test_gis_scenarios_and_sensitivity():
+    sc = GIS.groupby("exp")["scenario"].first()
+    assert sc["exp07"] == "RCP2.6" and set(sc.drop("exp07")) == {"RCP8.5"}
+    sens = GIS.groupby("exp")["ocean_sensitivity"].first()
+    assert sens["exp09"] == "High" and sens["exp10"] == "Low" and set(sens.drop(["exp09", "exp10"])) == {"Medium"}
+
+
+def test_gcm_names_are_shared_across_ice_sheets():
+    names = set(AIS["climate_model"]) | set(GIS["climate_model"])
+    assert not names & {"NorESM", "NorESM-M", "CSIRO-MK3", "CSIRO-Mk3.6", "ACCESS1.3"}
+    assert {"NorESM1-M", "HadGEM2-ES", "IPSL-CM5A-MR", "CSIRO-Mk3-6-0"} <= set(AIS["climate_model"]) & set(GIS["climate_model"])
+
+
+def test_gis_open_format_configurations():
+    forcing = GIS.groupby(["group", "model"])["ocean_forcing"].agg(lambda s: set(s))
+    open_ = {("BGC", "BISICLES"), ("UAF", "PISM2"), ("UCIJPL", "ISSM2"), ("VUW", "PISM")}
+    for k, v in forcing.items():
+        assert v == ({"Open"} if k in open_ else {"Standard"}), k
+
+
+def test_gis_model_classes():
+    sl, init, sb = _by_config("sliding_law", GIS), _by_config("initialization", GIS), _by_config("stress_balance", GIS)
+    issm = [("AWI", "ISSM1"), ("AWI", "ISSM2"), ("AWI", "ISSM3"), ("GSFC", "ISSM"), ("JPL", "ISSM"), ("JPL", "ISSMPALEO"),
+            ("UCIJPL", "ISSM1"), ("UCIJPL", "ISSM2")]
+    assert all(sl[k] == "Budd" for k in issm)
+    assert sl[("UAF", "PISM1")] == sl[("UAF", "PISM2")] == sl[("MUN", "GSM1")] == sl[("NCAR", "CISM")] == "Coulomb-limited"
+    assert sl[("MUN", "GSM2")] == sl[("BGC", "BISICLES")] == sl[("LSCE", "GRISLI")] == "Linear"
+    assert sl[("VUB", "GISM")] == sl[("ILTS_PIK", "SICOPOLIS1")] == "Budd"
+    assert {k for k, v in sb.items() if v == "Higher-order"} == {
+        ("AWI", "ISSM1"), ("AWI", "ISSM2"), ("AWI", "ISSM3"), ("BGC", "BISICLES"), ("JPL", "ISSM"), ("JPL", "ISSMPALEO"),
+        ("NCAR", "CISM"), ("UCIJPL", "ISSM1"), ("UCIJPL", "ISSM2"), ("VUB", "GISM")}
+    assert {k for k, v in init.items() if v == "Spin-up / equilibrium"} == {
+        ("IMAU", "IMAUICE1"), ("IMAU", "IMAUICE2"), ("MUN", "GSM1"), ("MUN", "GSM2")}
+    assert init[("VUW", "PISM")] == init[("UAF", "PISM1")] == "Hybrid (thickness-nudged)"
+    assert init[("JPL", "ISSMPALEO")] == "Data assimilation (velocity inversion)"

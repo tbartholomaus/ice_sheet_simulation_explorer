@@ -2,19 +2,21 @@
 # "(hover)" is shown in hover text only, any other value is the app field it fills. value_map translates
 # verbatim values into the encoded vocabulary (encoding_rules.csv). App fields a study doesn't map
 # (ocean_forcing, ocean_sensitivity, ice_shelf_fracture) read "Not yet reviewed" ("Not applicable (...)"
-# for emulators and assessments; ice_shelf_fracture False).
+# for emulators and assessments; ice_shelf_fracture False). A model row's ocean_forcing_encoded, where
+# filled in, overrides the experiment's ocean forcing (Goelzer2020: configurations run in the open framework).
 study,file_column,app_field,value_map,note
 Seroussi2020,Experiment,(key),,
-Seroussi2020,AOGCM,climate_model,,
+Seroussi2020,AOGCM,climate_model,CSIRO-MK3=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
 Seroussi2020,Scenario,scenario,,
 Seroussi2020,Ocean forcing,ocean_forcing,,
 Seroussi2020,Ocean sensitivity,ocean_sensitivity,Medium*=Medium; High*=High; Low*=Low,* marks the standard-framework MeanAnt gamma0 percentiles (Table 1 footnote)
 Seroussi2020,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis (decision 2026-11-23)
 Seroussi2020,Tier,(hover),,
-Goelzer2020,Experiment,(key),,
-Goelzer2020,climate_model,climate_model,,
-Goelzer2020,scenario,scenario,,
-Goelzer2020,protocol,(hover),,
+Goelzer2020,Exp ID,(key),,
+Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
+Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,
+Goelzer2020,Ocean sensitivity,ocean_sensitivity,,Low/Medium/High = 25th/50th/75th percentiles of the retreat parameter kappa (Goelzer et al. 2020 Sect. 2)
+Goelzer2020,Table 3 group,(hover),,
 DeConto2016,Experiment,(key),,
 DeConto2016,climate_model,climate_model,,
 DeConto2016,scenario,scenario,,
@@ -47,7 +49,6 @@ IPCCAR6,Experiment,(key),,
 IPCCAR6,climate_model,climate_model,,
 IPCCAR6,scenario,scenario,,
 IPCCAR6,protocol,(hover),,
-Goelzer2020,study_ocean_sensitivity,(hover),,Not yet reviewed; the app's ocean_sensitivity field reads 'Not yet reviewed'
 Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity tier; not yet reviewed
 Coulon2024,basal_melt_param,(hover),,
 DeConto2016,mici_params,(hover),,

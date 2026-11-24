@@ -1,15 +1,19 @@
-# Experiments of Goelzer et al. (2020), The future sea-level contribution of the Greenland ice sheet: a multi-model
-# ensemble study of ISMIP6, The Cryosphere 14, 3071-3096, https://doi.org/10.5194/tc-14-3071-2020.
-# NOT YET REVIEWED. Experiment metadata carried over from the app's earlier lookup table (labelled there as Goelzer et al.
-# 2020 Table 1 & Appendix); not yet checked against the paper.
-# How each column is used by the app is in experiment_columns.csv.
-Experiment,climate_model,scenario,protocol,study_ocean_sensitivity
-exp05,MIROC5,RCP8.5,Standard,Medium
-exp06,NorESM,RCP8.5,Standard,Medium
-exp07,MIROC5,RCP2.6,Standard,Medium
-exp08,HadGEM2-ES,RCP8.5,Standard,Medium
-exp09,MIROC5,RCP8.5,Standard,High
-exp10,MIROC5,RCP8.5,Standard,Low
-expa01,IPSL-CM5A-MR,RCP8.5,Standard,Medium
-expa02,CSIRO-Mk3.6,RCP8.5,Standard,Medium
-expa03,ACCESS1.3,RCP8.5,Standard,Medium
+# ISMIP6-Greenland projection experiments, transcribed verbatim from Goelzer et al. (2020), The
+# Cryosphere 14, 3071-3096, Table 1 ("List of GCM-forced experiments for ISMIP-Greenland projections";
+# Table 1 is printed with experiments as columns; here they are rows). Table 1 caption: "Sensitivity to the
+# ocean forcing is sampled with three experiments under scenario RCP8.5." Sect. 2: the low, medium and high
+# ocean sensitivities are the 25th, 50th and 75th percentiles of the retreat parameter kappa (Slater et al.
+# 2019, 2020). "Table 3 group" is the grouping in Table 3. Experiments exp01-exp04 (open framework) are not
+# in the archive. Which configurations ran these experiments in the open framework is recorded in
+# Goelzer2020_models.csv (ocean_forcing_encoded). How each column is used: experiment_columns.csv.
+# Reviewed 2026-11-23.
+Exp ID,GCM,RCP,Ocean sensitivity,Table 3 group
+exp05,MIROC5,8.5,Medium,Core experiments
+exp06,NorESM-M,8.5,Medium,Core experiments
+exp07,MIROC5,2.6,Medium,Core experiments
+exp08,HadGEM2-ES,8.5,Medium,Core experiments
+exp09,MIROC5,8.5,High,Core experiments
+exp10,MIROC5,8.5,Low,Core experiments
+expa01,IPSL-CM5A-MR,8.5,Medium,Extensions
+expa02,CSIRO-Mk3.6,8.5,Medium,Extensions
+expa03,ACCESS1-3,8.5,Medium,Extensions

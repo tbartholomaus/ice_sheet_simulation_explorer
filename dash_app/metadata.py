@@ -59,7 +59,7 @@ def resolution_bin(res_min_km):
 # ── encoding rules ────────────────────────────────────────────────────────
 
 RULES = _read("encoding_rules.csv")
-VOCAB = {f: list(g["encoded_value"]) for f, g in RULES[RULES["field"] != "(any)"].groupby("field", sort=False)}
+VOCAB = {f: list(g["encoded_value"]) for f, g in RULES[~RULES["field"].str.startswith("(")].groupby("field", sort=False)}
 CATEGORY_ORDER = VOCAB  # display order of each field's values
 
 
@@ -91,6 +91,10 @@ def _load_models():
                 _check_encoded(f, row[f], row["review_status"], where)
             if row["review_status"] == "reviewed" and row["resolution"] != resolution_bin(row["res_min_km"]):
                 raise ValueError(f"{where}: resolution_encoded doesn't match res_min_km")
+            # Optional per-configuration ocean forcing (e.g. ISMIP6-GIS runs made in
+            # the open framework); it overrides the experiment's value in run_meta.
+            if row.get("ocean_forcing_encoded") and row["ocean_forcing_encoded"] not in VOCAB["ocean_forcing"]:
+                raise ValueError(f"{where}: ocean_forcing_encoded = {row['ocean_forcing_encoded']!r} isn't in encoding_rules.csv")
             key = (row["ice_sheet"], row["Group"], row["Model"])
             if key in out:
                 raise ValueError(f"{where}: duplicate model key {key}")
@@ -125,6 +129,7 @@ def _load_experiments():
         spec = COLUMNS[COLUMNS["study"] == stem]
         to_field = dict(zip(spec["file_column"], spec["app_field"]))
         maps = {c: _value_map(v) for c, v in zip(spec["file_column"], spec["value_map"]) if v}
+        key_col = next(c for c, f in to_field.items() if f == "(key)" and c != "Ice sheet")
         df = _read(f"{stem}_experiments.csv")
         undescribed = set(df.columns) - set(to_field)
         if undescribed:
@@ -143,9 +148,9 @@ def _load_experiments():
                 meta["ice_shelf_fracture"] = meta["ice_shelf_fracture"] == "True"
             for f in ("ocean_forcing", "ocean_sensitivity"):
                 if f in meta and meta[f] not in VOCAB[f]:
-                    raise ValueError(f"{stem}_experiments.csv {row['Experiment']}: {f} = {meta[f]!r} "
+                    raise ValueError(f"{stem}_experiments.csv {row[key_col]}: {f} = {meta[f]!r} "
                                      "isn't in encoding_rules.csv")
-            key = (stem, row.get("Ice sheet", ice), row["Experiment"])
+            key = (stem, row.get("Ice sheet", ice), row[key_col])
             if key in out:
                 raise ValueError(f"{stem}_experiments.csv: duplicate experiment {key}")
             out[key] = meta
@@ -165,7 +170,10 @@ def run_meta(ice_sheet, group, model, exp):
     except KeyError:
         raise KeyError(f"No row for experiment {exp!r} ({ice_sheet}) in {m['study']}_experiments.csv") from None
     fill = m["stress_balance"] if m["review_status"] == "not applicable" else NOT_REVIEWED
-    return m, {"ocean_forcing": fill, "ocean_sensitivity": fill, "ice_shelf_fracture": False, **e}
+    e = {"ocean_forcing": fill, "ocean_sensitivity": fill, "ice_shelf_fracture": False, **e}
+    if m.get("ocean_forcing_encoded"):
+        e["ocean_forcing"] = m["ocean_forcing_encoded"]
+    return m, e
 
 
 def category_order(dim, cats):

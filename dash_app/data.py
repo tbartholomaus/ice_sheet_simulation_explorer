@@ -90,8 +90,8 @@ IMBIE = {
 # Simulation metadata lives in dash_app/metadata/ -- a <Study>_models.csv and
 # a <Study>_experiments.csv per study, plus encoding_rules.csv -- and is read
 # through metadata.py, which the notebook shares. ISMIP6-AIS (Seroussi et
-# al. 2020) has been reviewed against the paper and the wider literature;
-# the other studies' encodings are logged as they are, marked "(unreviewed)"
+# al. 2020) and ISMIP6-GIS (Goelzer et al. 2020) have been reviewed against
+# their papers and the wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)"
 # / "Not yet reviewed", until each study is reviewed.
 # ─────────────────────────────────────────────────────────────────────────────
 

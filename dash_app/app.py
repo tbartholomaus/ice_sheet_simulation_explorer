@@ -456,9 +456,9 @@ def _match_readout(valid, matched, bounds, users, users_matched, units, obs, lo,
         lines.append(html.Div([html.B(f"{name}: "), f"observed {fmt.format(r_obs)} {rate_label}; kept "
                                f"{fmt.format(b_lo)} to {fmt.format(b_hi)}: ", html.B(f"{n_kept} of {n_all}"),
                                " simulations."]))
-    lines.append(html.Div(f"Rates over {lo}–{hi} against {OBS_PRODUCTS[obs]['label']}, within ±{tol_pct}%. "
-                          "Faint outlined boxes: all selected simulations; solid boxes: those that match.",
-                          className="muted"))
+    lines.append(html.Div([html.B("Faint outlined boxes:"), " all selected simulations; ", html.B("solid boxes:"),
+                           f" those that match. Rates over {lo}–{hi} against {OBS_PRODUCTS[obs]['label']}, "
+                           f"within ±{tol_pct}%."], className="muted"))
     return lines
 
 
