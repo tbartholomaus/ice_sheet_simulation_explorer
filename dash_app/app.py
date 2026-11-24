@@ -163,6 +163,12 @@ sidebar = html.Aside(className="sidebar", children=[
                 html.A("other published ensembles", href=f"{REPO_URL}#data", target="_blank"),
                 ". Large ensembles are weighted so each study counts about as much as one ISMIP6 model "
                 "configuration."]),
+        html.P(["How every simulation is encoded (ice sheet model, initialization, sliding law, stress balance, "
+                "resolution, climate model, scenario, ocean forcing and sensitivity) is in ",
+                _metadata_link(), ": for each study, ", html.Code("<Study>_models.csv"), " and ",
+                html.Code("<Study>_experiments.csv"), " give each source's own description beside the encoded "
+                "value, and ", html.A("docs/metadata_review/", href=REVIEWS_URL, target="_blank"),
+                " explains each study's encoding decisions. Corrections are welcome."]),
     ]),
 ])
 
@@ -250,13 +256,6 @@ main = html.Main(className="content", children=[
         html.P("This web app was developed by Tim Bartholomaus at the University of Idaho, using claude ai."),
         html.P(["You can explore the source code for the app and an accompanying jupyter notebook at ",
                 html.A(REPO_URL, href=REPO_URL, target="_blank"), "."]),
-        html.P(["How every simulation is encoded (ice sheet model, initialization, sliding law, stress balance, "
-                "resolution, climate model, scenario, ocean forcing and sensitivity) is in ",
-                _metadata_link(), ": for each study, ", html.Code("<Study>_models.csv"), " and ",
-                html.Code("<Study>_experiments.csv"), " give each source's own description beside the encoded "
-                "value, and ", html.A("docs/metadata_review/", href=REVIEWS_URL, target="_blank"),
-                " explains each study's encoding decisions. Hover over any simulation to see which files "
-                "describe it. Corrections are welcome."]),
     ]),
 ])
 

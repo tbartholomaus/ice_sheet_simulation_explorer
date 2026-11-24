@@ -133,11 +133,15 @@ def test_resolution_bin_edges_belong_to_lower_bin(r, expect):
 # ── unreviewed sources are labelled, never pooled with reviewed classes ───
 
 def test_unreviewed_labels_are_marked():
-    unrev = RUNS[RUNS["publication"] == "Rahlves 2025"]
-    assert unrev["initialization"].str.endswith(M.UNREVIEWED_SUFFIX).all()
-    assert (unrev["stress_balance"] == M.NOT_REVIEWED).all()
+    """Rows not yet reviewed carry marked labels that never pool with reviewed
+    classes; reviewed rows never carry them."""
     reviewed = set().union(*M.CATEGORY_ORDER.values())
-    assert not (set(unrev["initialization"]) | set(unrev["sliding_law"])) & reviewed
+    for key, row in M.MODEL_META.items():
+        vals = {row[f] for f in M.CLASS_FIELDS if f != "ice_model"}
+        if row["review_status"] == "not yet reviewed":
+            assert not vals & reviewed, key
+        elif row["review_status"] == "reviewed":
+            assert vals <= reviewed, key
 
 
 # ── weighting: every (group, model) configuration counts on its own ───────
@@ -308,7 +312,8 @@ def test_goelzer2025_model_classes():
 
 def test_goelzer2025_forcing_fields():
     pct = G25["exp"].str.split("_").str[3]
-    expect = {"p05": "Very low", "p25": "Low", "p50": "Medium", "p75": "High", "p95": "Very high"}
+    # A lower kappa percentile means more retreat (Goelzer et al. 2025: "25th (high) and 75th (low)")
+    expect = {"p05": "Very high", "p25": "High", "p50": "Medium", "p75": "Low", "p95": "Very low"}
     assert (G25["ocean_sensitivity"] == pct.map(expect)).all()
     assert (G25["regional_climate_model"] == G25["exp"].str.split("_").str[2]).all()
     assert (G25["ocean_forcing"] == "Standard").all()
@@ -411,3 +416,74 @@ def test_coulon2024_keeps_the_2014_mass_change():
     wide = d.pivot(index="Year", columns="Exp", values="Cumulative ice sheet mass change (Gt)")
     step = wide.loc[2015] - wide.loc[2014]
     assert (step != 0).all() and -200 < step.median() < -60
+
+
+def test_gis_high_retreat_sensitivity_loses_more_ice():
+    """The encoded sensitivity follows the physics: for the same configuration
+    and forcing, High (and Very high) runs lose more ice by 2100 than Low
+    (Very low) ones."""
+    d = pd.read_csv(os.path.join(os.path.dirname(M.META_DIR), "data", "external_sources_goelzer2025_gis.csv.gz"))
+    y = d[d["Year"].isin([2015, 2100])].pivot_table(index=["Group", "Model", "Exp"], columns="Year",
+                                                     values="Cumulative ice sheet mass change (Gt)").reset_index()
+    y["loss"] = y[2015] - y[2100]
+    y["forcing"] = y["Exp"].str.rsplit("_", n=1).str[0]
+    y["level"] = [M.EXP_META[("Goelzer2025", "GIS", e)]["ocean_sensitivity"] for e in y["Exp"]]
+    w = y.pivot_table(index=["Group", "Model", "forcing"], columns="level", values="loss")
+    hl = w.dropna(subset=["High", "Low"])
+    assert len(hl) > 100 and (hl["High"] > hl["Low"]).mean() > 0.95
+    vv = w.dropna(subset=["Very high", "Very low"])
+    assert (vv["Very high"] > vv["Very low"]).mean() > 0.9
+
+
+# ── Rahlves et al. 2025 (review 07) ──────────────────────────────────────
+
+R25 = RUNS[RUNS["group"] == "Rahlves2025"]
+
+
+def test_rahlves2025_configurations_and_runs():
+    """Two configurations (decision R1); 16 Table A1 projections x 3 retreat
+    sensitivities each; no control runs (decision R2)."""
+    assert set(R25["model"]) == {"CISM (ERA5-init)", "CISM (ESM-init)"}
+    assert (R25.groupby("model").size() == 48).all()
+    assert "Control" not in set(R25["scenario"])
+    assert set(R25["ocean_sensitivity"]) == {"Low", "Medium", "High"}
+    # ACCESS1.3 is CMIP5: RCP8.5 in both branches
+    assert set(R25.loc[R25["climate_model"] == "ACCESS1-3", "scenario"]) == {"RCP8.5"}
+    assert set(R25["climate_model"]) == {"ACCESS1-3", "CNRM-CM6-1", "UKESM1-0-LL-Robin", "CESM2-Leo", "CNRM-ESM2-1",
+                                         "MPI-ESM1-2-HR", "IPSL-CM6A-LR", "NorESM2-MM", "CESM2", "UKESM1-0-LL"}
+
+
+def test_rahlves2025_model_classes():
+    for model in ("CISM (ERA5-init)", "CISM (ESM-init)"):
+        m = M.model_meta("GIS", "Rahlves2025", model)
+        assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+            "Higher-order", "Budd", "Hybrid (thickness-nudged)", "≤5 km")
+    assert set(R25["ocean_forcing"]) == {"Standard"} and set(R25["regional_climate_model"]) == {"MARv3.12"}
+
+
+# ── Aschwanden et al. 2019 (review 08) ───────────────────────────────────
+
+ASCH = RUNS[RUNS["group"] == "Aschwanden2019"]
+
+
+def test_aschwanden2019_runs_and_model():
+    """A19's large ensemble: 489 + 491 + 478 real PISM runs under RCP2.6/4.5/8.5."""
+    assert len(ASCH) == 1458 and (ASCH["review_status"] == "reviewed").all()
+    assert ASCH["scenario"].value_counts().to_dict() == {"RCP4.5": 491, "RCP2.6": 489, "RCP8.5": 478}
+    m = M.model_meta("GIS", "Aschwanden2019", "PISM")
+    assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+        "Shallow", "Coulomb-limited", "Hybrid (thickness-nudged)", "≤5 km")
+    # same initial state and sliding law as UAF-PISM in ISMIP6-GIS
+    uaf = M.model_meta("GIS", "UAF", "PISM1")
+    assert (m["initialization"], m["sliding_law"]) == (uaf["initialization"], uaf["sliding_law"])
+
+
+def test_aschwanden2019_forcing_fields():
+    assert set(ASCH["climate_model"]) == {"GISS-E2-H", "GISS-E2-R", "IPSL-CM5A-LR", "MPI-ESM-LR"}
+    assert set(ASCH["regional_climate_model"]) == {"None (AOGCM output used directly)"}
+    assert set(ASCH["ocean_forcing"]) == {"Open"}
+    assert set(ASCH["ocean_sensitivity"]) == {"Study-specific (see experiment)"}
+    assert not ASCH["ice_shelf_fracture"].any() and BIAS_ELIGIBLE[ASCH.index].all()
+    e = M.EXP_META[("Aschwanden2019", "GIS", "les000_rcp26")]["extras"]
+    assert set(e) >= {"OCM", "OCS", "q"} and e["OCM"] in {"low", "mid", "high"}
+    assert "PRS (%/K)" not in e  # file-only parameters stay out of the hover

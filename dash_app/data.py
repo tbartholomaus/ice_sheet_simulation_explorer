@@ -301,7 +301,7 @@ def _build_hover(group, model, exp, ism_m, exp_m, publication):
     # ensemble parameters) share one line; longer ones get a line each.
     short, long_ = [], []
     for label, value in exp_m["extras"].items():
-        item = f"{label[:1].upper() + label[1:]}: {value}"
+        item = f"{label if len(label) == 1 else label[:1].upper() + label[1:]}: {value}"  # keep symbols like q
         (short if len(str(value)) <= 8 else long_).append(item)
     if short:
         lines.append(" · ".join(short))
@@ -310,8 +310,6 @@ def _build_hover(group, model, exp, ism_m, exp_m, publication):
         lines.append("<b>Ice-shelf collapse imposed: excluded from the bias analysis</b>")
     if ism_m["review_status"] == "not yet reviewed":
         lines.append("<i>Metadata not yet reviewed against the source paper</i>")
-    # where this run's encoding is documented, for reviewers
-    lines.append(f"<i>Metadata: dash_app/metadata/{ism_m['study']}_*.csv</i>")
     return "<br>".join(_wrap(line) for line in lines)
 
 

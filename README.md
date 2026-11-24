@@ -32,9 +32,10 @@ The app (`dash_app/`) is a single scrolling page with shared controls in a sideb
   similar RCP and SSP scenarios into "composite" scenarios. The metadata behind these groupings is in
   `dash_app/metadata/`, as a models file and an experiments file per study, with each source's own
   description beside the encoded value (see `dash_app/metadata/README.md`). So far the two ISMIP6
-  ensembles, the PROTECT Greenland ensemble, DeConto & Pollard (2016), DeConto et al. (2021) and Coulon et al.
-  (2024) have been reviewed against their papers (Seroussi et al. 2020; Goelzer et al. 2020; Goelzer et al. 2025;
-  DeConto and Pollard 2016; DeConto et al. 2021; Coulon et al. 2024) and the
+  ensembles, the PROTECT Greenland ensemble, DeConto & Pollard (2016), DeConto et al. (2021), Coulon et al.
+  (2024), Rahlves et al. (2025) and Aschwanden et al. (2019) have been reviewed against their papers (Seroussi et
+  al. 2020; Goelzer et al. 2020; Goelzer et al. 2025; DeConto and Pollard 2016; DeConto et al. 2021; Coulon et al.
+  2024; Rahlves et al. 2025; Aschwanden et al. 2019) and the
   wider literature; the other studies' encodings are logged as they are, marked "(unreviewed)" / "Not yet
   reviewed", until each is reviewed.
 - **Units:** Gt of ice, or mm of sea-level equivalent.
@@ -129,7 +130,7 @@ plotly, statsmodels, xarray, netCDF4, h5py, requests and ipywidgets.
 | Aschwanden 2019 | Aschwanden et al. (2019), *Science Advances* 5, eaav9396, https://doi.org/10.1126/sciadv.aav9396; ensemble as archived with Aschwanden & Brinkerhoff (2022), https://doi.org/10.18739/A2KW57K4R |
 | DeConto 2021 | DeConto et al. (2021), *Nature* 593, 83–89, https://doi.org/10.1038/s41586-021-03427-0; runs from the paper's Figure 1 source data (+1.5 °C, +2 °C, +3 °C and RCP8.5): the 109-member calibrated ensemble, whose members were selected partly by matching IMBIE's 1992–2017 Antarctic mass change |
 | Coulon 2024 | Coulon et al. (2024), *The Cryosphere* 18, 653, https://doi.org/10.5194/tc-18-653-2024; runs from the Zenodo archive (https://doi.org/10.5281/zenodo.8398771): all 100 members, unweighted, 1950–2014 hindcast joined to the SSP5-8.5 projection |
-| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025 |
+| Rahlves 2025 | Rahlves et al. (2025), *The Cryosphere* 19, 1205, https://doi.org/10.5194/tc-19-1205-2025; runs from the NIRD archive (https://doi.org/10.11582/2024.00128) at 4 km: the ERA5-init and ESM-init branches (two model configurations), each historical run joined to its projections; control runs not included |
 | Goelzer 2025 (PROTECT GIS) | Goelzer et al. (2025), *The Cryosphere* 19, 6887, https://doi.org/10.5194/tc-19-6887-2025 |
 | Edwards 2021 (AIS Main, AIS Risk Averse, GIS) | Edwards et al. (2021), *Nature* 593, 74–82, https://doi.org/10.1038/s41586-021-03302-y; samples from https://github.com/tamsinedwards/emulandice |
 | IPCC AR6 (AIS, GIS) | Fox-Kemper et al. (2021), IPCC AR6 WG1 Chapter 9; data: Garner et al. (2021), IPCC AR6 Sea Level Projections, https://doi.org/10.5281/zenodo.5914710 (CC-BY-4.0). Medium-confidence (all five SSPs) and low-confidence (SSP1-2.6, 2-4.5, 5-8.5) projections; each "run" is one percentile path (1st–99th), decadal values interpolated to annual from the 2005 baseline |
@@ -170,7 +171,8 @@ reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and
 encoding decision. So far the
 ISMIP6-Antarctica (`Seroussi2020_*.csv`), ISMIP6-Greenland (`Goelzer2020_*.csv`), PROTECT Greenland
 (`Goelzer2025_*.csv`), DeConto & Pollard 2016 (`DeConto2016_*.csv`), DeConto et al. 2021
-(`DeConto2021_*.csv`) and Coulon et al. 2024 (`Coulon2024_*.csv`) ensembles have been
+(`DeConto2021_*.csv`), Coulon et al. 2024 (`Coulon2024_*.csv`), Rahlves et al. 2025 (`Rahlves2025_*.csv`) and
+Aschwanden et al. 2019 (`Aschwanden2019_*.csv`) ensembles have been
 reviewed against their papers and the wider literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
 reviewed", until each is reviewed. If you find an encoding you disagree with, please
 [open an issue](https://github.com/tbartholomaus/ice_sheet_simulation_explorer/issues) naming the file,

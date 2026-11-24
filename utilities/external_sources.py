@@ -62,12 +62,16 @@ def _download(url, cache_name, min_expected_bytes=1):
 # the Greenland ice sheet", The Cryosphere 19, 1205,
 # https://doi.org/10.5194/tc-19-1205-2025.
 #
-# CISM (Weertman power-law sliding, inverse-calibrated basal friction),
-# ERA5-forced historical run (tracks IMBIE within observed uncertainty) and
-# ESM-forced runs, projected under SSP1-2.6/2-4.5/5-8.5 (RCP8.5 for the
-# CMIP5-forced member) to 2100/2101, at three ocean-sensitivity tiers
-# (Low/Medium/High, mapped onto the same `ocean_sensitivity` field ISMIP6's
-# own GIS experiments use).
+# CISM with DIVA stress balance and a Budd-type sliding law (tau_b depends on
+# effective pressure), basal friction nudged to the observed surface during a
+# 5000-yr spin-up. Two initialization branches, kept as two model
+# configurations (decision R1, docs/metadata_review/07_Rahlves2025_CISM_GIS.md):
+# ERA5-init (one ERA5-forced spin-up; 1960-2014 ERA5/MAR historical run;
+# projections forced by ESM anomalies) and ESM-init (one spin-up per ESM;
+# absolute ESM/MAR forcing throughout). Projections under SSP1-2.6/2-4.5/5-8.5
+# (RCP8.5 for CMIP5 ACCESS1.3) to 2100, at three retreat sensitivities
+# (Low/Medium/High = kappa 75th/50th/25th percentiles). Control runs (reference
+# climate held from 2015) are left out (decision R2).
 #
 # Archive: NIRD Research Data Archive, https://doi.org/10.11582/2024.00128
 # (767 GB total -- per-run `scalars.nc` files, the same domain-integrated-
@@ -90,6 +94,17 @@ ESM_SCENARIO_MAP = {
     "proj_ssp126": "SSP1-2.6", "proj_ssp245": "SSP2-4.5", "proj_ssp585": "SSP5-8.5",
 }
 ERA5_F_CODE_TO_SCENARIO = {"26": "SSP1-2.6", "45": "SSP2-4.5", "85": "SSP5-8.5"}
+# ERA5_init run codes, from the archive's 04 km ensemble README.txt ('GCM model from which forcing is used is
+# coded as 'm'': ["ACCESS1.3"]="06" ["CNRM-CM6"]="07" ["UKESM1-CM6"]="08" ["CESM2"]="09" ["CNRM-ESM2"]="10"
+# ["MPI-ESM1-2-HR"]="11" ["IPSL-CM6A-LR"]="12" ["NorESM2"]="13" ["CESM2-CMIP6"]="14" ["UKESM1-0-LL-CMIP6"]="15").
+# The codes follow Table A1's model order, so 08 and 09 are UKESM1-0-LL-Robin and CESM2-Leo; names here use
+# the ESM_init branch's directory names, so both branches name each model the same way.
+ERA5_M_CODE_TO_GCM = {
+    "06": "ACCESS1.3", "07": "CNRM-CM6", "08": "UKESM1-0-LL-Robin", "09": "CESM2-Leo", "10": "CNRM-ESM2",
+    "11": "MPI-ESM1-2-HR", "12": "IPSL-CM6A-LR", "13": "NorESM2", "14": "CESM2-CMIP6", "15": "UKESM1-0-LL-CMIP6",
+}
+CMIP5_GCMS = {"ACCESS1.3"}  # forced by RCP8.5, though the archive codes rcp85 and ssp585 alike as f85
+R_TIER_TO_KAPPA_PERCENTILE = {"Low": "75th", "Med": "50th", "High": "25th"}  # README: med=50, high=25, low=75
 
 
 def _rahlves2025_select_scalars_urls():
@@ -184,8 +199,10 @@ def _rahlves2025_parse_filename(cache_name):
         else:
             m = re.search(r"_m(\d+)_r(\d+)_f(\d+)_o(\d+)", runtype)
             m_code, _, f_code, _ = m.groups()
-            return {"init_group": "ERA5", "gcm": f"GCM-{m_code} (MAR-downscaled)", "r_tier": r_tier,
-                    "runtype": runtype, "scenario": ERA5_F_CODE_TO_SCENARIO[f_code], "is_hist": False}
+            gcm = ERA5_M_CODE_TO_GCM[m_code]
+            scenario = "RCP8.5" if gcm in CMIP5_GCMS and f_code == "85" else ERA5_F_CODE_TO_SCENARIO[f_code]
+            return {"init_group": "ERA5", "gcm": gcm, "r_tier": r_tier,
+                    "runtype": runtype, "scenario": scenario, "is_hist": False}
 
 
 def load_rahlves2025_gis():
@@ -222,6 +239,8 @@ def load_rahlves2025_gis():
     for name, m in meta_by_file.items():
         if m["is_hist"]:
             continue  # merged into each projection below, not its own standalone Exp
+        if m["scenario"] == "Control":
+            continue  # 1960-1989 reference climate held from 2015, not a projection (decision R2)
         key = (m["init_group"], m["r_tier"]) if m["init_group"] == "ERA5" else (m["init_group"], m["gcm"], m["r_tier"])
         hist_name = hist_by_key.get(key)
 
@@ -244,7 +263,7 @@ def load_rahlves2025_gis():
         exp_code = f"{m['init_group']}_{m['r_tier']}_{m['gcm']}_{m['scenario']}".replace(" ", "").replace("/", "-")
         rows.append(pd.DataFrame({
             "Year": years, "Cumulative ice sheet mass change (Gt)": mass_gt,
-            "Group": "Rahlves2025", "Model": "CISM", "Exp": exp_code, "IS": "GIS",
+            "Group": "Rahlves2025", "Model": f"CISM ({m['init_group']}-init)", "Exp": exp_code, "IS": "GIS",
         }))
         exp_meta_rows.append({
             "Exp": exp_code, "climate_model": m["gcm"], "scenario": m["scenario"],
@@ -452,13 +471,21 @@ def load_coulon2024_ais(keep_through_year=None):
 # Greenland Ice Sheet", Geophysical Research Letters 49, e2022GL099058,
 # https://doi.org/10.1029/2022GL099058.
 #
-# PISM, forced by a temperature-index SMB model driven by RCP-scenario
-# warming. The paper trains a PyTorch neural-network emulator on ~1000 true
-# PISM runs, then draws large ensembles from it both before ("les", the
-# prior -- what's loaded here, per an explicit user request to use the
-# uncalibrated ensemble rather than the Bayesian-calibrated posterior) and
-# after ("mc") jointly conditioning on observed surface speed and observed
-# cumulative mass loss.
+# What the runs are (checked in docs/metadata_review/08_Aschwanden2019_PISM_GIS.md):
+# the "les" file loaded here is the large ensemble of Aschwanden et al. (2019),
+# "Contribution of the Greenland Ice Sheet to sea level over the next
+# millennium", Science Advances 5, eaav9396 -- REAL PISM runs (hybrid
+# SIA+SSA, 1.8 km, temperature-index SMB on a HIRHAM5 climatology shifted by
+# a Greenland-mean CMIP5 temperature anomaly), 500 Latin-hypercube members
+# per RCP, 2008-3007, republished in this archive zeroed at 2008. The
+# archive's metadata: the scalar files are "prepared with the Parallel Ice
+# Sheet Model (PISM) ... for both the ensemble using the Prior and the
+# Posterior (calibrated) parameter distribution". Aschwanden & Brinkerhoff's
+# neural-network emulator (trained on ~1000 surface-speed runs) only
+# calibrates the parameters; the posterior "mc" file holds PISM runs of
+# posterior samples and is NOT used here (the user chose the uncalibrated
+# ensemble). Checked: the file's 16th-84th percentiles reproduce A19 Table 1
+# (e.g. 2100: 6-19, 8-23, 14-34 cm vs 5-19, 8-23, 14-33 cm).
 #
 # Archive: Aschwanden & Brinkerhoff (2022), Arctic Data Center,
 # https://doi.org/10.18739/A2KW57K4R -- a plain Apache directory listing
@@ -495,14 +522,10 @@ ASCHWANDEN2022_KEEP_THROUGH_YEAR = 2100  # trim the 2008-3007 file to the paper'
 # "We select the four GCMs that extend to year 2300: GISS-E2-H, GISS-E2-R,
 # IPSL-CM5A-LR, and MPI-ESM-LR. We select the four GCM projections with
 # equal probability" (Table 1 lists the GCM parameter's distribution as
-# "uniform (1-4)"). The PDF does NOT explicitly tabulate which numeric code
-# is which GCM -- this order (matching the prose listing order, 0-indexed
-# instead of the paper's 1-4) is our own inference, not a stated mapping.
-# It's corroborated by lhs_samples_gcm.csv's GCM column taking exactly the
-# values {0,1,2,3} with an EXACTLY even 125/125/125/125 split across 500
-# rows, matching "select with equal probability" -- but if this specific
-# code-to-name ORDER is ever contradicted by another source, treat this
-# dict, not the underlying data, as what's wrong.
+# "uniform (1-4)"). The code-to-name order below is the one the authors' own
+# run script uses to pick each member's forcing file: pism/pism-gris,
+# stability/lhs_ensemble.py, gcm_dict = {0.0: "GISS-E2-H", 1.0: "GISS-E2-R",
+# 2.0: "IPSL-CM5A-LR", 3.0: "MPI-ESM-LR"} (confirmed 2026-11-23).
 ASCHWANDEN2022_GCM_CODE_MAP = {0: "GISS-E2-H", 1: "GISS-E2-R", 2: "IPSL-CM5A-LR", 3: "MPI-ESM-LR"}
 
 
@@ -532,15 +555,16 @@ def _aschwanden2022_download_lhs_gcm():
 
 def load_aschwanden2022_gis():
     """
-    Loads Aschwanden & Brinkerhoff (2022)'s Greenland/PISM uncalibrated
-    prior ensemble as a dataframe shaped like ismip6_gis: Year, Cumulative
-    ice sheet mass change (Gt), Group, Model, Exp, IS -- plus
+    Loads Aschwanden et al. (2019)'s Greenland/PISM large ensemble (real
+    PISM runs, uncalibrated), as archived with Aschwanden & Brinkerhoff
+    (2022), as a dataframe shaped like ismip6_gis: Year, Cumulative ice
+    sheet mass change (Gt), Group, Model, Exp, IS -- plus
     climate_model/scenario/protocol columns for classification.
 
     Step 1 (above): download aschwanden_et_al_2019_les_2008_norm.csv.gz.
-    Step 1b (above): download lhs_samples_gcm.csv, the companion 2019
-    millennium-study LHS parameter table that this ensemble's "Experiment"
-    ids are drawn from, for per-member climate_model classification.
+    Step 1b (above): download lhs_samples_gcm.csv, the 2019 study's own LHS
+    parameter table (the ids in the "Experiment" column are its rows), for
+    per-member climate_model classification.
     Step 2: read the `Mass (Gt)` column directly (already the exact
     cumulative-mass-change quantity this module's other loaders have to
     derive via unit conversion) for each (Experiment, RCP) realization,
@@ -551,8 +575,8 @@ def load_aschwanden2022_gis():
     `climate_model` from lhs_samples_gcm.csv's GCM column (joined on
     Experiment == id, decoded via ASCHWANDEN2022_GCM_CODE_MAP), and mark
     `protocol` as "Uncalibrated (prior ensemble)" -- distinguishing it from
-    the archive's separate Bayesian-calibrated "mc" (posterior) ensemble,
-    which this loader does NOT use.
+    the archive's separate calibrated "mc" (posterior) ensemble, PISM runs
+    of posterior parameter samples, which this loader does NOT use.
 
     Zero-referenced at 2008 rather than at a common absolute ice-sheet mass
     -- like every other source in this module, only rate differences over a

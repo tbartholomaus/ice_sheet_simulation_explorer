@@ -130,6 +130,7 @@ Table A1 codes: DAv = data assimilation of velocity; DAs = of surface elevation;
 - ~~**D4. MUN-GSM2 sliding.**~~ **DECIDED:** Linear (the soft-bed law).
 - ~~**D5. GCM names.**~~ **DECIDED:** encode official CMIP model identifiers through value maps; the verbatim spellings stay in the experiments files. Applied to Seroussi2020 (CSIRO-MK3 → CSIRO-Mk3-6-0) and Goelzer2020 (NorESM-M → NorESM1-M, CSIRO-Mk3.6 → CSIRO-Mk3-6-0); other studies at their review.
 - ~~**D6. Ocean sensitivity.**~~ **DECIDED:** shared Low/Medium/High labels; encoding_rules.csv gives each ice sheet's meaning (AIS γ0 5/50/95th, GIS κ 25/50/75th percentiles).
+  - **Clarification (2026-11-23).** For GIS, High means more retreat, which is the **25th** percentile of κ: Goelzer et al. 2025 has "25th (high) and 75th (low) percentile value (like in ISMIP6)", and Rahlves et al. 2025's archive codes high = 25, low = 75. (Goelzer et al. 2020 Sect. 2 words it as "(medium, high, low) covering the median, 75 % and 25 % percentiles".) The encodings here follow Table 1's names and are correct: exp09 (High) loses more ice by 2100 than exp10 (Low) under the same MIROC5 RCP8.5 forcing. Only the percentile wording in `encoding_rules.csv` and `experiment_columns.csv` is corrected.
 - ~~**D7. IMAU-ICE sliding.**~~ **DECIDED:** Power law (Weertman), medium-low confidence, on the strength of de Boer et al. (2015).
 
 
@@ -145,3 +146,28 @@ On branch `metadata-review-ais`, commit `1fc791b`:
 - `metadata.py`: an optional model-level ocean-forcing override (validated), and a generic experiments key column.
 - `Seroussi2020`: VUW-PISM → Hybrid (D1); CSIRO-MK3 → CSIRO-Mk3-6-0 (D5).
 - Tests: 61 pass. The run table changed in exactly the expected rows: 165 GIS runs, the 4 AIS VUW runs (initialization) and the 14 AIS CSIRO runs (GCM name). No external study changed.
+
+---
+
+## Appendix: what "High" and "Low" ocean sensitivity mean for Greenland (added 2026-11-23)
+
+Sources: Slater et al. (2019), TC 13, 2489, https://doi.org/10.5194/tc-13-2489-2019, and Slater et al. (2020), TC 14, 985, https://doi.org/10.5194/tc-14-985-2020.
+
+**The parameter.** Retreat is ΔL = κ Δ(Q^0.4 TF). κ is fitted at about 200 tidewater glaciers over 1960–2018. Its distribution is skewed: "very few positive κ values ... and a long tail of negative κ values". The median and quartiles are "κ50 = −0.17, while the lower and upper quartiles take values κ25 = −0.37 and κ75 = −0.06". The more negative κ, the more retreat (a large |κ| means a glacier "highly sensitive to melting"). So κ's 25th percentile is the high-retreat end.
+
+**How each study defines High:**
+
+| Source | Definition (quoted) | High is | Retreat |
+|---|---|---|---|
+| Slater et al. 2019 | κ quartiles κ25 = −0.37, κ75 = −0.06 | κ25 | most |
+| Slater et al. 2020 (ISMIP6 ocean forcing) | "the low- and high-retreat scenarios as the trajectories with the 25th and 75th percentile retreats at 2100", from 10⁴ sampled κ trajectories per AOGCM and sector | the 75th-percentile **retreat** trajectory (≈ κ25) | more |
+| Goelzer et al. 2020 (this study) | "(medium, high, low) covering the median, 75 % and 25 % percentiles of sensitivity parameter κ" | the 75th percentile, which is Slater 2020's **retreat** percentile, though worded as κ's | more |
+| Goelzer et al. 2025 (PROTECT) | "median (med), 25th (high) and 75th (low) percentile value (like in ISMIP6)"; "very high retreat sensitivity (5th percentile)" | κ25; Very high = κ5 | more |
+| Rahlves et al. 2025 | "median, 25th percentile, and 75th percentile ... referred to as medium, high, and low"; archive README "high"=25, "low"=75 | κ25 | more |
+
+**The data agree with the labels.** For the same configuration and forcing, High loses more ice by 2100 than Low:
+- **This study:** exp09 (High) against exp10 (Low).
+- **Goelzer 2025:** 244 of 245 pairs (p25 against p75).
+- **Rahlves 2025:** 32 of 32 pairs (Medium against Low); High beats Medium in 31 of 32.
+
+`encoding_rules.csv` gives both definitions: the κ percentile where a study sets κ directly, and the retreat trajectory for the ISMIP6 forcing.

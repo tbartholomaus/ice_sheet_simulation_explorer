@@ -71,6 +71,10 @@ Notes:
 - ~~**G1. Split each lab into its configurations.**~~ **DECIDED:** yes. Group = "Goelzer2025-<lab>", Model = the Table B1 configuration; `ice_model` still names the code base (Elmer/Ice, IMAU-ICE, CISM, GISM), so grouping by ice sheet model shows four models.
 - ~~**G2. NORCE resolution duplicates.**~~ **DECIDED:** restore them; every NORCE resolution is its own configuration.
 - ~~**G3. Retreat sensitivity.**~~ **DECIDED:** p05/p25/p50/p75/p95 → Very low / Low / Medium / High / Very high (the two new values added to `encoding_rules.csv`).
+  - **Correction (2026-11-23, found during review 07).** The direction of this mapping was wrong.
+    - In PROTECT, as in ISMIP6, a **lower** κ percentile means **more** retreat. Goelzer et al. 2025 Sect. 2.2: κ is "sampled at its median (med), 25th (high) and 75th (low) percentile value (like in ISMIP6) and in extension at its 5th and 95th percentile value". Sect. 3: "very high retreat sensitivity (5th percentile)".
+    - The bundled runs agree: for the same configuration and forcing, p25 loses more ice by 2100 than p75 in 244 of 245 pairs, and p05 more than p95 in 42 of 43.
+    - The value map is now **p05 → Very high, p25 → High, p50 → Medium, p75 → Low, p95 → Very low**. `encoding_rules.csv` is corrected to match, and a test checks that High runs lose more ice than Low runs.
 - ~~**G4. Regional climate model.**~~ **DECIDED:** a new characteristic (grouping and ANOVA factor) across studies. ISMIP6-AIS: "None (AOGCM output used directly)" (Seroussi et al. 2020 Sect. 2.2); ISMIP6-GIS: MARv3.9 (Goelzer et al. 2020 Sect. 2); unreviewed studies: "Not yet reviewed".
 - ~~**G5. Pre-CMIP6 members.**~~ **DECIDED:** CESM2-Leo and UKESM1-0-LL-Robin stay their own GCM values.
 

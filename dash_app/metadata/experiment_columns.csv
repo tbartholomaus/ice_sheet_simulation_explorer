@@ -16,7 +16,7 @@ Seroussi2020,Regional climate model,regional_climate_model,,
 Goelzer2020,Exp ID,(key),,
 Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
 Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,
-Goelzer2020,Ocean sensitivity,ocean_sensitivity,,Low/Medium/High = 25th/50th/75th percentiles of the retreat parameter kappa (Goelzer et al. 2020 Sect. 2)
+Goelzer2020,Ocean sensitivity,ocean_sensitivity,,"By name: High = more retreat, the 75th-percentile retreat trajectory at 2100 of the ISMIP6 forcing (Slater et al. 2020), equivalent to kappa25 = -0.37 (Slater et al. 2019); Low = the 25th-percentile trajectory (kappa75)"
 Goelzer2020,Table 3 group,(hover),,
 Goelzer2020,Regional climate model,regional_climate_model,,
 DeConto2016,Experiment,(key),,
@@ -32,9 +32,23 @@ DeConto2016,Pliocene SL (m),(file),,The ensemble scoring values; kept out of the
 DeConto2016,LIG SL (m),(file),,
 DeConto2016,Protocol,(hover),,
 Aschwanden2019,Experiment,(key),,
-Aschwanden2019,climate_model,climate_model,,
-Aschwanden2019,scenario,scenario,,
-Aschwanden2019,protocol,(hover),,
+Aschwanden2019,GCM,climate_model,,CMIP5 identifiers; code order confirmed by pism-gris lhs_ensemble.py
+Aschwanden2019,Scenario,scenario,,
+Aschwanden2019,Climate forcing,(hover),,
+Aschwanden2019,Regional climate model,regional_climate_model,"None: HIRHAM5 2000-2015 climatology, no downscaling=None (AOGCM output used directly)","Decision AS1, 2026-11-23"
+Aschwanden2019,Ocean forcing,ocean_forcing,Own submarine-melt scheme driven by air-temperature anomalies=Open,The group's own scheme (decision AS2)
+Aschwanden2019,Ocean sensitivity,ocean_sensitivity,"Own low, mid or high regimes (OCM, OCS)=Study-specific (see experiment)","Decision AS2, 2026-11-23"
+Aschwanden2019,OCM,(hover),,Present-day submarine melt regime
+Aschwanden2019,OCS,(hover),,Submarine melt response to warming
+Aschwanden2019,q,(hover),,Pseudo-plastic sliding exponent
+Aschwanden2019,PRS (%/K),(file),,Kept out of the hover to keep it short
+Aschwanden2019,FICE (mm/K/day),(file),,
+Aschwanden2019,FSNOW (mm/K/day),(file),,
+Aschwanden2019,RFR,(file),,
+Aschwanden2019,TCT,(file),,
+Aschwanden2019,VCM (MPa),(file),,
+Aschwanden2019,SIAE,(file),,
+Aschwanden2019,Protocol,(hover),,
 DeConto2021,Experiment,(key),,
 DeConto2021,Scenario,scenario,,Warming-level scenarios keep their own labels; RCP8.5 joins composite 8.5
 DeConto2021,Emissions pathway,(hover),,
@@ -62,9 +76,14 @@ Coulon2024,Kice (mm/PDD),(file),,
 Coulon2024,Ksnow (mm/PDD),(file),,
 Coulon2024,Protocol,(hover),,"Decision C5, 2026-11-23"
 Rahlves2025,Experiment,(key),,
-Rahlves2025,climate_model,climate_model,,
-Rahlves2025,scenario,scenario,,
-Rahlves2025,protocol,(hover),,
+Rahlves2025,Initialization branch,(hover),,ERA5-init and ESM-init are separate model configurations (decision R1)
+Rahlves2025,ESM,climate_model,ACCESS1.3=ACCESS1-3; CNRM-CM6=CNRM-CM6-1; CNRM-ESM2=CNRM-ESM2-1; CESM2-CMIP6=CESM2; UKESM1-0-LL-CMIP6=UKESM1-0-LL; NorESM2=NorESM2-MM,"CMIP identifiers (D5), as Goelzer 2025; CESM2-Leo and UKESM1-0-LL-Robin kept distinct (G5)"
+Rahlves2025,Scenario,scenario,,
+Rahlves2025,Historical forcing,(hover),,
+Rahlves2025,Regional climate model,regional_climate_model,,
+Rahlves2025,Ocean forcing,ocean_forcing,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)=Standard",The ISMIP6 retreat parameterization
+Rahlves2025,Retreat sensitivity,ocean_sensitivity,low=Low; med=Medium; high=High,"By name: high = kappa 25th percentile (-0.37, more retreat), low = 75th (-0.06), as Slater et al. 2019; archive README high=25, low=75"
+Rahlves2025,Kappa percentile,(hover),,
 Edwards2021,Experiment,(key),,
 Edwards2021,climate_model,climate_model,,
 Edwards2021,scenario,scenario,,
@@ -73,11 +92,10 @@ IPCCAR6,Experiment,(key),,
 IPCCAR6,climate_model,climate_model,,
 IPCCAR6,scenario,scenario,,
 IPCCAR6,protocol,(hover),,
-Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity tier; not yet reviewed
 Edwards2021,Ice sheet,(key),,
 IPCCAR6,Ice sheet,(key),,
 Goelzer2025,Experiment,(key),,
 Goelzer2025,GCM,climate_model,ACCESS1.3=ACCESS1-3; CSIRO-Mk3.6.0=CSIRO-Mk3-6-0,"CMIP model identifiers (D5); CESM2-Leo and UKESM1-0-LL-Robin are pre-CMIP6 ensemble members, kept distinct (G5)"
 Goelzer2025,Scenario,scenario,rcp26=RCP2.6; rcp85=RCP8.5; ssp126=SSP1-2.6; ssp245=SSP2-4.5; ssp585=SSP5-8.5,
 Goelzer2025,RCM,regional_climate_model,,
-Goelzer2025,Retreat percentile,ocean_sensitivity,p05=Very low; p25=Low; p50=Medium; p75=High; p95=Very high,"Percentiles of the retreat parameter kappa (decision G3, 2026-11-23)"
+Goelzer2025,Retreat percentile,ocean_sensitivity,p05=Very high; p25=High; p50=Medium; p75=Low; p95=Very low,"Percentiles of the retreat parameter kappa; a lower percentile means more retreat: ""25th (high) and 75th (low)"", ""very high retreat sensitivity (5th percentile)"" (Goelzer et al. 2025 Sects. 2.2, 3; decision G3)"

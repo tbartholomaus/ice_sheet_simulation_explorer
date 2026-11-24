@@ -1,134 +1,111 @@
-# Experiments of Rahlves et al. (2025), The Cryosphere 19, 1205, https://doi.org/10.5194/tc-19-1205-2025
-# (data https://doi.org/10.11582/2024.00128).
-# NOT YET REVIEWED. Experiment metadata as written into the bundled data by utilities/external_sources.py load_rahlves2025_gis().
-# How each column is used by the app is in experiment_columns.csv.
-Experiment,climate_model,scenario,protocol,study_ocean_sensitivity
-ERA5_High_GCM-14(MAR-downscaled)_SSP5-8.5,GCM-14 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-14(MAR-downscaled)_SSP2-4.5,GCM-14 (MAR-downscaled),SSP2-4.5,Not applicable,High
-ERA5_High_GCM-14(MAR-downscaled)_SSP1-2.6,GCM-14 (MAR-downscaled),SSP1-2.6,Not applicable,High
-ERA5_High_GCM-13(MAR-downscaled)_SSP5-8.5,GCM-13 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-06(MAR-downscaled)_SSP5-8.5,GCM-06 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-11(MAR-downscaled)_SSP2-4.5,GCM-11 (MAR-downscaled),SSP2-4.5,Not applicable,High
-ERA5_High_GCM-08(MAR-downscaled)_SSP5-8.5,GCM-08 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-15(MAR-downscaled)_SSP5-8.5,GCM-15 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-12(MAR-downscaled)_SSP5-8.5,GCM-12 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-13(MAR-downscaled)_SSP2-4.5,GCM-13 (MAR-downscaled),SSP2-4.5,Not applicable,High
-ERA5_High_GCM-09(MAR-downscaled)_SSP5-8.5,GCM-09 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-07(MAR-downscaled)_SSP5-8.5,GCM-07 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_GCM-11(MAR-downscaled)_SSP5-8.5,GCM-11 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_High_ERA5_Control,ERA5,Control,Not applicable,High
-ERA5_High_GCM-15(MAR-downscaled)_SSP2-4.5,GCM-15 (MAR-downscaled),SSP2-4.5,Not applicable,High
-ERA5_High_GCM-10(MAR-downscaled)_SSP5-8.5,GCM-10 (MAR-downscaled),SSP5-8.5,Not applicable,High
-ERA5_Med_GCM-13(MAR-downscaled)_SSP5-8.5,GCM-13 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-09(MAR-downscaled)_SSP5-8.5,GCM-09 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-14(MAR-downscaled)_SSP2-4.5,GCM-14 (MAR-downscaled),SSP2-4.5,Not applicable,Medium
-ERA5_Med_GCM-11(MAR-downscaled)_SSP5-8.5,GCM-11 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-06(MAR-downscaled)_SSP5-8.5,GCM-06 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-14(MAR-downscaled)_SSP5-8.5,GCM-14 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-15(MAR-downscaled)_SSP5-8.5,GCM-15 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-11(MAR-downscaled)_SSP1-2.6,GCM-11 (MAR-downscaled),SSP1-2.6,Not applicable,Medium
-ERA5_Med_GCM-07(MAR-downscaled)_SSP5-8.5,GCM-07 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-14(MAR-downscaled)_SSP1-2.6,GCM-14 (MAR-downscaled),SSP1-2.6,Not applicable,Medium
-ERA5_Med_GCM-12(MAR-downscaled)_SSP5-8.5,GCM-12 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-10(MAR-downscaled)_SSP5-8.5,GCM-10 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_High_GCM-11(MAR-downscaled)_SSP1-2.6,GCM-11 (MAR-downscaled),SSP1-2.6,Not applicable,High
-ERA5_Med_GCM-15(MAR-downscaled)_SSP2-4.5,GCM-15 (MAR-downscaled),SSP2-4.5,Not applicable,Medium
-ERA5_Med_GCM-08(MAR-downscaled)_SSP5-8.5,GCM-08 (MAR-downscaled),SSP5-8.5,Not applicable,Medium
-ERA5_Med_GCM-11(MAR-downscaled)_SSP2-4.5,GCM-11 (MAR-downscaled),SSP2-4.5,Not applicable,Medium
-ERA5_Med_GCM-13(MAR-downscaled)_SSP2-4.5,GCM-13 (MAR-downscaled),SSP2-4.5,Not applicable,Medium
-ERA5_Low_GCM-11(MAR-downscaled)_SSP2-4.5,GCM-11 (MAR-downscaled),SSP2-4.5,Not applicable,Low
-ERA5_Low_GCM-12(MAR-downscaled)_SSP5-8.5,GCM-12 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-13(MAR-downscaled)_SSP5-8.5,GCM-13 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-07(MAR-downscaled)_SSP5-8.5,GCM-07 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-08(MAR-downscaled)_SSP5-8.5,GCM-08 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-06(MAR-downscaled)_SSP5-8.5,GCM-06 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-11(MAR-downscaled)_SSP1-2.6,GCM-11 (MAR-downscaled),SSP1-2.6,Not applicable,Low
-ERA5_Low_GCM-10(MAR-downscaled)_SSP5-8.5,GCM-10 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-15(MAR-downscaled)_SSP2-4.5,GCM-15 (MAR-downscaled),SSP2-4.5,Not applicable,Low
-ERA5_Low_GCM-14(MAR-downscaled)_SSP1-2.6,GCM-14 (MAR-downscaled),SSP1-2.6,Not applicable,Low
-ERA5_Low_GCM-14(MAR-downscaled)_SSP2-4.5,GCM-14 (MAR-downscaled),SSP2-4.5,Not applicable,Low
-ERA5_Low_GCM-09(MAR-downscaled)_SSP5-8.5,GCM-09 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-14(MAR-downscaled)_SSP5-8.5,GCM-14 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_GCM-13(MAR-downscaled)_SSP2-4.5,GCM-13 (MAR-downscaled),SSP2-4.5,Not applicable,Low
-ERA5_Low_GCM-11(MAR-downscaled)_SSP5-8.5,GCM-11 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ERA5_Low_ERA5_Control,ERA5,Control,Not applicable,Low
-ESM_High_UKESM1-0-LL-CMIP6_SSP2-4.5,UKESM1-0-LL-CMIP6,SSP2-4.5,Not applicable,High
-ESM_High_UKESM1-0-LL-CMIP6_Control,UKESM1-0-LL-CMIP6,Control,Not applicable,High
-ESM_High_UKESM1-0-LL-CMIP6_SSP5-8.5,UKESM1-0-LL-CMIP6,SSP5-8.5,Not applicable,High
-ERA5_Med_ERA5_Control,ERA5,Control,Not applicable,Medium
-ERA5_Low_GCM-15(MAR-downscaled)_SSP5-8.5,GCM-15 (MAR-downscaled),SSP5-8.5,Not applicable,Low
-ESM_Med_UKESM1-0-LL-CMIP6_SSP2-4.5,UKESM1-0-LL-CMIP6,SSP2-4.5,Not applicable,Medium
-ESM_Med_UKESM1-0-LL-CMIP6_Control,UKESM1-0-LL-CMIP6,Control,Not applicable,Medium
-ESM_Med_CESM2-Leo_Control,CESM2-Leo,Control,Not applicable,Medium
-ESM_Med_CESM2-Leo_SSP5-8.5,CESM2-Leo,SSP5-8.5,Not applicable,Medium
-ESM_Low_CESM2-Leo_Control,CESM2-Leo,Control,Not applicable,Low
-ESM_Low_CESM2-Leo_SSP5-8.5,CESM2-Leo,SSP5-8.5,Not applicable,Low
-ESM_High_CESM2-CMIP6_SSP1-2.6,CESM2-CMIP6,SSP1-2.6,Not applicable,High
-ESM_High_CESM2-CMIP6_SSP2-4.5,CESM2-CMIP6,SSP2-4.5,Not applicable,High
-ESM_High_CESM2-CMIP6_Control,CESM2-CMIP6,Control,Not applicable,High
-ESM_High_CESM2-CMIP6_SSP5-8.5,CESM2-CMIP6,SSP5-8.5,Not applicable,High
-ESM_Med_CESM2-CMIP6_SSP1-2.6,CESM2-CMIP6,SSP1-2.6,Not applicable,Medium
-ESM_Med_CESM2-CMIP6_Control,CESM2-CMIP6,Control,Not applicable,Medium
-ESM_Med_CESM2-CMIP6_SSP5-8.5,CESM2-CMIP6,SSP5-8.5,Not applicable,Medium
-ESM_Low_CESM2-CMIP6_SSP1-2.6,CESM2-CMIP6,SSP1-2.6,Not applicable,Low
-ESM_Low_CESM2-CMIP6_SSP2-4.5,CESM2-CMIP6,SSP2-4.5,Not applicable,Low
-ESM_Low_CESM2-CMIP6_Control,CESM2-CMIP6,Control,Not applicable,Low
-ESM_Low_CESM2-CMIP6_SSP5-8.5,CESM2-CMIP6,SSP5-8.5,Not applicable,Low
-ESM_High_CNRM-CM6_Control,CNRM-CM6,Control,Not applicable,High
-ESM_High_CNRM-CM6_SSP5-8.5,CNRM-CM6,SSP5-8.5,Not applicable,High
-ESM_Med_UKESM1-0-LL-CMIP6_SSP5-8.5,UKESM1-0-LL-CMIP6,SSP5-8.5,Not applicable,Medium
-ESM_Low_UKESM1-0-LL-CMIP6_SSP2-4.5,UKESM1-0-LL-CMIP6,SSP2-4.5,Not applicable,Low
-ESM_Low_UKESM1-0-LL-CMIP6_Control,UKESM1-0-LL-CMIP6,Control,Not applicable,Low
-ESM_Low_UKESM1-0-LL-CMIP6_SSP5-8.5,UKESM1-0-LL-CMIP6,SSP5-8.5,Not applicable,Low
-ESM_High_CESM2-Leo_Control,CESM2-Leo,Control,Not applicable,High
-ESM_High_CESM2-Leo_SSP5-8.5,CESM2-Leo,SSP5-8.5,Not applicable,High
-ESM_Med_CNRM-CM6_Control,CNRM-CM6,Control,Not applicable,Medium
-ESM_Med_CNRM-CM6_SSP5-8.5,CNRM-CM6,SSP5-8.5,Not applicable,Medium
-ESM_Low_CNRM-CM6_Control,CNRM-CM6,Control,Not applicable,Low
-ESM_High_IPSL-CM6A-LR_SSP5-8.5,IPSL-CM6A-LR,SSP5-8.5,Not applicable,High
-ESM_Med_IPSL-CM6A-LR_Control,IPSL-CM6A-LR,Control,Not applicable,Medium
-ESM_Med_IPSL-CM6A-LR_SSP5-8.5,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Medium
-ESM_Low_IPSL-CM6A-LR_Control,IPSL-CM6A-LR,Control,Not applicable,Low
-ESM_Low_IPSL-CM6A-LR_SSP5-8.5,IPSL-CM6A-LR,SSP5-8.5,Not applicable,Low
-ESM_High_ACCESS1.3_RCP8.5,ACCESS1.3,RCP8.5,Not applicable,High
-ESM_High_ACCESS1.3_Control,ACCESS1.3,Control,Not applicable,High
-ESM_Med_CESM2-CMIP6_SSP2-4.5,CESM2-CMIP6,SSP2-4.5,Not applicable,Medium
-ESM_Med_ACCESS1.3_RCP8.5,ACCESS1.3,RCP8.5,Not applicable,Medium
-ESM_Med_ACCESS1.3_Control,ACCESS1.3,Control,Not applicable,Medium
-ESM_High_MPI-ESM1-2-HR_SSP1-2.6,MPI-ESM1-2-HR,SSP1-2.6,Not applicable,High
-ESM_High_MPI-ESM1-2-HR_SSP2-4.5,MPI-ESM1-2-HR,SSP2-4.5,Not applicable,High
-ESM_High_MPI-ESM1-2-HR_Control,MPI-ESM1-2-HR,Control,Not applicable,High
-ESM_High_MPI-ESM1-2-HR_SSP5-8.5,MPI-ESM1-2-HR,SSP5-8.5,Not applicable,High
-ESM_Med_MPI-ESM1-2-HR_SSP1-2.6,MPI-ESM1-2-HR,SSP1-2.6,Not applicable,Medium
-ESM_Med_MPI-ESM1-2-HR_SSP2-4.5,MPI-ESM1-2-HR,SSP2-4.5,Not applicable,Medium
-ESM_Med_MPI-ESM1-2-HR_Control,MPI-ESM1-2-HR,Control,Not applicable,Medium
-ESM_Med_MPI-ESM1-2-HR_SSP5-8.5,MPI-ESM1-2-HR,SSP5-8.5,Not applicable,Medium
-ESM_Low_MPI-ESM1-2-HR_SSP1-2.6,MPI-ESM1-2-HR,SSP1-2.6,Not applicable,Low
-ESM_Low_CNRM-CM6_SSP5-8.5,CNRM-CM6,SSP5-8.5,Not applicable,Low
-ESM_High_IPSL-CM6A-LR_Control,IPSL-CM6A-LR,Control,Not applicable,High
-ESM_Low_MPI-ESM1-2-HR_SSP2-4.5,MPI-ESM1-2-HR,SSP2-4.5,Not applicable,Low
-ESM_Low_MPI-ESM1-2-HR_Control,MPI-ESM1-2-HR,Control,Not applicable,Low
-ESM_Low_MPI-ESM1-2-HR_SSP5-8.5,MPI-ESM1-2-HR,SSP5-8.5,Not applicable,Low
-ESM_Med_UKESM1-0-LL-Robin_Control,UKESM1-0-LL-Robin,Control,Not applicable,Medium
-ESM_Med_UKESM1-0-LL-Robin_SSP5-8.5,UKESM1-0-LL-Robin,SSP5-8.5,Not applicable,Medium
-ESM_Low_UKESM1-0-LL-Robin_Control,UKESM1-0-LL-Robin,Control,Not applicable,Low
-ESM_Low_UKESM1-0-LL-Robin_SSP5-8.5,UKESM1-0-LL-Robin,SSP5-8.5,Not applicable,Low
-ESM_High_CNRM-ESM2_Control,CNRM-ESM2,Control,Not applicable,High
-ESM_High_CNRM-ESM2_SSP5-8.5,CNRM-ESM2,SSP5-8.5,Not applicable,High
-ESM_Low_ACCESS1.3_RCP8.5,ACCESS1.3,RCP8.5,Not applicable,Low
-ESM_Low_ACCESS1.3_Control,ACCESS1.3,Control,Not applicable,Low
-ESM_Med_CNRM-ESM2_Control,CNRM-ESM2,Control,Not applicable,Medium
-ESM_Med_CNRM-ESM2_SSP5-8.5,CNRM-ESM2,SSP5-8.5,Not applicable,Medium
-ESM_Low_CNRM-ESM2_Control,CNRM-ESM2,Control,Not applicable,Low
-ESM_Low_CNRM-ESM2_SSP5-8.5,CNRM-ESM2,SSP5-8.5,Not applicable,Low
-ESM_High_NorESM2_SSP2-4.5,NorESM2,SSP2-4.5,Not applicable,High
-ESM_High_NorESM2_Control,NorESM2,Control,Not applicable,High
-ESM_High_NorESM2_SSP5-8.5,NorESM2,SSP5-8.5,Not applicable,High
-ESM_Med_NorESM2_SSP2-4.5,NorESM2,SSP2-4.5,Not applicable,Medium
-ESM_Med_NorESM2_Control,NorESM2,Control,Not applicable,Medium
-ESM_Med_NorESM2_SSP5-8.5,NorESM2,SSP5-8.5,Not applicable,Medium
-ESM_Low_NorESM2_SSP2-4.5,NorESM2,SSP2-4.5,Not applicable,Low
-ESM_High_UKESM1-0-LL-Robin_Control,UKESM1-0-LL-Robin,Control,Not applicable,High
-ESM_High_UKESM1-0-LL-Robin_SSP5-8.5,UKESM1-0-LL-Robin,SSP5-8.5,Not applicable,High
-ESM_Low_NorESM2_Control,NorESM2,Control,Not applicable,Low
-ESM_Low_NorESM2_SSP5-8.5,NorESM2,SSP5-8.5,Not applicable,Low
+# Experiments of Rahlves et al. (2025), Historically consistent mass loss projections of the Greenland ice sheet, The
+# Cryosphere 19, 1205-1220, https://doi.org/10.5194/tc-19-1205-2025 (R25): one row per projection, decoded from the
+# archive's run directories (NIRD, https://doi.org/10.11582/2024.00128; 4 km only). ESM-init runs name the ESM in the
+# directory (e04_MAR312_<ESM>); ERA5-init runs code it as m<nn>, decoded with the archive's 04 km README.txt (06
+# ACCESS1.3, 07 CNRM-CM6, 08 UKESM1-0-LL-Robin, 09 CESM2-Leo, 10 CNRM-ESM2, 11 MPI-ESM1-2-HR, 12 IPSL-CM6A-LR, 13
+# NorESM2, 14 CESM2-CMIP6, 15 UKESM1-0-LL-CMIP6). The 16 ESM-scenario combinations are Table A1's; ACCESS1.3 is
+# CMIP5, so RCP8.5. Retreat sensitivity: "three different values for kappa covering the median, 25th percentile, and
+# 75th percentile ... referred to as medium, high, and low sensitivity"; README: "med"=50, "high"=25, "low"=75.
+# Historical forcing: ERA5-init, "the ERA5 reanalysis, downscaled with MAR"; ESM-init, "absolute values of SMB and
+# ST from the respective ESM (dynamically downscaled with MAR)". All ESM forcing "dynamically downscaled over
+# Greenland with the Modele Atmospherique Regional (MAR) v3.12". Ocean forcing: "We follow Slater et al. (2019,
+# 2020) and use the ISMIP6 parameterization". Control runs (reference climate held from 2015) are not included
+# (decision R2). How each column is used: experiment_columns.csv. Reviewed 2026-11-23
+# (docs/metadata_review/07_Rahlves2025_CISM_GIS.md).
+Experiment,Initialization branch,ESM,Scenario,Historical forcing,Regional climate model,Ocean forcing,Retreat sensitivity,Kappa percentile
+ERA5_High_ACCESS1.3_RCP8.5,ERA5-init,ACCESS1.3,RCP8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_ACCESS1.3_RCP8.5,ERA5-init,ACCESS1.3,RCP8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_ACCESS1.3_RCP8.5,ERA5-init,ACCESS1.3,RCP8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CESM2-CMIP6_SSP1-2.6,ERA5-init,CESM2-CMIP6,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CESM2-CMIP6_SSP1-2.6,ERA5-init,CESM2-CMIP6,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CESM2-CMIP6_SSP1-2.6,ERA5-init,CESM2-CMIP6,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CESM2-CMIP6_SSP2-4.5,ERA5-init,CESM2-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CESM2-CMIP6_SSP2-4.5,ERA5-init,CESM2-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CESM2-CMIP6_SSP2-4.5,ERA5-init,CESM2-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CESM2-CMIP6_SSP5-8.5,ERA5-init,CESM2-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CESM2-CMIP6_SSP5-8.5,ERA5-init,CESM2-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CESM2-CMIP6_SSP5-8.5,ERA5-init,CESM2-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CESM2-Leo_SSP5-8.5,ERA5-init,CESM2-Leo,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CESM2-Leo_SSP5-8.5,ERA5-init,CESM2-Leo,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CESM2-Leo_SSP5-8.5,ERA5-init,CESM2-Leo,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CNRM-CM6_SSP5-8.5,ERA5-init,CNRM-CM6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CNRM-CM6_SSP5-8.5,ERA5-init,CNRM-CM6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CNRM-CM6_SSP5-8.5,ERA5-init,CNRM-CM6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_CNRM-ESM2_SSP5-8.5,ERA5-init,CNRM-ESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_CNRM-ESM2_SSP5-8.5,ERA5-init,CNRM-ESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_CNRM-ESM2_SSP5-8.5,ERA5-init,CNRM-ESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_IPSL-CM6A-LR_SSP5-8.5,ERA5-init,IPSL-CM6A-LR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_IPSL-CM6A-LR_SSP5-8.5,ERA5-init,IPSL-CM6A-LR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_IPSL-CM6A-LR_SSP5-8.5,ERA5-init,IPSL-CM6A-LR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_MPI-ESM1-2-HR_SSP1-2.6,ERA5-init,MPI-ESM1-2-HR,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_MPI-ESM1-2-HR_SSP1-2.6,ERA5-init,MPI-ESM1-2-HR,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_MPI-ESM1-2-HR_SSP1-2.6,ERA5-init,MPI-ESM1-2-HR,SSP1-2.6,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_MPI-ESM1-2-HR_SSP2-4.5,ERA5-init,MPI-ESM1-2-HR,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_MPI-ESM1-2-HR_SSP2-4.5,ERA5-init,MPI-ESM1-2-HR,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_MPI-ESM1-2-HR_SSP2-4.5,ERA5-init,MPI-ESM1-2-HR,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_MPI-ESM1-2-HR_SSP5-8.5,ERA5-init,MPI-ESM1-2-HR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_MPI-ESM1-2-HR_SSP5-8.5,ERA5-init,MPI-ESM1-2-HR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_MPI-ESM1-2-HR_SSP5-8.5,ERA5-init,MPI-ESM1-2-HR,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_NorESM2_SSP2-4.5,ERA5-init,NorESM2,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_NorESM2_SSP2-4.5,ERA5-init,NorESM2,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_NorESM2_SSP2-4.5,ERA5-init,NorESM2,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_NorESM2_SSP5-8.5,ERA5-init,NorESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_NorESM2_SSP5-8.5,ERA5-init,NorESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_NorESM2_SSP5-8.5,ERA5-init,NorESM2,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_UKESM1-0-LL-CMIP6_SSP2-4.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_UKESM1-0-LL-CMIP6_SSP2-4.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_UKESM1-0-LL-CMIP6_SSP2-4.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP2-4.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_UKESM1-0-LL-CMIP6_SSP5-8.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_UKESM1-0-LL-CMIP6_SSP5-8.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_UKESM1-0-LL-CMIP6_SSP5-8.5,ERA5-init,UKESM1-0-LL-CMIP6,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ERA5_High_UKESM1-0-LL-Robin_SSP5-8.5,ERA5-init,UKESM1-0-LL-Robin,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ERA5_Low_UKESM1-0-LL-Robin_SSP5-8.5,ERA5-init,UKESM1-0-LL-Robin,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ERA5_Med_UKESM1-0-LL-Robin_SSP5-8.5,ERA5-init,UKESM1-0-LL-Robin,SSP5-8.5,ERA5 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_ACCESS1.3_RCP8.5,ESM-init,ACCESS1.3,RCP8.5,ACCESS1.3 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_ACCESS1.3_RCP8.5,ESM-init,ACCESS1.3,RCP8.5,ACCESS1.3 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_ACCESS1.3_RCP8.5,ESM-init,ACCESS1.3,RCP8.5,ACCESS1.3 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CESM2-CMIP6_SSP1-2.6,ESM-init,CESM2-CMIP6,SSP1-2.6,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CESM2-CMIP6_SSP1-2.6,ESM-init,CESM2-CMIP6,SSP1-2.6,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CESM2-CMIP6_SSP1-2.6,ESM-init,CESM2-CMIP6,SSP1-2.6,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CESM2-CMIP6_SSP2-4.5,ESM-init,CESM2-CMIP6,SSP2-4.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CESM2-CMIP6_SSP2-4.5,ESM-init,CESM2-CMIP6,SSP2-4.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CESM2-CMIP6_SSP2-4.5,ESM-init,CESM2-CMIP6,SSP2-4.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CESM2-CMIP6_SSP5-8.5,ESM-init,CESM2-CMIP6,SSP5-8.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CESM2-CMIP6_SSP5-8.5,ESM-init,CESM2-CMIP6,SSP5-8.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CESM2-CMIP6_SSP5-8.5,ESM-init,CESM2-CMIP6,SSP5-8.5,CESM2-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CESM2-Leo_SSP5-8.5,ESM-init,CESM2-Leo,SSP5-8.5,CESM2-Leo (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CESM2-Leo_SSP5-8.5,ESM-init,CESM2-Leo,SSP5-8.5,CESM2-Leo (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CESM2-Leo_SSP5-8.5,ESM-init,CESM2-Leo,SSP5-8.5,CESM2-Leo (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CNRM-CM6_SSP5-8.5,ESM-init,CNRM-CM6,SSP5-8.5,CNRM-CM6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CNRM-CM6_SSP5-8.5,ESM-init,CNRM-CM6,SSP5-8.5,CNRM-CM6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CNRM-CM6_SSP5-8.5,ESM-init,CNRM-CM6,SSP5-8.5,CNRM-CM6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_CNRM-ESM2_SSP5-8.5,ESM-init,CNRM-ESM2,SSP5-8.5,CNRM-ESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_CNRM-ESM2_SSP5-8.5,ESM-init,CNRM-ESM2,SSP5-8.5,CNRM-ESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_CNRM-ESM2_SSP5-8.5,ESM-init,CNRM-ESM2,SSP5-8.5,CNRM-ESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_IPSL-CM6A-LR_SSP5-8.5,ESM-init,IPSL-CM6A-LR,SSP5-8.5,IPSL-CM6A-LR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_IPSL-CM6A-LR_SSP5-8.5,ESM-init,IPSL-CM6A-LR,SSP5-8.5,IPSL-CM6A-LR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_IPSL-CM6A-LR_SSP5-8.5,ESM-init,IPSL-CM6A-LR,SSP5-8.5,IPSL-CM6A-LR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_MPI-ESM1-2-HR_SSP1-2.6,ESM-init,MPI-ESM1-2-HR,SSP1-2.6,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_MPI-ESM1-2-HR_SSP1-2.6,ESM-init,MPI-ESM1-2-HR,SSP1-2.6,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_MPI-ESM1-2-HR_SSP1-2.6,ESM-init,MPI-ESM1-2-HR,SSP1-2.6,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_MPI-ESM1-2-HR_SSP2-4.5,ESM-init,MPI-ESM1-2-HR,SSP2-4.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_MPI-ESM1-2-HR_SSP2-4.5,ESM-init,MPI-ESM1-2-HR,SSP2-4.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_MPI-ESM1-2-HR_SSP2-4.5,ESM-init,MPI-ESM1-2-HR,SSP2-4.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_MPI-ESM1-2-HR_SSP5-8.5,ESM-init,MPI-ESM1-2-HR,SSP5-8.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_MPI-ESM1-2-HR_SSP5-8.5,ESM-init,MPI-ESM1-2-HR,SSP5-8.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_MPI-ESM1-2-HR_SSP5-8.5,ESM-init,MPI-ESM1-2-HR,SSP5-8.5,MPI-ESM1-2-HR (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_NorESM2_SSP2-4.5,ESM-init,NorESM2,SSP2-4.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_NorESM2_SSP2-4.5,ESM-init,NorESM2,SSP2-4.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_NorESM2_SSP2-4.5,ESM-init,NorESM2,SSP2-4.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_NorESM2_SSP5-8.5,ESM-init,NorESM2,SSP5-8.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_NorESM2_SSP5-8.5,ESM-init,NorESM2,SSP5-8.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_NorESM2_SSP5-8.5,ESM-init,NorESM2,SSP5-8.5,NorESM2 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_UKESM1-0-LL-CMIP6_SSP2-4.5,ESM-init,UKESM1-0-LL-CMIP6,SSP2-4.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_UKESM1-0-LL-CMIP6_SSP2-4.5,ESM-init,UKESM1-0-LL-CMIP6,SSP2-4.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_UKESM1-0-LL-CMIP6_SSP2-4.5,ESM-init,UKESM1-0-LL-CMIP6,SSP2-4.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_UKESM1-0-LL-CMIP6_SSP5-8.5,ESM-init,UKESM1-0-LL-CMIP6,SSP5-8.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_UKESM1-0-LL-CMIP6_SSP5-8.5,ESM-init,UKESM1-0-LL-CMIP6,SSP5-8.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_UKESM1-0-LL-CMIP6_SSP5-8.5,ESM-init,UKESM1-0-LL-CMIP6,SSP5-8.5,UKESM1-0-LL-CMIP6 (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
+ESM_High_UKESM1-0-LL-Robin_SSP5-8.5,ESM-init,UKESM1-0-LL-Robin,SSP5-8.5,UKESM1-0-LL-Robin (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",high,25th
+ESM_Low_UKESM1-0-LL-Robin_SSP5-8.5,ESM-init,UKESM1-0-LL-Robin,SSP5-8.5,UKESM1-0-LL-Robin (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",low,75th
+ESM_Med_UKESM1-0-LL-Robin_SSP5-8.5,ESM-init,UKESM1-0-LL-Robin,SSP5-8.5,UKESM1-0-LL-Robin (MAR) 1960-2014,MARv3.12,"ISMIP6 retreat parameterization (Slater et al. 2019, 2020)",med,50th
