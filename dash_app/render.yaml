@@ -27,6 +27,10 @@ services:
     # Render for an identical request) -- far more than raw CPU throttling
     # alone would explain.
     envVars:
+      # Official public address of the site (no trailing slash), used for
+      # search engines' canonical URL and sitemap. app.py has the same default.
+      - key: SITE_URL
+        value: https://ice-sheet-simulation-explorer.onrender.com
       - key: OMP_NUM_THREADS
         value: "1"
       - key: OPENBLAS_NUM_THREADS
