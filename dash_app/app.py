@@ -41,6 +41,16 @@ YEAR_MIN, MIN_YEAR_SPAN = 2000, 5
 YEAR_MAX = max(p["last_year"] for p in OBS_PRODUCTS.values())  # 2023, IMBIE3's last full year
 YEAR_DEFAULT = [2015, 2023]
 LOW_BIAS_FRAC = 0.10
+# Where a reviewer can check how each study's simulations are encoded: one
+# models and one experiments CSV per study, plus a review report per study.
+REPO_URL = "https://github.com/tbartholomaus/ice_sheet_simulation_explorer"
+METADATA_URL = f"{REPO_URL}/tree/main/dash_app/metadata"
+REVIEWS_URL = f"{REPO_URL}/tree/main/docs/metadata_review"
+
+
+def _metadata_link(text="dash_app/metadata/"):
+    return html.A(text, href=METADATA_URL, target="_blank")
+
 _ICE = RUNS["ice_sheet"].to_numpy()
 
 
@@ -157,7 +167,7 @@ sidebar = html.Aside(className="sidebar", children=[
 main = html.Main(className="content", children=[
     html.Header(className="page-header", children=[
         html.Div(className="header-actions", children=[
-            html.Button("✉ Email me the link", id="email-open", className="about-button", n_clicks=0,
+            html.Button("✉ Email me this website", id="email-open", className="about-button", n_clicks=0,
                         title="Send yourself a link to this app"),
             html.Button("ⓘ About this app", id="intro-open", className="about-button", n_clicks=0,
                         title="Show the introduction to this app again"),
@@ -219,9 +229,11 @@ main = html.Main(className="content", children=[
                  html.Label("Group by", htmlFor="bias-groupby", className="group-picker-label"),
                  dcc.Dropdown(id="bias-groupby", clearable=False, searchable=False, value="all",
                               options=GROUP_OPTIONS, className="group-picker-dropdown"),
-                 html.Span("Choose which modeling characteristic to break the bias down by (or click a row "
-                           "in the table). This is the same setting as Group by in the sidebar, so it also "
-                           "regroups the plots above.", className="group-picker-hint"),
+                 html.Span(["Choose which modeling characteristic to break the bias down by (or click a row "
+                            "in the table). This is the same setting as Group by in the sidebar, so it also "
+                            "regroups the plots above. How each simulation is assigned to a category is "
+                            "documented in ", _metadata_link("its study's metadata files"), "."],
+                           className="group-picker-hint"),
              ]),
              html.Div(className="two-col", children=[
                  html.Div([html.H3(id="bias-box-title"), html.Div(id="bias-box-note", className="note"),
@@ -235,9 +247,14 @@ main = html.Main(className="content", children=[
     html.Footer(className="page-footer", children=[
         html.P("This web app was developed by Tim Bartholomaus at the University of Idaho, using claude ai."),
         html.P(["You can explore the source code for the app and an accompanying jupyter notebook at ",
-                html.A("https://github.com/tbartholomaus/ice_sheet_simulation_explorer",
-                       href="https://github.com/tbartholomaus/ice_sheet_simulation_explorer", target="_blank"),
-                "."]),
+                html.A(REPO_URL, href=REPO_URL, target="_blank"), "."]),
+        html.P(["How every simulation is encoded (ice sheet model, initialization, sliding law, stress balance, "
+                "resolution, climate model, scenario, ocean forcing and sensitivity) is in ",
+                _metadata_link(), ": for each study, ", html.Code("<Study>_models.csv"), " and ",
+                html.Code("<Study>_experiments.csv"), " give each source's own description beside the encoded "
+                "value, and ", html.A("docs/metadata_review/", href=REVIEWS_URL, target="_blank"),
+                " explains each study's encoding decisions. Hover over any simulation to see which files "
+                "describe it. Corrections are welcome."]),
     ]),
 ])
 
@@ -364,7 +381,7 @@ upload_modal = html.Div(id="upload-modal", className="modal-backdrop", style={"d
     ]),
 ])
 
-# "Email me the link": builds a mailto: link that opens the visitor's own email
+# "Email me this website": builds a mailto: link that opens the visitor's own email
 # app with a message to themselves holding this page's URL. Nothing is sent or
 # stored by the server; the callbacks run in the browser (see bottom of file).
 email_modal = html.Div(id="email-modal", className="modal-backdrop", style={"display": "none"}, children=[
@@ -388,7 +405,7 @@ email_modal = html.Div(id="email-modal", className="modal-backdrop", style={"dis
 
 
 def _intro_item(term, text):
-    return html.Li([html.B(term), " — ", text])
+    return html.Li([html.B(term), " — ", *(text if isinstance(text, list) else [text])])  # Dash children must be flat
 
 
 # Overview shown over the app when it opens; "About this app" (top right)
@@ -399,7 +416,7 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
         html.Div("Ice Sheet Simulation Explorer", className="brand-top"),
         html.H2("Learning from ice sheet simulations", id="intro-title"),
         # Shown only on phone-width screens (CSS .mobile-only); "Click here" swaps
-        # this box for the "Email me the link" box.
+        # this box for the "Email me this website" box.
         html.P(className="mobile-only mobile-notice", children=[
             "This app works best on a full-size computer screen. ",
             html.Button("Click here", id="intro-email", className="link-button", n_clicks=0),
@@ -461,10 +478,11 @@ intro_modal = html.Div(id="intro-modal", className="modal-backdrop", style={"dis
                         "include studies of both physics-based ice sheet models and, for comparison, emulations "
                         "and syntheses. You can also add your own ensemble of simulations."),
             _intro_item("Group by",
-                        "split every plot by published study or by a modeling decision (ice sheet model, "
-                        "initialization, sliding law, stress balance, resolution, ocean forcing and sensitivity, "
-                        "climate scenario, climate model or regional climate model). Optionally pool similar RCP "
-                        "and SSP scenarios."),
+                        ["split every plot by published study or by a modeling decision (ice sheet model, "
+                         "initialization, sliding law, stress balance, resolution, ocean forcing and sensitivity, "
+                         "climate scenario, climate model or regional climate model). Optionally pool similar "
+                         "RCP and SSP scenarios. How each simulation is encoded is documented, study by study, "
+                         "in the ", _metadata_link("metadata files"), "."]),
             _intro_item("Units", "mass change in gigatonnes, or the equivalent contribution to sea level."),
             _intro_item("Observations", "compare against IMBIE3 (through 2023) or IMBIE2 (through 2020)."),
             _intro_item("Display", "show or hide each group's median."),
@@ -880,7 +898,7 @@ app.clientside_callback(
     Output("ts-view", "data"), Input("ts-graph", "relayoutData"), prevent_initial_call=True)
 
 
-# ── email me the link (all in the browser) ────────────────────────────────
+# ── email me this website (all in the browser) ────────────────────────────────
 
 app.clientside_callback(
     """

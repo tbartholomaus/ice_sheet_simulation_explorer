@@ -243,7 +243,7 @@ a { color: var(--accent); }
 a.button-primary { text-decoration: none; display: inline-block; }
 a.button-primary.disabled { background: #b8c4d3; cursor: not-allowed; }
 
-/* "Email me the link" box (reuses .modal-backdrop / .modal) */
+/* "Email me this website" box (reuses .modal-backdrop / .modal) */
 .modal.email { width: min(440px, 100%); position: relative; }
 .modal.email .text-input { margin-top: 4px; }
 .email-url {

@@ -1089,11 +1089,14 @@ def load_deconto2016_ais(path=None, keep_through_year=2100):
 # "RCP8.5 sea level equiv. (m)" -- each with Year (annual, 2000-2300) and one
 # column per run: Antarctic contribution to sea level in METRES, zeroed at
 # 2000. The same 109 runs appear in every sheet, named param_<a>_<b> with
-# a = 15..195 (step 15) and b = 2..13. Read here as CREVLIQ (hydrofracturing)
-# and CLIFVMAX (maximum cliff-failure rate): the same Run85_<CREVLIQ>_<CLIFVMAX>
-# convention as Gilford & DeConto's PSU3D-ICE ensembles (Zenodo 3478486,
-# whose record names those two parameters). Checked: the +3 ºC median rate in
-# 2090-2100 is 0.41 cm/yr, vs. the abstract's "about 0.5 cm per year by 2100".
+# a = CALVLIQ (hydrofracturing, 15..195 m-1 yr2, step 15) and b = VCLIFF
+# (maximum ice-cliff calving rate, 2..13 km/yr), the paper's names. Checked
+# (docs/metadata_review/05_DeConto2021_PSU3D_AIS.md): the parameter means and
+# medians (107.1, 7.65; 105, 7) are Extended Data Table 1's calibrated values
+# (107, 7.7; 105, 7), and every sheet's 2100 median and 17-83% range
+# reproduce Table 1 (+1.5 °C 0.08 (0.06-0.10) m ... RCP8.5 0.34 (0.20-0.53)).
+# The 109 are the calibrated ensemble: 196 runs scored on IMBIE 1992-2017
+# dM/dt, LIG and Pliocene targets.
 #
 # Licence: the article is not open access (Crossref lists only Springer
 # Nature's text-and-data-mining terms, no Creative Commons licence).
@@ -1107,8 +1110,8 @@ DECONTO2021_SOURCE_DATA_URL = (
     "https://static-content.springer.com/esm/art%3A10.1038%2Fs41586-021-03427-0/"
     "MediaObjects/41586_2021_3427_MOESM2_ESM.xlsx"
 )
-DECONTO2021_PROTOCOL_LABEL = "Figure 1 source data (calibrated ensemble)"
-DECONTO2021_CLIMATE_MODEL_LABEL = "Not reported in source data"
+DECONTO2021_PROTOCOL_LABEL = "Figure 1 source data (calibrated ensemble, 109 of 196 members)"
+DECONTO2021_CLIMATE_MODEL_LABEL = "CCSM4 (ocean); RegCM3 CO2 snapshots (atmosphere)"  # decision DC1
 
 
 def _deconto2021_scenario(sheet_name):
@@ -1122,8 +1125,8 @@ def load_deconto2021_ais(keep_through_year=2100):
     source data (see the section comment above) as a dataframe shaped like
     the other loaders: Year (annual), Cumulative ice sheet mass change (Gt;
     m SLE x -362,500, so ice loss is negative), Group, Model, Exp, IS, plus
-    climate_model/scenario/protocol and `mici_params` (the run's CREVLIQ and
-    CLIFVMAX). 109 runs x 4 warming scenarios = 436 Exps."""
+    climate_model/scenario/protocol and `mici_params` (the run's CALVLIQ and
+    VCLIFF). 109 runs x 4 warming scenarios = 436 Exps."""
     path = _download(DECONTO2021_SOURCE_DATA_URL, "deconto2021_fig1_source_data.xlsx", min_expected_bytes=500_000)
     rows, meta = [], []
     for sheet, d in pd.read_excel(path, sheet_name=None).items():
@@ -1140,7 +1143,7 @@ def load_deconto2021_ais(keep_through_year=2100):
             }))
             meta.append({"Exp": exp, "climate_model": DECONTO2021_CLIMATE_MODEL_LABEL, "scenario": scen,
                          "protocol": DECONTO2021_PROTOCOL_LABEL,
-                         "mici_params": f"CREVLIQ {crev}, CLIFVMAX {clif} (run {col})"})
+                         "mici_params": f"CALVLIQ {crev}, VCLIFF {clif} km/yr (run {col})"})
     return pd.concat(rows, ignore_index=True).merge(pd.DataFrame(meta), on="Exp", how="left")
 
 

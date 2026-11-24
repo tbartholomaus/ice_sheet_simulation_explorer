@@ -11,6 +11,7 @@ app from starting at all.
 """
 
 import os
+import textwrap
 
 import numpy as np
 import pandas as pd
@@ -296,13 +297,30 @@ def _build_hover(group, model, exp, ism_m, exp_m, publication):
         f"Ocean forcing: {exp_m['ocean_forcing']}",
         f"Ocean sensitivity: {exp_m['ocean_sensitivity']}",
     ]
-    for label, value in exp_m["extras"].items():  # columns shown in hover only (experiment_columns.csv)
-        lines.append(f"{label[:1].upper() + label[1:]}: {value}")
+    # Columns shown in hover only (experiment_columns.csv). Short values (e.g.
+    # ensemble parameters) share one line; longer ones get a line each.
+    short, long_ = [], []
+    for label, value in exp_m["extras"].items():
+        item = f"{label[:1].upper() + label[1:]}: {value}"
+        (short if len(str(value)) <= 8 else long_).append(item)
+    if short:
+        lines.append(" · ".join(short))
+    lines += long_
     if exp_m["ice_shelf_fracture"]:
         lines.append("<b>Ice-shelf collapse imposed: excluded from the bias analysis</b>")
     if ism_m["review_status"] == "not yet reviewed":
         lines.append("<i>Metadata not yet reviewed against the source paper</i>")
-    return "<br>".join(lines)
+    # where this run's encoding is documented, for reviewers
+    lines.append(f"<i>Metadata: dash_app/metadata/{ism_m['study']}_*.csv</i>")
+    return "<br>".join(_wrap(line) for line in lines)
+
+
+def _wrap(line, width=60):
+    """Long plain hover lines broken onto indented continuation lines, so a
+    hover box stays narrow enough not to cover the plot."""
+    if len(line) <= width or "<" in line:
+        return line
+    return "<br>   ".join(textwrap.wrap(line, width))
 
 
 def _build_runs():

@@ -49,8 +49,9 @@ Each reviewed study has a report in [`docs/metadata_review/`](../../docs/metadat
 consulted, every discrepancy found, and the reasoning and date of each encoding decision:
 [`01_Seroussi2020_ISMIP6_AIS.md`](../../docs/metadata_review/01_Seroussi2020_ISMIP6_AIS.md),
 [`02_Goelzer2020_ISMIP6_GIS.md`](../../docs/metadata_review/02_Goelzer2020_ISMIP6_GIS.md),
-[`03_Goelzer2025_PROTECT_GIS.md`](../../docs/metadata_review/03_Goelzer2025_PROTECT_GIS.md) and
-[`04_DeConto2016_PSU3D_AIS.md`](../../docs/metadata_review/04_DeConto2016_PSU3D_AIS.md).
+[`03_Goelzer2025_PROTECT_GIS.md`](../../docs/metadata_review/03_Goelzer2025_PROTECT_GIS.md),
+[`04_DeConto2016_PSU3D_AIS.md`](../../docs/metadata_review/04_DeConto2016_PSU3D_AIS.md) and
+[`05_DeConto2021_PSU3D_AIS.md`](../../docs/metadata_review/05_DeConto2021_PSU3D_AIS.md).
 
 ## Checks
 

@@ -11,10 +11,23 @@ import user_data as U
 import metadata as M
 from data import COLOR_MAPS, DEFAULT_OBS, DIM_LABEL, OBS_PRODUCTS, GT_TO_MM_SLE, ICE_SHEET_NAMES, ICE_SHEETS, RUNS
 
-# Characteristics whose categories have a natural order (finest to coarsest
-# grid): the bias section shows these in that order rather than ranked by
-# median bias or by over-representation.
-ORDINAL_DIMS = {"resolution"}
+# Characteristics whose categories have a natural order: the bias section
+# shows these top to bottom in that order, whatever their bias, rather than
+# ranked by median bias or by over-representation. Resolution runs finest to
+# coarsest (its encoding_rules.csv order); ocean sensitivity from most to least
+# sensitive, with PIGL (an order of magnitude above the MeanAnt High gamma0) on
+# top. Categories off the scale (e.g. "Study-specific (see experiment)", "Not
+# yet reviewed") follow at the bottom.
+ORDINAL_DIMS = {"resolution", "ocean_sensitivity"}
+_TOP_DOWN = {"ocean_sensitivity": ["PIGL", "Very high", "High", "Medium", "Low", "Very low"]}
+
+
+def ordinal_order(dim, cats):
+    """`cats` of an ORDINAL_DIMS characteristic, top to bottom as drawn."""
+    order = _TOP_DOWN.get(dim)
+    if order is None:
+        return M.category_order(dim, cats)
+    return [c for c in order if c in cats] + M.category_order(dim, {c for c in cats if c not in order})
 
 FONT = '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif'
 INK = "#1f2a3c"
@@ -29,7 +42,7 @@ TEMPLATE = go.layout.Template(layout=go.Layout(
     xaxis=dict(gridcolor=GRID, zerolinecolor="#c9d0da", linecolor="#c9d0da", ticks="outside", tickcolor="#c9d0da"),
     yaxis=dict(gridcolor=GRID, zerolinecolor="#c9d0da", linecolor="#c9d0da", ticks="outside", tickcolor="#c9d0da"),
     legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor=GRID, borderwidth=1, font=dict(size=12)),
-    hoverlabel=dict(font=dict(family=FONT, size=12), bgcolor="white", bordercolor="#c9d0da"),
+    hoverlabel=dict(font=dict(family=FONT, size=12), bgcolor="white", bordercolor="#c9d0da", align="left"),
     margin=dict(l=70, r=20, t=50, b=55),
 ))
 
@@ -444,7 +457,7 @@ def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, uploads=()):
     """Weighted box (5/25/50/75/95) + points of bias per category of `dim`,
     sorted by median bias (most negative at top) -- or, for an ordinal
     characteristic (ORDINAL_DIMS), in its natural order, e.g. finest
-    resolution at top; dashed zero = perfect match to IMBIE. `uploads`: [(upload, per-simulation bias)], drawn as
+    resolution or PIGL ocean sensitivity at top; dashed zero = perfect match to IMBIE. `uploads`: [(upload, per-simulation bias)], drawn as
     extra rows at the bottom for comparison only."""
     col = RUNS[dim].to_numpy()
     cats = []
@@ -452,7 +465,7 @@ def bias_figure(b, w, mask, dim, bias_label, obs=DEFAULT_OBS, uploads=()):
         m = mask & (col == c)
         cats.append((A.weighted_quantiles(b[m], w[m], [0.5])[0], c, m))
     if dim in ORDINAL_DIMS:
-        order = M.category_order(dim, {c for _, c, _ in cats})
+        order = ordinal_order(dim, {c for _, c, _ in cats})
         cats.sort(key=lambda t: order.index(t[1]))
     else:
         cats.sort(key=lambda t: t[0])
@@ -505,7 +518,7 @@ def enrichment_figure(rows, dim, frac):
     if dim in ORDINAL_DIMS:
         # Horizontal bars list categories bottom-up, so reverse the natural
         # order to put the first category (e.g. the finest resolution) on top.
-        order = M.category_order(dim, {r["category"] for r in rows})
+        order = ordinal_order(dim, {r["category"] for r in rows})
         rows = sorted(rows, key=lambda r: -order.index(r["category"]))
     else:
         rows = sorted(rows, key=lambda r: r["share_low_bias"] - r["share_all"])

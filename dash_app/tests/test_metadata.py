@@ -212,6 +212,25 @@ def test_bias_plots_order_resolution_finest_first():
     assert list(bars.data[0].y) == M.CATEGORY_ORDER["resolution"][::-1]  # drawn bottom-up
 
 
+def test_bias_plots_order_ocean_sensitivity_pigl_first():
+    """PIGL on top, then High, Medium, Low, whatever the bias; off-scale
+    categories (DeConto & Pollard 2016's study-specific OCFAC) below."""
+    import figures as F
+    valid = (RUNS["ice_sheet"] == "AIS").to_numpy() & RUNS["publication"].isin(
+        [PUBLICATION_LABEL["AIS"], "DeConto & Pollard 2016"]).to_numpy()
+    b = A.bias(valid, 2015, 2023)
+    w = A.run_weights(valid)
+    expect = ["PIGL", "High", "Medium", "Low", "Study-specific (see experiment)"]
+    fig = F.bias_figure(b, w, valid, "ocean_sensitivity", "Gt/yr")
+    assert list(fig.layout.yaxis.ticktext) == expect  # drawn top-down
+    rows, _ = A.low_bias_enrichment(b[valid], w[valid], RUNS["ocean_sensitivity"].to_numpy()[valid])
+    bars = F.enrichment_figure(rows, "ocean_sensitivity", 0.10)
+    assert list(bars.data[0].y) == [c for c in expect if c in {r["category"] for r in rows}][::-1]
+    gis = (RUNS["publication"] == "Goelzer 2025 (PROTECT GIS)").to_numpy()
+    cats = set(RUNS["ocean_sensitivity"].to_numpy()[gis])
+    assert F.ordinal_order("ocean_sensitivity", cats) == ["Very high", "High", "Medium", "Low", "Very low"]
+
+
 # ── ISMIP6-GIS (Goelzer et al. 2020), reviewed 2026-11-23 ─────────────────
 
 def test_all_165_gis_runs_are_present():
@@ -331,3 +350,36 @@ def test_deconto2016_model_and_forcing():
     assert not DP16["ice_shelf_fracture"].any()
     e = M.EXP_META[("DeConto2016", "AIS", "RCP26_m23")]
     assert e["extras"]["OCFAC"] == "10" and e["extras"]["VCLIF (km/yr)"] == "0"
+
+
+# ── DeConto et al. 2021 (review 05) ──────────────────────────────────────
+
+DC21 = RUNS[RUNS["group"] == "DeConto2021"]
+
+
+def test_deconto2021_is_the_calibrated_ensemble():
+    """109 members x 4 scenarios; parameters are CALVLIQ and VCLIFF, whose
+    means are Extended Data Table 1's calibrated averages (107, 7.7)."""
+    assert len(DC21) == 436 and set(DC21["scenario"]) == {"+1.5 °C", "+2.0 °C", "+3.0 °C", "RCP8.5"}
+    ex = [M.EXP_META[("DeConto2021", "AIS", e)]["extras"] for e in DC21["exp"]]
+    calv = np.array([float(x["CALVLIQ"]) for x in ex])
+    vcl = np.array([float(x["VCLIFF (km/yr)"]) for x in ex])
+    assert round(calv.mean()) == 107 and round(vcl.mean(), 1) == 7.7
+
+
+def test_deconto2021_model_and_forcing():
+    assert (DC21["review_status"] == "reviewed").all()
+    m = M.model_meta("AIS", "DeConto2021", "PSU3D-ICE")
+    assert (m["stress_balance"], m["sliding_law"], m["initialization"], m["resolution"]) == (
+        "Shallow", "Power law (Weertman)", "Hybrid (thickness-nudged)", ">5–10 km")
+    assert set(DC21["climate_model"]) == {"CCSM4 (ocean); RegCM3 CO2 snapshots (atmosphere)"}
+    assert set(DC21["regional_climate_model"]) == {"RegCM3"}
+    assert set(DC21["ocean_forcing"]) == {"Open"} and set(DC21["ocean_sensitivity"]) == {"Medium"}
+    assert not DC21["ice_shelf_fracture"].any() and BIAS_ELIGIBLE[DC21.index].all()  # decision DC3: kept
+    assert all("matching IMBIE" in h.replace("<br>   ", " ") for h in DC21["hover"])
+
+
+def test_hover_lines_stay_narrow():
+    """Long hover lines are wrapped so the hover box doesn't cover the plot."""
+    longest = max(len(line) for h in RUNS["hover"] for line in h.split("<br>") if "<" not in line)
+    assert longest <= 60

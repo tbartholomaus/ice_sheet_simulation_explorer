@@ -1,5 +1,5 @@
 # How each column of a <Study>_experiments.csv file is used. app_field "(key)" identifies the run,
-# "(hover)" is shown in hover text only, any other value is the app field it fills. value_map translates
+# "(hover)" is shown in hover text only, "(file)" is kept in the file for reference but not shown, any other value is the app field it fills. value_map translates
 # verbatim values into the encoded vocabulary (encoding_rules.csv). App fields a study doesn't map
 # (ocean_forcing, ocean_sensitivity, ice_shelf_fracture) read "Not yet reviewed" ("Not applicable (...)"
 # for emulators and assessments; ice_shelf_fracture False). A model row's ocean_forcing_encoded, where
@@ -28,17 +28,23 @@ DeConto2016,Ocean sensitivity,ocean_sensitivity,OCFAC (multiplier on the default
 DeConto2016,OCFAC,(hover),,
 DeConto2016,CREVLIQ,(hover),,
 DeConto2016,VCLIF (km/yr),(hover),,
-DeConto2016,Pliocene SL (m),(hover),,
-DeConto2016,LIG SL (m),(hover),,
+DeConto2016,Pliocene SL (m),(file),,The ensemble scoring values; kept out of the hover to keep it short
+DeConto2016,LIG SL (m),(file),,
 DeConto2016,Protocol,(hover),,
 Aschwanden2019,Experiment,(key),,
 Aschwanden2019,climate_model,climate_model,,
 Aschwanden2019,scenario,scenario,,
 Aschwanden2019,protocol,(hover),,
 DeConto2021,Experiment,(key),,
-DeConto2021,climate_model,climate_model,,
-DeConto2021,scenario,scenario,,
-DeConto2021,protocol,(hover),,
+DeConto2021,Scenario,scenario,,Warming-level scenarios keep their own labels; RCP8.5 joins composite 8.5
+DeConto2021,Emissions pathway,(hover),,
+DeConto2021,Climate models,climate_model,,"Ocean from CCSM4 RCP runs, atmosphere from RegCM3 snapshots at fixed CO2; kept distinct from runs forced by CCSM4 alone (decision DC1, 2026-11-23)"
+DeConto2021,Regional climate model,regional_climate_model,,
+DeConto2021,Ocean forcing,ocean_forcing,Quadratic sub-ice melt (DC21 Methods) driven by CCSM4 ocean temperatures at 400 m=Open,The group's own melt parameterization (as decision DP3)
+DeConto2021,Ocean sensitivity,ocean_sensitivity,Single uniform melt coefficient calibrated by the group on a 625-member deglacial WAIS ensemble=Medium,"The group's own single calibration, encoded Medium as for ISMIP6 open-framework runs (decision DC2, 2026-11-23)"
+DeConto2021,CALVLIQ,(hover),,
+DeConto2021,VCLIFF (km/yr),(hover),,
+DeConto2021,Protocol,(hover),,"States the partial calibration to IMBIE (decision DC3, 2026-11-23)"
 Coulon2024,Experiment,(key),,
 Coulon2024,climate_model,climate_model,,
 Coulon2024,scenario,scenario,,
@@ -57,7 +63,6 @@ IPCCAR6,scenario,scenario,,
 IPCCAR6,protocol,(hover),,
 Rahlves2025,study_ocean_sensitivity,(hover),,The study's own ocean-sensitivity tier; not yet reviewed
 Coulon2024,basal_melt_param,(hover),,
-DeConto2021,mici_params,(hover),,
 Edwards2021,Ice sheet,(key),,
 IPCCAR6,Ice sheet,(key),,
 Goelzer2025,Experiment,(key),,

@@ -143,7 +143,7 @@ def _load_experiments():
                 if field == "(hover)":
                     if val:
                         meta["extras"][col.replace("_", " ")] = val
-                elif field != "(key)":
+                elif field not in ("(key)", "(file)"):  # "(file)": documented here, not shown
                     meta[field] = val
             if "ice_shelf_fracture" in meta:
                 meta["ice_shelf_fracture"] = meta["ice_shelf_fracture"] == "True"
