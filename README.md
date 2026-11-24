@@ -163,7 +163,9 @@ hard-coded anywhere else:
 - `dash_app/metadata/encoding_rules.csv`: every allowed encoded value and the rule that assigns it.
 - `dash_app/metadata/experiment_columns.csv`: how each experiments column is used.
 
-[`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them. So far the
+[`dash_app/metadata/README.md`](dash_app/metadata/README.md) explains how to read them, and the review
+reports in [`docs/metadata_review/`](docs/metadata_review/) give the sources and reasoning behind each
+encoding decision. So far the
 ISMIP6-Antarctica (`Seroussi2020_*.csv`) and ISMIP6-Greenland (`Goelzer2020_*.csv`) ensembles have been
 reviewed against their papers and the wider literature; the other studies' files log their current encodings, marked "(unreviewed)" / "Not yet
 reviewed", until each is reviewed. If you find an encoding you disagree with, please
@@ -177,6 +179,7 @@ dash_app/        the web app: app.py (layout + callbacks), data.py, analysis.py,
                  user_data.py, assets/, and the bundled data/
 dash_app/metadata/  the simulation metadata: a models and an experiments CSV per study, plus the
                  encoding rules (read by metadata.py, shared by the app and the notebook)
+docs/metadata_review/  one review report per reviewed study: sources, discrepancies, decisions
 exploring_fits/  the notebook and the ISMIP6 files it reads
 utilities/       data loaders shared by the notebook (and used to build dash_app/data/)
 ```

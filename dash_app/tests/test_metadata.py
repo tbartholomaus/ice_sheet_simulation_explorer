@@ -1,7 +1,7 @@
 """Tests for the simulation metadata (metadata.py + data.py's run table).
 
 These pin the encodings in dash_app/metadata/ (decided in the metadata
-review, ismip6_check_261123/metadata_review/) so a later edit can't
+review, docs/metadata_review/) so a later edit can't
 silently change them, and check that the metadata files and the bundled
 data agree.
 

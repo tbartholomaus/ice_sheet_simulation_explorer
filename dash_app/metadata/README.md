@@ -42,6 +42,13 @@ have no ice sheet model physics). For studies not yet reviewed, the `*_encoded` 
 use today, marked `(unreviewed)` or `Not yet reviewed` so they never pool with reviewed values; their
 `*_described` columns are filled in when the study is reviewed.
 
+## Review reports
+
+Each reviewed study has a report in [`docs/metadata_review/`](../../docs/metadata_review/) giving the sources
+consulted, every discrepancy found, and the reasoning and date of each encoding decision:
+[`01_Seroussi2020_ISMIP6_AIS.md`](../../docs/metadata_review/01_Seroussi2020_ISMIP6_AIS.md) and
+[`02_Goelzer2020_ISMIP6_GIS.md`](../../docs/metadata_review/02_Goelzer2020_ISMIP6_GIS.md).
+
 ## Checks
 
 `dash_app/metadata.py` validates every file when the app or notebook starts: each encoded value must be

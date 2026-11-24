@@ -1,7 +1,7 @@
 # Vocabulary of encoded values used by the app and notebook, and the rule that assigns each one.
 # For each field the rows are in display order. Sliding laws are assigned by a cascade: the first step
 # that applies wins (1 Coulomb-limited, 2 Budd, 3 Linear, 4 Power law). Decisions are documented in
-# metadata_review/01_Seroussi2020_ISMIP6_AIS.md (ismip6_check_261123 review folder).
+# docs/metadata_review/ (01_Seroussi2020_ISMIP6_AIS.md, 02_Goelzer2020_ISMIP6_GIS.md).
 field,encoded_value,meaning,assigned_when,decided
 initialization,Spin-up / equilibrium,The model is run to a (quasi-)steady or paleo spun-up state without nudging its thickness or surface elevation toward observations or tuning parameters to present-day velocity.,"Seroussi et al. 2020 codes SP and Eq; Goelzer et al. 2020 codes SP and CYC, alone or with NDm (nudging to the ice mask only).",2026-11-23
 initialization,Hybrid (thickness-nudged),"Spin-up in which the ice thickness or surface elevation is nudged toward observations: by adjusting basal friction, melt or SMB, by flux correction, or by resetting thickness to observed values.","Seroussi et al. 2020 codes SP+ and DA*; Goelzer et al. 2020 codes DAs, DAi and NDs; any spin-up nudged to observed thickness or surface elevation (decision 2026-11-23).",2026-11-23
