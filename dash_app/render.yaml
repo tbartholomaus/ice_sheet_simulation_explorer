@@ -27,11 +27,10 @@ services:
     # Render for an identical request) -- far more than raw CPU throttling
     # alone would explain.
     envVars:
-      # Public address of the site (e.g. https://<service>.onrender.com, no
-      # trailing slash), used for search engines' canonical URL and sitemap.
-      # sync: false -- Render asks for the value in its dashboard.
+      # Official public address of the site (no trailing slash), used for
+      # search engines' canonical URL and sitemap. app.py has the same default.
       - key: SITE_URL
-        sync: false
+        value: https://ice-sheet-simulation-explorer.onrender.com
       - key: OMP_NUM_THREADS
         value: "1"
       - key: OPENBLAS_NUM_THREADS

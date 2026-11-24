@@ -244,11 +244,11 @@ main = html.Main(className="content", children=[
 # ── search engines ────────────────────────────────────────────────────────
 # Dash draws the page with JavaScript, so everything a crawler (or a link
 # preview) needs to know is also put in the static HTML: title, description,
-# social-card tags, schema.org data, and a <noscript> summary. SITE_URL (set
-# on Render) is the public address; without it the canonical / og:url tags are
-# left out and robots.txt / sitemap.xml use the address the request came to.
-SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
-SITE_TITLE = "Ice Sheet Simulation Explorer: ISMIP6 ice sheet models vs. IMBIE observations"
+# social-card tags, schema.org data, and a <noscript> summary. SITE_URL is the
+# official public address, used for the canonical / og:url tags and in
+# robots.txt / sitemap.xml; the SITE_URL environment variable overrides it.
+SITE_URL = os.environ.get("SITE_URL", "https://ice-sheet-simulation-explorer.onrender.com").rstrip("/")
+SITE_TITLE = "Ice Sheet Simulation Explorer: ISMIP and other ice sheet models vs. IMBIE observations"
 SITE_DESCRIPTION = (
     "Interactive tool comparing simulations of Greenland and Antarctic ice sheet mass loss (ISMIP6 and other "
     "published ensembles) with IMBIE satellite observations: rates of mass change, sea level contribution by "
