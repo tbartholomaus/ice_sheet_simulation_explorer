@@ -1,0 +1,23 @@
+# Experiments of Seroussi et al. (2024), ISMIP6 Antarctica 2300 (https://doi.org/10.1029/2024EF004561), Table 1,
+# transcribed verbatim, plus the regional climate model (none: GCM anomalies added to each model's reference
+# climatology, Sect. 2.2). The app loads expAE01-05, 07, 10-14 to 2100 (with each model's historical run); expAE06/08/09
+# equal expAE05/03/04 through 2100 and are left out (decision S3); the control run isn't loaded. Runs with ice shelf
+# collapse (expAE11-14) are excluded from the bias analysis. How each column is used: experiment_columns.csv.
+# Reviewed 2026-11-24 (docs/metadata_review/09_Seroussi2024_ISMIP6_AIS2300.md).
+Experiment,Global climate model,Scenario,Forcing,Ice shelf collapse,Tier,Regional climate model
+Historical,None,None,Free,No,Tier 1,None (AOGCM output used directly)
+ctrlAE,None,None,Free,No,Tier 1,None (AOGCM output used directly)
+expAE01,NorESM1-M,RCP2.6,Repeat,No,Tier 1,None (AOGCM output used directly)
+expAE02,CCSM4,RCP8.5,To 2300,No,Tier 1,None (AOGCM output used directly)
+expAE03,HadGEM2,RCP8.5,To 2300,No,Tier 1,None (AOGCM output used directly)
+expAE04,CESM2,SSP5-85,To 2300,No,Tier 1,None (AOGCM output used directly)
+expAE05,UKESM,SSP5-85,To 2300,No,Tier 1,None (AOGCM output used directly)
+expAE06,UKESM,SSP5-85,Repeat,No,Tier 1,None (AOGCM output used directly)
+expAE07,NorESM1-M,RCP8.5,Repeat,No,Tier 2,None (AOGCM output used directly)
+expAE08,HadGEM2,RCP8.5,Repeat,No,Tier 2,None (AOGCM output used directly)
+expAE09,CESM2,SSP5-85,Repeat,No,Tier 2,None (AOGCM output used directly)
+expAE10,UKESM,SSP1-26,To 2300,No,Tier 2,None (AOGCM output used directly)
+expAE11,CCSM4,RCP8.5,To 2300,Yes,Tier 2,None (AOGCM output used directly)
+expAE12,HadGEM2,RCP8.5,To 2300,Yes,Tier 2,None (AOGCM output used directly)
+expAE13,CESM2,SSP5-85,To 2300,Yes,Tier 2,None (AOGCM output used directly)
+expAE14,UKESM,SSP5-85,To 2300,Yes,Tier 2,None (AOGCM output used directly)

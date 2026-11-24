@@ -1186,6 +1186,87 @@ def load_deconto2021_ais(keep_through_year=2100):
 
 
 # ═════════════════════════════════════════════════════════════════════════
+# Seroussi, Pelle, Lipscomb et al. (2024), "Evolution of the Antarctic Ice
+# Sheet over the next three centuries from an ISMIP6 model ensemble",
+# Earth's Future 12, e2024EF004561, https://doi.org/10.1029/2024EF004561
+# (ISMIP6 Antarctica 2300; 43 model configurations).
+#
+# Source: the paper's Zenodo record of "Scalars computed from two dimensional
+# fields" (https://doi.org/10.5281/zenodo.10528582, CC BY 4.0),
+# ComputedScalars.zip: ComputedScalars/<exp>/<var>/computed_<var>_AIS_<model>_<exp>.nc,
+# annual, 2015-2300 for the projections. Uses `ivaf`, which despite its name
+# ("ice volume above floatation") is stored in Gt (its units attribute; the
+# values, ~2.1e7 Gt, are Antarctica's ~58 m SLE), so no density conversion.
+#
+# Checked (docs/metadata_review/09_Seroussi2024_ISMIP6_AIS2300.md):
+# - The histAE files' time axis is mislabelled: every one starts at 2015 and
+#   counts forward (PIK_PISM "2015-2179"). Their last value equals the
+#   projection's first (2015) to <1e-6 Gt and their lengths match each
+#   model's initial year (Table 3), so the true years are 2015-(n-1)..2015;
+#   they're rebuilt here and joined to each projection without the
+#   duplicate 2015 point.
+# - Values are states at the start of each labelled year (projection 2015 =
+#   end of the historical run), as for Coulon 2024 and Rahlves 2025.
+# - expAE06/08/09 (repeat forcing after 2100) equal expAE05/03/04 exactly
+#   through 2100, so they're left out by default (decision S3).
+# Group names are "Seroussi2024-<lab>" so these configurations never pool
+# with Seroussi 2020's.
+#
+# dash_app's bundled CSV (2015-2100 projections with historical lead-ins):
+#   load_seroussi2024_ais().to_csv(
+#       "dash_app/data/external_sources_seroussi2024_ais.csv.gz", index=False, compression="gzip")
+# ═════════════════════════════════════════════════════════════════════════
+
+SEROUSSI2024_SCALARS_URL = "https://zenodo.org/api/records/10528582/files/ComputedScalars.zip/content"
+SEROUSSI2024_EXPS = ["expAE01", "expAE02", "expAE03", "expAE04", "expAE05", "expAE07", "expAE10",
+                     "expAE11", "expAE12", "expAE13", "expAE14"]  # expAE06/08/09 duplicate 05/03/04 to 2100
+
+
+def load_seroussi2024_ais(exps=SEROUSSI2024_EXPS, keep_through_year=2100):
+    """Seroussi et al. (2024)'s ISMIP6 Antarctica 2300 runs as a dataframe
+    shaped like the other loaders: Year, Cumulative ice sheet mass change
+    (Gt; the archive's ivaf, stored in Gt), Group ("Seroussi2024-<lab>"), Model (archive name
+    after the lab), Exp, IS -- each projection preceded by the model's
+    historical run where there is one (time axis rebuilt; see above)."""
+    path = _download(SEROUSSI2024_SCALARS_URL, "seroussi2024_ComputedScalars.zip", min_expected_bytes=100_000_000)
+    import zipfile, tempfile
+    rows = []
+    with zipfile.ZipFile(path) as z, tempfile.TemporaryDirectory() as tmp:
+        names = [n for n in z.namelist() if "/ivaf/" in n and n.endswith(".nc") and not n.startswith("__MACOSX")]
+
+        def read(name):
+            z.extract(name, tmp)
+            ds = xr.open_dataset(os.path.join(tmp, name), decode_times=False)
+            assert ds["ivaf"].attrs.get("units") == "Gt", ds["ivaf"].attrs
+            t, v = ds.time.values.astype(float), ds["ivaf"].values.astype(float)
+            ds.close()
+            return t, v  # already Gt
+
+        hist = {}
+        for n in names:
+            if "/histAE/" in n:
+                model = re.match(r".*computed_ivaf_AIS_(.+)_histAE\.nc$", n).group(1)
+                t, gt = read(n)
+                hist[model] = (np.arange(2015 - (len(t) - 1), 2016, dtype=float), gt)  # rebuilt years
+        for n in names:
+            m = re.match(r".*/(expAE\d\d)/ivaf/computed_ivaf_AIS_(.+)_expAE\d\d\.nc$", n)
+            if not m or m.group(1) not in exps:
+                continue
+            exp, model = m.groups()
+            t, gt = read(n)
+            if model in hist:
+                ht, hg = hist[model]
+                t, gt = np.concatenate([ht[:-1], t]), np.concatenate([hg[:-1], gt])  # hist's 2015 = proj's 2015
+            keep = t <= keep_through_year
+            lab, rest = model.split("_", 1)
+            rows.append(pd.DataFrame({
+                "Year": t[keep].astype(int), "Cumulative ice sheet mass change (Gt)": gt[keep],
+                "Group": f"Seroussi2024-{lab}", "Model": rest, "Exp": exp, "IS": "AIS",
+            }))
+    return pd.concat(rows, ignore_index=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════
 # IPCC AR6 WG1 sea-level projections of the ice sheets: Fox-Kemper et al.
 # (2021), Chapter 9 of Climate Change 2021: The Physical Science Basis, with
 # the FACTS framework (Kopp et al., 2023, GMD) and the data set Garner et al.

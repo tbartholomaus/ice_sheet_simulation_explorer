@@ -13,6 +13,13 @@ Seroussi2020,Ocean sensitivity,ocean_sensitivity,Medium*=Medium; High*=High; Low
 Seroussi2020,Ice shelf fracture,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis (decision 2026-11-23)
 Seroussi2020,Tier,(hover),,
 Seroussi2020,Regional climate model,regional_climate_model,,
+Seroussi2024,Experiment,(key),,
+Seroussi2024,Global climate model,climate_model,HadGEM2=HadGEM2-ES; CESM2=CESM2-WACCM; UKESM=UKESM1-0-LL,"CMIP identifiers from S24 Sect. 2.1 (CESM2-WACCM, not ISMIP6 2100's CESM2)"
+Seroussi2024,Scenario,scenario,SSP5-85=SSP5-8.5; SSP1-26=SSP1-2.6,
+Seroussi2024,Forcing,(hover),,"Forcing after 2100: GCM to 2300, or repeated 2080-2100 years"
+Seroussi2024,Ice shelf collapse,ice_shelf_fracture,Yes=True; No=False,Runs with True are left out of the bias analysis
+Seroussi2024,Tier,(file),,
+Seroussi2024,Regional climate model,regional_climate_model,,
 Goelzer2020,Exp ID,(key),,
 Goelzer2020,GCM,climate_model,NorESM-M=NorESM1-M; CSIRO-Mk3.6=CSIRO-Mk3-6-0,"GCMs are encoded with their CMIP5 model identifiers (decision D5, 2026-11-23)"
 Goelzer2020,RCP,scenario,8.5=RCP8.5; 2.6=RCP2.6,

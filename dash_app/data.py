@@ -166,6 +166,7 @@ def _load_deconto2016():
 
 deconto2016_ais = _load_deconto2016()
 deconto2021_ais = _read_csv("external_sources_deconto2021_ais.csv.gz")
+seroussi2024_ais = _read_csv("external_sources_seroussi2024_ais.csv.gz")  # ISMIP6 Antarctica 2300, to 2100
 ar6_ais = _read_csv("external_sources_ar6_ais.csv.gz")
 ar6_gis = _read_csv("external_sources_ar6_gis.csv.gz")
 
@@ -183,7 +184,12 @@ EXTRA_SOURCES = [
     {"label": "DeConto & Pollard 2016", "df": deconto2016_ais, "color": "#7f3b08"},
     {"label": "Aschwanden 2019", "df": aschwanden2022_gis, "color": "#5e3c99"},
     {"label": "DeConto 2021", "df": deconto2021_ais, "color": "#e6ab02"},
-    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#117733"},
+    {"label": "Coulon 2024", "df": coulon2024_ais, "color": "#117733"},  # TC 18, 653 (Feb 2024)
+    # ISMIP6 Antarctica 2300 (Earth's Future 12, Sep 2024), in publication order
+    # after the two 2020 ISMIP6 ensembles (user request, 2026-11-24). It's still
+    # weighted like ISMIP6 (ISMIP6_STUDIES below; decision S5). Its color clears
+    # CIEDE2000 >= 20 against every other study (min 20.6).
+    {"label": "Seroussi 2024 (ISMIP6 AIS 2300)", "df": seroussi2024_ais, "color": "#d62728"},
     {"label": "Rahlves 2025", "df": rahlves2025_gis, "color": "#ff7f0e"},  # TC 19, 1205 (Mar 2025)
     {"label": "Goelzer 2025 (PROTECT GIS)", "df": goelzer2025_gis, "color": "#0072b2"},  # TC 19, 6887 (later 2025)
     # Edwards et al. (2021) covers BOTH ice sheets, so its labels carry an
@@ -200,7 +206,7 @@ EXTRA_SOURCES = [
 ]
 
 for _src, _is in [
-    ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
+    ("Seroussi 2024 (ISMIP6 AIS 2300)", "AIS"), ("Rahlves 2025", "GIS"), ("Coulon 2024", "AIS"), ("Aschwanden 2019", "GIS"),
     ("Goelzer 2025 (PROTECT GIS)", "GIS"), ("Edwards 2021 (AIS Main)", "AIS"),
     ("Edwards 2021 (AIS Risk Averse)", "AIS"), ("Edwards 2021 (GIS)", "GIS"), ("DeConto & Pollard 2016", "AIS"),
     ("DeConto 2021", "AIS"), ("IPCC AR6 (AIS)", "AIS"), ("IPCC AR6 (GIS)", "GIS"),
@@ -398,10 +404,15 @@ _edwards_baseline_2015()
 for _s in EXTRA_SOURCES:
     _s["df"] = None
 del ismip6_ais, ismip6_gis, rahlves2025_gis, coulon2024_ais, aschwanden2022_gis, goelzer2025_gis
-del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, deconto2021_ais, ar6_ais, ar6_gis
+del edwards2021_ais, edwards2021_ais_risk, edwards2021_gis, deconto2016_ais, deconto2021_ais, seroussi2024_ais, ar6_ais, ar6_gis
 import gc  # noqa: E402
 gc.collect()
-IS_ISMIP6 = RUNS["publication"].isin(PUBLICATION_LABEL.values()).to_numpy()
+# ISMIP6 studies: each of their runs counts once in the weighting (every model
+# configuration counts on its own); any other study is scaled to weigh as one
+# typical ISMIP6 configuration (analysis.run_weights). ISMIP6 Antarctica 2300
+# is an ISMIP6 study (decision S5, docs/metadata_review/09_Seroussi2024_ISMIP6_AIS2300.md).
+ISMIP6_STUDIES = set(PUBLICATION_LABEL.values()) | {"Seroussi 2024 (ISMIP6 AIS 2300)"}
+IS_ISMIP6 = RUNS["publication"].isin(ISMIP6_STUDIES).to_numpy()
 # Runs that enter the bias analysis (rate bias, low-bias shares, ANOVA).
 # Imposed ice-shelf-collapse experiments (ISMIP6-AIS exp11/exp12) are left
 # out there but still drawn everywhere else (decision 2026-11-23).

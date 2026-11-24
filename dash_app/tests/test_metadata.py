@@ -80,8 +80,11 @@ def test_noresm_is_noresm1_m():
 
 def test_ice_shelf_collapse_runs_are_excluded_from_bias():
     collapse = RUNS["ice_shelf_fracture"].to_numpy()
-    assert collapse.sum() == 14
-    assert set(RUNS.loc[collapse, "exp"]) == {"exp11", "exp12"}
+    s20 = (RUNS["publication"] == PUBLICATION_LABEL["AIS"]).to_numpy()
+    assert (collapse & s20).sum() == 14
+    assert set(RUNS.loc[collapse & s20, "exp"]) == {"exp11", "exp12"}
+    # Elsewhere only Seroussi 2024's expAE11-14 impose collapse (its own test)
+    assert set(RUNS.loc[collapse, "publication"]) == {PUBLICATION_LABEL["AIS"], "Seroussi 2024 (ISMIP6 AIS 2300)"}
     assert not BIAS_ELIGIBLE[collapse].any()
     assert BIAS_ELIGIBLE[~collapse].all()
 
@@ -490,3 +493,45 @@ def test_aschwanden2019_forcing_fields():
     e = M.EXP_META[("Aschwanden2019", "GIS", "les000_rcp26")]["extras"]
     assert set(e) >= {"OCM", "OCS", "q"} and e["OCM"] in {"low", "mid", "high"}
     assert "PRS (%/K)" not in e  # file-only parameters stay out of the hover
+
+
+# ── Seroussi et al. 2024, ISMIP6 Antarctica 2300 (review 09) ─────────────
+
+S24 = RUNS[RUNS["publication"] == "Seroussi 2024 (ISMIP6 AIS 2300)"]
+
+
+def test_seroussi2024_runs_and_experiments():
+    """Table 4's counts without the repeat-forcing duplicates expAE06/08/09
+    (decision S3); collapse runs expAE11-14 out of the bias analysis."""
+    assert len(S24) == 329 and S24[["group", "model"]].drop_duplicates().shape[0] == 43
+    assert not set(S24["exp"]) & {"expAE06", "expAE08", "expAE09", "ctrlAE"}
+    assert S24.groupby("exp").size().to_dict() == {
+        "expAE01": 43, "expAE02": 43, "expAE03": 43, "expAE04": 43, "expAE05": 43, "expAE07": 29, "expAE10": 29,
+        "expAE11": 14, "expAE12": 14, "expAE13": 14, "expAE14": 14}
+    collapse = S24["exp"].isin(["expAE11", "expAE12", "expAE13", "expAE14"])
+    assert (S24["ice_shelf_fracture"] == collapse).all() and not BIAS_ELIGIBLE[S24.index[collapse]].any()
+    assert set(S24["climate_model"]) == {"NorESM1-M", "CCSM4", "HadGEM2-ES", "CESM2-WACCM", "UKESM1-0-LL"}
+
+
+def test_seroussi2024_encodings():
+    m = lambda g, mod: M.model_meta("AIS", "Seroussi2024-" + g, mod)  # noqa: E731
+    assert m("NORCE", "CISM2-MAR364-ERA-t1")["resolution"] == "≤5 km"  # 4 km, decision S4
+    assert m("VUW", "PISM1")["initialization"] == "Hybrid (thickness-nudged)"  # thickness resetting, rule D1
+    assert m("PIK", "PISM")["initialization"] == "Spin-up / equilibrium"
+    assert m("DOE", "MALI_8km_Ant95")["sliding_law"] == "Power law (Weertman)"
+    assert m("UCM", "Yelmo")["sliding_law"] == "Coulomb-limited" and m("VUB", "AISMPALEO")["sliding_law"] == "Budd"
+    _, e = M.run_meta("AIS", "Seroussi2024-DOE", "MALI_8km_Ant95", "expAE02")
+    assert (e["ocean_forcing"], e["ocean_sensitivity"]) == ("Standard", "High")
+    _, e = M.run_meta("AIS", "Seroussi2024-PIK", "PISM", "expAE02")
+    assert (e["ocean_forcing"], e["ocean_sensitivity"]) == ("Open", "Medium")  # PICO
+
+
+def test_seroussi2024_is_weighted_as_ismip6():
+    """Each configuration counts on its own (decision S5): every run weighs 1,
+    as for Seroussi 2020, while a non-ISMIP6 study weighs as one configuration."""
+    valid = (RUNS["ice_sheet"] == "AIS").to_numpy() & RUNS["publication"].isin(
+        [PUBLICATION_LABEL["AIS"], "Seroussi 2024 (ISMIP6 AIS 2300)", "Coulon 2024"]).to_numpy()
+    w = A.run_weights(valid)
+    assert np.allclose(w[S24.index], 1.0)
+    typical = (188 + 329) / (16 + 43)
+    assert np.isclose(w[(RUNS["publication"] == "Coulon 2024").to_numpy()].sum(), typical)

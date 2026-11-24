@@ -114,7 +114,7 @@ They differ only in their initialization descriptions: one ERA5 spin-up, or one 
 ## 5. Decisions (applied 2026-11-23)
 
 The user chose **Option A** for both decisions.
-- **R1:** two model rows, `CISM (ERA5-init)` and `CISM (ESM-init)`, each with 48 runs (16 projections × 3 retreat sensitivities). Rahlves now counts as two configurations.
+- **R1:** two model rows, `CISM (ERA5-init)` and `CISM (ESM-init)`, each with 48 runs (16 projections × 3 retreat sensitivities). (Correction, 2026-11-24: this doesn't change Rahlves's weight. In the app, a non-ISMIP6 study as a whole weighs as one typical ISMIP6 configuration, however many configuration rows it has.)
 - **R2:** the 33 control runs are left out. The loader skips them, and `external_sources_rahlves2025_gis.csv.gz` was regenerated: 96 runs. The ESM-init values are unchanged.
 
 **Also applied:**
